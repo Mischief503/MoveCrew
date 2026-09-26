@@ -2,9 +2,11 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
 android {
     namespace = "com.movecrew.android"
     compileSdk = 35
+
     defaultConfig {
         applicationId = "com.movecrew"
         minSdk = 26
@@ -12,13 +14,28 @@ android {
         versionCode = 1
         versionName = "0.1.0"
     }
-    buildTypes {
-        debug { applicationIdSuffix = ".debug" }
-        release { isMinifyEnabled = false }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+        }
+        release {
+            isMinifyEnabled = false
+        }
+    }
+
     flavorDimensions += "environment"
     productFlavors {
-        create("testCompany") {
+        create("companyTest") {
             dimension = "environment"
             applicationIdSuffix = ".test"
             buildConfigField("String", "APP_ENVIRONMENT", "\"TEST_COMPANY\"")
@@ -30,8 +47,12 @@ android {
             manifestPlaceholders["entryActivity"] = "com.movecrew.android.MainActivity"
         }
     }
-    buildFeatures { buildConfig = true }
+
+    buildFeatures {
+        buildConfig = true
+    }
 }
+
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:auth"))
@@ -46,5 +67,5 @@ dependencies {
     implementation(project(":features:analytics"))
     implementation(project(":features:communications"))
     implementation(project(":features:documents"))
-    "testCompanyImplementation"(project(":test-support:fake-company"))
+    "companyTestImplementation"(project(":test-support:fake-company"))
 }
