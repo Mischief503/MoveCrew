@@ -35,19 +35,48 @@ jobs:
       - name: Runtime smoke test
         shell: bash
         run: |
-          echo no | avdmanager create avd -n movecrew-ci -k "system-images;android-35;google_apis;x86_64" --force
-          nohup emulator -avd movecrew-ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect >/tmp/emulator.log 2>&1 &
-          adb wait-for-device
-          timeout 240 bash -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = "1" ]; do sleep 2; done'
+          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          if [ ! -x "$AVDMANAGER" ]; then
+            AVDMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name avdmanager | head -n 1)"
+          fi
+          EMULATOR="$ANDROID_HOME/emulator/emulator"
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          test -x "$AVDMANAGER"
+          test -x "$EMULATOR"
+          test -x "$ADB"
+
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm || true
+          fi
+
+          echo no | "$AVDMANAGER" create avd -n movecrew-ci -k "system-images;android-35;google_apis;x86_64" --force
+          nohup "$EMULATOR" -avd movecrew-ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect >/tmp/emulator.log 2>&1 &
+          "$ADB" wait-for-device
+          timeout 240 bash -c 'until [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d "\r")" = "1" ]; do sleep 2; done'
+
           APK=$(find apps/android/build/outputs/apk/companyTest/debug -name '*.apk' | head -n 1)
           test -f "$APK"
-          adb install -r "$APK"
-          adb logcat -c
-          adb shell am start -W -n com.movecrew.test.debug/com.movecrew.android.TestCompanyActivity
+          "$ADB" install -r "$APK"
+          "$ADB" logcat -c
+          "$ADB" shell am start -W -n com.movecrew.test.debug/com.movecrew.android.TestCompanyActivity
           sleep 8
-          PID=$(adb shell pidof com.movecrew.test.debug | tr -d '\r')
-          test -n "$PID" || { adb logcat -d '*:E'; exit 1; }
-          adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep -q 'com.movecrew.test.debug' || { adb logcat -d '*:E'; exit 1; }
+
+          PID=$("$ADB" shell pidof com.movecrew.test.debug | tr -d '\r')
+          if [ -z "$PID" ]; then
+            echo 'MoveCrew process died after launch.'
+            cat /tmp/emulator.log || true
+            "$ADB" logcat -d '*:E' || true
+            exit 1
+          fi
+
+          RESUMED=$("$ADB" shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep 'com.movecrew.test.debug' || true)
+          if [ -z "$RESUMED" ]; then
+            echo 'MoveCrew is not the resumed foreground activity.'
+            "$ADB" shell dumpsys activity activities | tail -n 200 || true
+            "$ADB" logcat -d '*:E' || true
+            exit 1
+          fi
+
           echo "MoveCrew runtime smoke test passed with PID $PID"
       - uses: actions/upload-artifact@v4
         if: success()
