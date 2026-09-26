@@ -1,0 +1,27 @@
+name: Windows Build
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - run: gradle :apps:desktop:test :apps:desktop:installDist :apps:desktop:distZip :apps:desktop-test:distZip
+      - name: Build Windows MSI
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build\windows-installer | Out-Null
+          jpackage --type msi --name MoveCrew --app-version 0.1.0 --vendor MoveCrew --input apps\desktop\build\install\desktop\lib --main-jar desktop.jar --main-class com.movecrew.desktop.MainKt --dest build\windows-installer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: movecrew-windows
+          path: |
+            apps/desktop/build/distributions/*
+            apps/desktop-test/build/distributions/*
+            build/windows-installer/*.msi
