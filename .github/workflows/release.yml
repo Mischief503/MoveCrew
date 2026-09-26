@@ -1,0 +1,12 @@
+name: Release Candidate
+on:
+  workflow_dispatch:
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+  android:
+    needs: verify
+    uses: ./.github/workflows/android-build.yml
+  windows:
+    needs: verify
+    uses: ./.github/workflows/windows-build.yml
