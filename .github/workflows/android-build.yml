@@ -13,14 +13,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Install Android SDK packages
+
+      - name: Install Android SDK build packages
         shell: bash
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
@@ -29,55 +32,56 @@ jobs:
           fi
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" "system-images;android-35;google_apis;x86_64"
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
       - name: Build Android deliverables
         run: gradle :apps:android:assembleCompanyTestDebug :apps:android:assembleProductionRelease :apps:android:bundleProductionRelease
-      - name: Runtime smoke test
+
+      - name: Enable KVM for emulator
         shell: bash
         run: |
-          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
-          if [ ! -x "$AVDMANAGER" ]; then
-            AVDMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name avdmanager | head -n 1)"
-          fi
-          EMULATOR="$ANDROID_HOME/emulator/emulator"
-          ADB="$ANDROID_HOME/platform-tools/adb"
-          test -x "$AVDMANAGER"
-          test -x "$EMULATOR"
-          test -x "$ADB"
-
           if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm || true
             sudo chmod 666 /dev/kvm || true
           fi
 
-          echo no | "$AVDMANAGER" create avd -n movecrew-ci -k "system-images;android-35;google_apis;x86_64" --force
-          nohup "$EMULATOR" -avd movecrew-ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect >/tmp/emulator.log 2>&1 &
-          "$ADB" wait-for-device
-          timeout 240 bash -c 'until [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d "\r")" = "1" ]; do sleep 2; done'
+      - name: Boot emulator and prove MoveCrew stays open
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none
+          script: |
+            set -euo pipefail
+            APK=$(find apps/android/build/outputs/apk/companyTest/debug -name '*.apk' | head -n 1)
+            test -f "$APK"
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell am start -W -n com.movecrew.test.debug/com.movecrew.android.TestCompanyActivity
+            sleep 8
 
-          APK=$(find apps/android/build/outputs/apk/companyTest/debug -name '*.apk' | head -n 1)
-          test -f "$APK"
-          "$ADB" install -r "$APK"
-          "$ADB" logcat -c
-          "$ADB" shell am start -W -n com.movecrew.test.debug/com.movecrew.android.TestCompanyActivity
-          sleep 8
+            PID=$(adb shell pidof com.movecrew.test.debug | tr -d '\r')
+            if [ -z "$PID" ]; then
+              echo 'MoveCrew process died after launch.'
+              adb logcat -d '*:E' || true
+              exit 1
+            fi
 
-          PID=$("$ADB" shell pidof com.movecrew.test.debug | tr -d '\r')
-          if [ -z "$PID" ]; then
-            echo 'MoveCrew process died after launch.'
-            cat /tmp/emulator.log || true
-            "$ADB" logcat -d '*:E' || true
-            exit 1
-          fi
+            RESUMED=$(adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep 'com.movecrew.test.debug' || true)
+            if [ -z "$RESUMED" ]; then
+              echo 'MoveCrew is not the resumed foreground activity.'
+              adb shell dumpsys activity activities | tail -n 200 || true
+              adb logcat -d '*:E' || true
+              exit 1
+            fi
 
-          RESUMED=$("$ADB" shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep 'com.movecrew.test.debug' || true)
-          if [ -z "$RESUMED" ]; then
-            echo 'MoveCrew is not the resumed foreground activity.'
-            "$ADB" shell dumpsys activity activities | tail -n 200 || true
-            "$ADB" logcat -d '*:E' || true
-            exit 1
-          fi
+            echo "MoveCrew runtime smoke test passed with PID $PID"
 
-          echo "MoveCrew runtime smoke test passed with PID $PID"
       - uses: actions/upload-artifact@v4
         if: success()
         with:
