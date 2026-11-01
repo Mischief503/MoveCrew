@@ -4,7 +4,10 @@ Moving-company software: quotes, dispatch, crew in the field, signing, payments,
 and a truck-down alert that tells the office where a broken-down truck is ([docs/TRUCK-DOWN.md](docs/TRUCK-DOWN.md)).
 Local moves are billed by the hour and mileage moves by the mile plus loading and unloading time,
 from what really happened on the job ([docs/PRICING.md](docs/PRICING.md)). The owner turns parts of it
-on and off in Setup › Options ([docs/OPTIONS.md](docs/OPTIONS.md)).
+on and off in Setup › Options ([docs/OPTIONS.md](docs/OPTIONS.md)). Each company takes cards through its own
+Stripe account or its own Square account, whichever it connects in Setup › Payments
+([docs/SETUP-stripe.md](docs/SETUP-stripe.md), [docs/SETUP-square.md](docs/SETUP-square.md)); someone who works for
+more than one company picks which one each day ([docs/GET-THE-APP.md](docs/GET-THE-APP.md#someone-who-works-for-more-than-one-company)).
 One web app (`web/index.html`) that runs four ways:
 
 - **Android app**, for the crews: built here by GitHub on every push. The APK has the whole app inside it.

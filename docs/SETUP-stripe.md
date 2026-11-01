@@ -11,6 +11,9 @@ touch MoveCrew:
 
 Cash and checks are recorded the same way as before.
 
+A company that already takes cards with Square can use its Square account instead (Setup › Payments ›
+Connect with Square): the same three ways then go through Square. See [SETUP-square.md](SETUP-square.md).
+
 The payment lands on the job by itself: Stripe tells the server, the server writes it onto the job,
 and every phone shows it. A finished job moves to **Paid** when the balance reaches zero.
 

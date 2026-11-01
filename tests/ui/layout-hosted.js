@@ -45,7 +45,11 @@ const COMPANIES = [
   { id: ORG, name: 'Live company test', created: inDays(-5), trial_ends: inDays(20), owners: ['richie@tally.example'], invited: [], members: 1, test: true, waived: true, discount_pct: 0, note: 'My test company', member: { state: 'test', price_cents: 14900, list_cents: 14900, discount_pct: 0 }, cards: 'connecting' },
 ];
 const PAY = { none: { ok: true, ready: false, test: true, publishableKey: '', reason: 'connect', connect: { state: 'none', due: [] } },
-  ready: { ok: true, ready: true, test: true, publishableKey: 'pk_test_x', connect: { state: 'ready', due: [] }, account: 'acct_1' } };
+  ready: { ok: true, ready: true, test: true, publishableKey: 'pk_test_x', connect: { state: 'ready', due: [] }, account: 'acct_1' },
+  // Square (Nov 1): offered beside Stripe, and a company whose cards go through its own Square account
+  sqOffer: { ok: true, ready: true, test: true, publishableKey: 'pk_test_x', connect: { state: 'ready', due: [] }, account: 'acct_1', provider: 'stripe', square: { mode: 'test', table: true, appId: 'sandbox-sq0idb-x', hooks: true } },
+  sqOn: { ok: true, ready: true, test: true, publishableKey: '', account: '', via: 'square', reason: '', provider: 'square',
+    square: { mode: 'test', table: true, appId: 'sandbox-sq0idb-x', hooks: true, conn: { state: 'ready', active: true, business: 'Ace Moving LLC', location: 'Ace Moving (Portland)', locationId: 'L1main' } } } };
 const owner = { uid: 'u-ana', email: 'ana@x.com' }, lead = { uid: 'u-marcus', email: 'marcus@x.com' };
 const REPLIES = { member_status: ST(), pay_config: PAY.none, admin_list: { ok: true, plan: { monthly_cents: 14900, trial_days: 14 }, payments: 'test', companies: COMPANIES } };
 const init = (cfg) => `(function(){ ${SB}
@@ -73,6 +77,8 @@ const SCREENS = {
   'Setup › Membership, paying with a discount': [{ replies: R({ member_status: ST({ state: 'active', period_end: inDays(10), billing: true, price_cents: 11175, discount_pct: 25 }) }) }, async (p) => { await more(p, 'settings', 'member'); }],
   'Setup › Payments, not connected': [{}, async (p) => { await more(p, 'settings', 'pay'); }],
   'Setup › Payments, ready': [{ replies: R({ pay_config: PAY.ready }) }, async (p) => { await more(p, 'settings', 'pay'); }],
+  'Setup › Payments, Square offered': [{ replies: R({ pay_config: PAY.sqOffer }) }, async (p) => { await more(p, 'settings', 'pay'); }],
+  'Setup › Payments, on Square': [{ replies: R({ pay_config: PAY.sqOn }) }, async (p) => { await more(p, 'settings', 'pay'); }],
   'Setup › App access, someone asking': [{}, async (p) => { await more(p, 'settings', 'access'); }],
   'Setup › Employees': [{}, async (p) => { await more(p, 'settings', 'employees'); }],
   'an employee’s file': [{}, async (p) => { await more(p, 'settings', 'employees'); await tap(p, '[data-act="emp:open"][data-id="e-marcus"]', 700); }],
@@ -80,6 +86,7 @@ const SCREENS = {
   'the More menu': [{}, async (p) => { await tap(p, '[data-act="more:open"]', 400); }],
   'MoveCrew admin': [{ replies: R({ member_status: ST({ admin: true }) }) }, async (p) => { await more(p, 'admin'); }],
   'a job sheet with cards on': [{ replies: R({ pay_config: PAY.ready }) }, async (p) => { await tap(p, '#tabs [data-act="tab"][data-tab="jobs"]', 300); await tap(p, '[data-act="job:open"][data-id="j1"]', 500); await p.evaluate(() => document.querySelectorAll('#sheet details').forEach((d) => { d.open = true; })); }],
+  'a card on Square': [{ replies: R({ pay_config: PAY.sqOn }) }, async (p) => { await tap(p, '#tabs [data-act="tab"][data-tab="jobs"]', 300); await tap(p, '[data-act="job:open"][data-id="j1"]', 500); await p.evaluate(() => { const b = Array.from(document.querySelectorAll('#sheet [data-act="flow:open"]')).find((x) => /Take a payment/.test(x.textContent)); b.click(); }); await sleep(600); await p.evaluate(() => { const c = document.querySelector('#flow [data-act="flow:method"][data-m="card"]'); if (c) c.click(); }); await sleep(500); }],
   'taking a deposit by card': [{ replies: R({ pay_config: PAY.ready }) }, async (p) => { await tap(p, '#tabs [data-act="tab"][data-tab="jobs"]', 300); await tap(p, '[data-act="job:open"][data-id="j1"]', 500); await p.evaluate(() => { const b = Array.from(document.querySelectorAll('#sheet [data-act="flow:open"]')).find((x) => /Take a payment/.test(x.textContent)); b.click(); }); await sleep(600); }],
   'crew lead Jobs': [{ me: lead }, async () => {}],
   'crew lead More': [{ me: lead }, async (p) => { await tap(p, '[data-act="more:open"]', 400); }],
@@ -88,8 +95,8 @@ const SCREENS = {
   'which company today': [{ twoOrgs: true }, async () => {}],
   'Switch company, two companies': [{ twoOrgs: true, today: true }, async (p) => { await tap(p, '#brandCo button.cosw', 400); }],
 };
-const NARROW = ['Setup › Membership, paying with a discount', 'Setup › Payments, ready', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker', 'which company today', 'Switch company, two companies'];
-const AXE_ON = ['Setup › Membership, on trial', 'Setup › Payments, ready', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker', 'which company today', 'Switch company, two companies'];
+const NARROW = ['Setup › Membership, paying with a discount', 'Setup › Payments, ready', 'Setup › Payments, on Square', 'a card on Square', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker', 'which company today', 'Switch company, two companies'];
+const AXE_ON = ['Setup › Membership, on trial', 'Setup › Payments, ready', 'Setup › Payments, Square offered', 'Setup › Payments, on Square', 'a card on Square', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker', 'which company today', 'Switch company, two companies'];
 
 (async () => {
   const b = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});

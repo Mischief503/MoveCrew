@@ -1472,7 +1472,12 @@ window.tallyPay={
   config:function(refresh){return commsPost(refresh?{action:'pay_config',refresh:true}:{action:'pay_config'})},
   connect:function(){return commsPost({action:'pay_connect'})},
   link:function(id,amount,save,text){return commsPost({action:'pay_link',jobId:id,amount:amount,save:!!save,text:!!text})},
-  intent:function(id,amount,save){return commsPost({action:'pay_intent',jobId:id,amount:amount,save:!!save})},
+  // token: a card typed into Square's card box (a company on Square), charged by the server; Stripe's card box finishes its own payment
+  intent:function(id,amount,save,token){var b={action:'pay_intent',jobId:id,amount:amount,save:!!save};if(token)b.token=token;return commsPost(b)},
+  // the company's own Square account (Setup › Payments, the owner)
+  sqConnect:function(){return commsPost({action:'pay_sq_connect'})},
+  sqUse:function(use){return commsPost({action:'pay_sq_use',use:use})},
+  sqDisconnect:function(){return commsPost({action:'pay_sq_disconnect'})},
   saved:function(id,vaultId,amount,nonce){return commsPost({action:'pay_saved',jobId:id,vaultId:vaultId,amount:amount,nonce:nonce})},
   check:function(id,pi){return commsPost({action:'pay_check',jobId:id,pi:pi||''})},
   forget:function(vaultId){return commsPost({action:'pay_forget',vaultId:vaultId})},
@@ -2634,8 +2639,8 @@ function csPayHtml(m,c){
     (c.tip==='other'?fld('Tip ($)','<input id="csTipOther" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" value="'+esc(c.other||'')+'">'):''):'';
   return head+tips+'<div class="cm-total"><span>'+(tip>0?'Total with your tip':'Total')+'</span><b id="csTotal">'+money(total)+'</b></div>'+
     '<button class="btn primary bigbtn" id="csPayBtn" data-act="cs:paygo" data-k="'+esc(custKeyOf(m))+'"'+(total>0&&!c.busy?'':' disabled')+'>'+(c.busy?'Opening…':total>0?'Pay '+money(total):'Pick a tip')+'</button>'+
-    '<p class="hint cm-center">Next: Google Pay, Apple Pay or a card, on Stripe’s secure page. '+esc(m.company||'Your mover')+' never sees your card number.</p>'+
-    (custLive()?'':'<div class="note" style="margin-top:10px">Sample: nothing is charged here. In the customer’s app, Pay opens Stripe’s page, with Google Pay on Android phones and Apple Pay on iPhones.</div>')+
+    '<p class="hint cm-center">Next: Google Pay, Apple Pay or a card, on a secure payment page. '+esc(m.company||'Your mover')+' never sees your card number.</p>'+
+    (custLive()?'':'<div class="note" style="margin-top:10px">Sample: nothing is charged here. In the customer’s app, Pay opens the company’s secure payment page (Stripe’s, or Square’s for a company on Square), with Google Pay on Android phones and Apple Pay on iPhones.</div>')+
     '<p class="hint" id="csErr" role="alert"></p>';
 }
 function csThanksHtml(m,c){
@@ -5310,7 +5315,7 @@ function setupSecs(){
   var formsList=(S.forms||[]).map(function(f){return '<details class="grp"><summary>'+esc(f.title)+' <small>'+(f.required?'required':'optional')+'</small></summary><div class="formbox">'+(f.kind==='text'?'<div class="formtext">'+esc(f.text)+'</div>':(f.pages||[]).map(function(pg,i){return pg?'<img src="'+pg+'" alt="'+esc(f.title)+' page '+(i+1)+'">':'<p class="hint">Loading page '+(i+1)+'…</p>'}).join(''))+'</div><div class="row" style="margin:8px 0"><button class="chip'+(f.required?' on':'')+'" data-act="st:reqform" data-id="'+f.id+'" aria-pressed="'+!!f.required+'">Required before payment</button><button class="chip'+(f.ahead?' on':'')+'" data-act="st:aheadform" data-id="'+f.id+'" aria-pressed="'+!!f.ahead+'">Customer signs ahead</button><button class="btn sm danger" data-act="st:rmform" data-id="'+f.id+'">Remove</button></div></details>'}).join('')||'<p class="hint">No forms yet.</p>';
   // a card kept for a customer without a phone belongs to the job it was kept on
   var vaultWho=function(x){if(!/^job:/.test(x.cust||'')){var cj=state.jobs.filter(function(j){return custKey(j)===x.cust}).pop();return 'Customer: '+(cj&&cj.d.name?esc(cj.d.name)+' · ':'')+esc(/^\d{10,11}$/.test(x.cust||'')?fmtPhone(x.cust):x.cust)}var kj=byId(x.cust.slice(4));return kj?'Kept on '+esc(kj.d.name||'a job')+'’s job':'Kept on a job that is no longer here'};
-  var vaultList=state.vault.map(function(x){return '<div class="who"><span>'+(x.type==='card'?esc(x.brand)+' ending '+esc(x.last4):'Bank ending '+esc(x.last4))+(x.name?' · '+esc(x.name):'')+(x.via==='stripe'?' <small>· Stripe'+(x.live?'':' test')+'</small>':'')+'<br><small>'+vaultWho(x)+'</small></span><button class="btn sm danger" data-act="st:rmvault" data-id="'+x.id+'">Remove</button></div>'}).join('')||'<p class="hint">Nothing saved yet.</p>';
+  var vaultList=state.vault.map(function(x){return '<div class="who"><span>'+(x.type==='card'?esc(x.brand)+' ending '+esc(x.last4):'Bank ending '+esc(x.last4))+(x.name?' · '+esc(x.name):'')+(x.via==='stripe'?' <small>· Stripe'+(x.live?'':' test')+'</small>':x.via==='square'?' <small>· Square'+(x.live?'':' sandbox')+'</small>':'')+'<br><small>'+vaultWho(x)+'</small></span><button class="btn sm danger" data-act="st:rmvault" data-id="'+x.id+'">Remove</button></div>'}).join('')||'<p class="hint">Nothing saved yet.</p>';
   var cfl=S.customFields.map(function(f,i){return '<div class="row between" style="margin-bottom:6px"><span>'+esc(f.label)+' <small>('+({yesno:'yes / no',number:'number',text:'text'}[f.type]||esc(f.type))+')</small></span><button class="btn sm danger" data-act="st:rmcf" data-i="'+i+'">Remove</button></div>'}).join('');
   // cubic feet and the special fee can be changed right in the list; they save as you type
   var cat=S.catalog.map(function(it,i){return '<tr><td>'+esc(it.name)+'</td><td class="n"><input class="cin" type="number" inputmode="decimal" step="any" min="0.1" data-min="0.1" data-s="catalog.'+i+'.cf" data-t="num" value="'+esc(String(it.cf))+'" aria-label="'+esc(it.name)+', cubic feet"></td><td class="n"><input class="cin" type="number" inputmode="decimal" step="0.01" min="0" data-min="0" placeholder="none" data-s="catalog.'+i+'.fee" data-t="num" value="'+(it.fee?esc(String(it.fee)):'')+'" aria-label="'+esc(it.name)+', special fee in dollars"></td><td class="n"><button class="btn sm ghost ibtn" data-act="st:rmitem" data-i="'+i+'" aria-label="Remove '+esc(it.name)+'">×</button></td></tr>'}).join('');
@@ -7792,9 +7797,13 @@ function qrSvg(text){
 var STRIPE_JS='https://js.stripe.com/endive/stripe.js',MIN_PAY=50;
 var pay={cfg:null,cfgAt:0,loading:null,stripe:null,stripeKey:'',js:null,elements:null,el:null,elJob:'',busy:false,links:{},poll:null,
   conn:{busy:false,wait:false,url:'',msg:''},
+  sq:{busy:false,wait:false,url:'',msg:''},sqPay:null,sqKey:'',sqCard:null,sqJs:null,
   lastTest:(function(){try{return localStorage.getItem('tally.payTest')==='1'}catch(e){return false}})()};
 function payOn(){return !!(window.tallyPay&&sync.mode==='shared'&&sync.identity.status==='ok'&&pay.cfg&&pay.cfg.ready)}
-function payCardOn(){return payOn()&&!!pay.cfg.publishableKey}
+// A company that takes cards through its own Square account (Setup › Payments, Nov 1): the card box is Square's,
+// cards on file and pay links are Square's, and the server charges them on that account.
+function sqOn(){return !!(pay.cfg&&pay.cfg.provider==='square')}
+function payCardOn(){return payOn()&&(sqOn()?!!(pay.cfg.square&&pay.cfg.square.appId&&pay.cfg.square.conn&&pay.cfg.square.conn.locationId):!!pay.cfg.publishableKey)}
 // refresh: ask Stripe now how the company's own Stripe account stands (back from Stripe's sign-up)
 function payLoad(force,refresh){
   if(!window.tallyPay||sync.mode!=='shared')return Promise.resolve(null);
@@ -7803,6 +7812,7 @@ function payLoad(force,refresh){
   pay.cfgAt=Date.now();
   pay.loading=Promise.resolve(window.tallyPay.config(!!refresh)).then(function(c){pay.cfg=c&&c.ok?c:{ready:false,reason:'down'};
       if(pay.cfg.ready||pay.cfg.reason==='connect-off')pay.conn.wait=false;
+      if(pay.cfg.square&&pay.cfg.square.conn&&/^(ready|no-location)$/.test(pay.cfg.square.conn.state))pay.sq.wait=false;
       if(pay.cfg.ready){pay.lastTest=pay.cfg.test===true;try{localStorage.setItem('tally.payTest',pay.lastTest?'1':'0')}catch(e){}}},function(){pay.cfg={ready:false,reason:'down'}})
     .then(function(){pay.loading=null;if(ui.flow)renderFlow();if(ui.jobId)renderSheet();softSettings();return pay.cfg});
   return pay.loading;
@@ -7813,7 +7823,7 @@ function payLoad(force,refresh){
 // when it was kept on this job; any other one, check with the customer first.
 function phoneKey(k){return /^\d{7,}$/.test(String(k||''))}
 function stripeCards(j){var live=!(pay.cfg&&pay.cfg.test),lead=state.ui.role==='lead';return state.vault.filter(function(v){
-  if(v.via!=='stripe'||!!v.live!==live)return false;var here=(v.jobs||[]).indexOf(j.id)>=0;return lead?here:(here||(phoneKey(v.cust)&&v.cust===custKey(j)))})}
+  if(v.via!==(sqOn()?'square':'stripe')||!!v.live!==live)return false;var here=(v.jobs||[]).indexOf(j.id)>=0;return lead?here:(here||(phoneKey(v.cust)&&v.cust===custKey(j)))})}
 function cardFits(j,v){return (v.jobs||[]).indexOf(j.id)>=0}
 // the ways to pay this screen offers (Options › Payments; with every other way off, cash and checks stay)
 function stripeWays(j){
@@ -7850,6 +7860,7 @@ function cardOpts(cents,save){return {mode:'payment',currency:'usd',amount:Math.
 function flowAmt(){return round2(moneyVal($('#flowAmt')))}
 function cardMount(j){
   if(!$('#stripeCard'))return;
+  if(sqOn())return sqMount(j);
   var cents=Math.round(flowAmt()*100),keepCard=!!(d0('#saveCard')||{}).checked;
   stripeJs().then(function(S){
     // a company on its own Stripe account (Connect): the card box works on that account, where the server makes the payment
@@ -7864,7 +7875,48 @@ function cardMount(j){
     box.innerHTML='';pay.el.mount(box);
   }).catch(function(){var b=$('#stripeCard');if(b)b.innerHTML='<p class="hint">The card form did not load. Check the connection, or send a pay link.</p>'});
 }
-function cardDrop(){if(pay.el){try{pay.el.destroy()}catch(e){}}pay.el=null;pay.elements=null;pay.elJob=''}
+function cardDrop(){if(pay.el){try{pay.el.destroy()}catch(e){}}pay.el=null;pay.elements=null;pay.elJob='';if(pay.sqCard){try{pay.sqCard.destroy()}catch(e){}}pay.sqCard=null}
+/* Square's card box (a company on Square). Its script is Square's own (the sandbox's for a company trying Square
+   out); the card is typed into Square's frame, which gives a one-use token, and the server charges that. */
+var SQ_JS={test:'https://sandbox.web.squarecdn.com/v1/square.js',live:'https://web.squarecdn.com/v1/square.js'};
+function sqJsLoad(){
+  var src=pay.cfg.test?SQ_JS.test:SQ_JS.live;
+  if(window.Square&&pay.sqJsSrc===src)return Promise.resolve(window.Square);
+  if(pay.sqJs&&pay.sqJsSrc===src)return pay.sqJs;
+  pay.sqJsSrc=src;
+  pay.sqJs=new Promise(function(res,rej){
+    var s=document.createElement('script');s.src=src;s.async=true;
+    s.onload=function(){if(window.Square)res(window.Square);else{pay.sqJs=null;rej(new Error('square'))}};
+    s.onerror=function(){pay.sqJs=null;rej(new Error('square'))};
+    document.head.appendChild(s);
+  });
+  return pay.sqJs;
+}
+// Square's card box in the app's colours (Square takes plain colours only, so the look's are read off the page)
+function sqLook(){
+  var cs=window.getComputedStyle?getComputedStyle(document.documentElement):null,v=function(n,d){return (cs&&cs.getPropertyValue(n)||'').trim()||d};
+  return {input:{color:v('--text','#141B2D'),backgroundColor:v('--field','#FFFFFF'),fontSize:'16px'},'input::placeholder':{color:v('--muted','#667085')},
+    '.input-container':{borderColor:v('--line','#E7EAF0'),borderRadius:'8px'},'.input-container.is-focus':{borderColor:v('--focus','#2563EB')},'.input-container.is-error':{borderColor:v('--bad','#D0392B')}};
+}
+function sqMount(j){
+  var s=pay.cfg.square,key=s.appId+'|'+s.conn.locationId;
+  sqJsLoad().then(function(Sq){
+    if(!pay.sqPay||pay.sqKey!==key){cardDrop();pay.sqPay=Sq.payments(s.appId,s.conn.locationId);pay.sqKey=key}
+    if(!$('#stripeCard'))return;
+    if(pay.sqCard){try{pay.sqCard.destroy()}catch(e){}pay.sqCard=null}
+    $('#stripeCard').innerHTML='';
+    // a look Square won't take: its own look instead
+    return Promise.resolve(pay.sqPay.card({style:sqLook()})).catch(function(){return pay.sqPay.card()}).then(function(card){
+      if(!$('#stripeCard')){try{card.destroy()}catch(e){}return}
+      pay.sqCard=card;pay.elJob=j.id;
+      return card.attach('#stripeCard');
+    });
+  }).catch(function(e){
+    var b=$('#stripeCard');if(!b)return;
+    // Square's card box only opens on a web address it knows (a website); in the Windows app it may refuse
+    b.innerHTML='<p class="hint">'+(e&&/WebSdkEmbedError|embed|origin|domain/i.test(String(e.name||'')+' '+String(e.message||''))?'Square’s card box doesn’t open here. Send a pay link, or charge a card on file.':'The card form did not load. Check the connection, or send a pay link.')+'</p>';
+  });
+}
 function payBusy(on,label){
   pay.busy=on;
   $$('#flow [data-busy],#sheet [data-busy]').forEach(function(b){b.disabled=on;if(on){if(!b.dataset.was)b.dataset.was=b.textContent;b.textContent=label||'Working…'}else if(b.dataset.was){b.textContent=b.dataset.was;delete b.dataset.was}});
@@ -7876,6 +7928,7 @@ function payDone(j,msg){
 }
 function payAmtCheck(j,amt){var bal=balOf(j);if(!(amt>0))return 'Enter an amount.';if(amt>bal+0.004)return 'That is more than the balance of '+money(bal)+'.';if(amt<MIN_PAY/100)return 'Card payments start at '+money(MIN_PAY/100)+'.';return ''}
 function payByCard(j){
+  if(sqOn())return payBySquare(j);
   var amt=flowAmt(),keepCard=!!(d0('#saveCard')||{}).checked,bad=payAmtCheck(j,amt);
   if(bad)return flowFail(bad);
   if(!pay.elements||!pay.stripe)return flowFail('The card form is still loading.');
@@ -7889,6 +7942,28 @@ function payByCard(j){
       if(res&&res.error)throw {msg:res.error.message};
       var pi=res&&res.paymentIntent;if(!pi)throw {msg:'The card was not charged.'};
       return window.tallyPay.check(j.id,pi.id).then(function(){payDone(j,pi.status==='processing'?'Payment processing.':'Card charged '+money(amt)+'.')});
+    })
+    .catch(function(e){flowFail((e&&e.msg)||'The card was not charged.')})
+    .then(function(){payBusy(false)});
+}
+// Square: the card box gives a one-use token for the card (Square checks it with the bank as needed), and the server
+// charges it for what it agrees is owed. sellerKeyedIn: the card is typed in on the company's own phone or computer.
+function payBySquare(j){
+  var amt=flowAmt(),keepCard=!!(d0('#saveCard')||{}).checked,bad=payAmtCheck(j,amt);
+  if(bad)return flowFail(bad);
+  if(!pay.sqCard)return flowFail('The card form is still loading.');
+  var d=j.d||{},nm=String(d.name||'').trim().split(/\s+/),bc={givenName:nm[0]||'',familyName:nm.slice(1).join(' ')};
+  if(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(d.email||'').trim()))bc.email=String(d.email).trim();
+  payBusy(true,'Charging…');flowFail('');
+  Promise.resolve(pay.sqCard.tokenize({amount:amt.toFixed(2),currencyCode:'USD',intent:'CHARGE',customerInitiated:true,sellerKeyedIn:true,billingContact:bc}))
+    .then(function(r){
+      if(!r||r.status!=='OK'||!r.token)throw {msg:(r&&r.errors&&r.errors[0]&&r.errors[0].message)||'Check the card details.'};
+      return window.tallyPay.intent(j.id,amt,keepCard,r.token);
+    })
+    .then(function(r){
+      if(r&&r.ok){payDone(j,r.message||'Card charged '+money(amt)+'.');return}
+      if(r&&r.needLink){ui.flow.method='link';payBusy(false);renderFlow();flowFail(r.message);return}
+      throw {msg:(r&&r.message)||'The card was not charged.'};
     })
     .catch(function(e){flowFail((e&&e.msg)||'The card was not charged.')})
     .then(function(){payBusy(false)});
@@ -7912,12 +7987,12 @@ function makeLink(j,amt,keep,text){
   payBusy(true,text?'Texting…':'Making the link…');
   return window.tallyPay.link(j.id,amt,keep,text).then(function(r){
     payBusy(false);
-    if(r&&r.ok){pay.links[j.id]={url:r.url,amount:amt,save:!!keep,at:Date.now()};logEv(j,(text&&r.texted?'Payment link texted: ':'Payment link made: ')+money(amt));save()}
+    if(r&&r.ok){pay.links[j.id]={url:r.url,amount:amt,save:!!keep&&!sqOn(),at:Date.now()};logEv(j,(text&&r.texted?'Payment link texted: ':'Payment link made: ')+money(amt));save()}
     return r||{ok:false,message:'Could not make the link.'};
   });
 }
 function payLinkPanel(j,amt){
-  var vaultOk=opt('payVault'),dflt=amt<balOf(j)-0.004,keep=vaultOk&&(ui.flow.saveLink!=null?ui.flow.saveLink:dflt),l=linkFor(j,amt,keep),who=esc(j.d.name||'the customer'),co=commsReady();
+  var vaultOk=opt('payVault')&&!sqOn(),dflt=amt<balOf(j)-0.004,keep=vaultOk&&(ui.flow.saveLink!=null?ui.flow.saveLink:dflt),l=linkFor(j,amt,keep),who=esc(j.d.name||'the customer'),co=commsReady();
   var h=vaultOk?'<label class="check"><input type="checkbox" id="saveLink"'+(keep?' checked':'')+'> Keep the card on file for the rest of the bill</label>':'';
   if(!l)return h+'<div class="row" style="margin-top:8px"><button class="btn primary grow" data-act="pay:qr" data-busy="1">Show a QR code</button>'+
     (j.d.phone?'<button class="btn grow" data-act="pay:text" data-busy="1">'+(co?'Text it to '+who:'Text it from my phone')+'</button>':'')+'</div>'+
@@ -7955,7 +8030,7 @@ function payStepStripe(j){
     panel='<div class="grid2 stack">'+fld('Method','<select id="otherMethod"><option>Cash</option><option>Check</option><option>Zelle or app</option></select>')+fld('Check number or reference (optional)','<input id="otherRef">')+'</div>';
     btn='<button class="btn primary bigbtn" data-act="flow:pay">Record payment</button>';
   }
-  return '<h2>'+payTitle(j)+'</h2>'+(pay.cfg.test?'<div class="note">Stripe test mode: no real money moves. Test card 4242 4242 4242 4242, any future date, any security code.</div>':'')+
+  return '<h2>'+payTitle(j)+'</h2>'+(pay.cfg.test?'<div class="note">'+(sqOn()?'Square’s sandbox: no real money moves. Test card 4111 1111 1111 1111, any future date, CVV 111, ZIP 94103.':'Stripe test mode: no real money moves. Test card 4242 4242 4242 4242, any future date, any security code.')+'</div>':'')+
     payTiles(j)+
     fld('Amount','<input id="flowAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+fmtCents(Math.round(amt*100))+'">')+payQuick(j)+'<div class="methods">'+chips+'</div>'+panel+btn+'<p class="hint" id="flowErr" role="alert"></p>';
 }
@@ -7991,7 +8066,7 @@ function payPoll(){
 function officeLinkHtml(j){
   var bal=balOf(j);if(!payOn()||bal<=0||!canEditJobs())return '';
   var l=pay.links[j.id],co=commsReady(),dep=Math.min(round2(j.quote.deposit||0),bal),who=esc(j.d.name||'the customer');
-  return '<h3 style="margin:16px 0 6px;font-size:16px">Send a payment link</h3><p class="hint" style="margin-top:0">'+who+' pays on their phone; the payment shows up here by itself.'+(pay.cfg.test?' Stripe test mode.':'')+'</p>'+
+  return '<h3 style="margin:16px 0 6px;font-size:16px">Send a payment link</h3><p class="hint" style="margin-top:0">'+who+' pays on their phone; the payment shows up here by itself.'+(pay.cfg.test?(sqOn()?' Square’s sandbox.':' Stripe test mode.'):'')+'</p>'+
     '<div class="row">'+(dep>0&&dep<bal-0.004?'<button class="btn sm" data-act="pl:make" data-v="'+dep+'" data-save="1" data-busy="1">Deposit '+money(dep)+'</button>':'')+'<button class="btn sm" data-act="pl:make" data-v="'+bal+'" data-busy="1">Balance '+money(bal)+'</button></div>'+
     (l?'<div class="linkbox" style="margin-top:8px"><code>'+esc(l.url)+'</code><small>'+money(l.amount)+(l.save?' · keeps the card on file':'')+'</small></div>'+
       '<div class="row" style="margin-top:6px">'+(j.d.phone?(co?'<button class="btn sm" data-act="pl:text" data-busy="1">Text it to '+who+'</button>':'<a class="btn sm" href="'+esc(smsHref(j.d.phone,payLinkText(l.amount,l.url)))+'">Text it from my phone</a>'):'')+
@@ -8006,6 +8081,8 @@ var STRIPE_DUE=[[/^external_account/,'The bank account Stripe pays out to'],[/^t
 function stripeDue(list){var out=[];(list||[]).forEach(function(k){var hit=STRIPE_DUE.filter(function(x){return x[0].test(String(k))})[0],t=hit?hit[1]:'Something else Stripe asks for';if(out.indexOf(t)<0)out.push(t)});return out}
 function payCardHtml(){
   if(!window.tallyPay)return '<section class="card"><h2>Payments</h2><p class="sub">Card payments run on the hosted edition of MoveCrew (the website and the Android app), through Stripe. This copy records payments but does not charge cards.</p></section>';
+  // cards go through the company's Square account: Square first, Stripe waiting
+  if(sqOn())return sqCardHtml()+'<section class="card"><h2>Stripe</h2><p class="sub" style="margin:0">Not used while card payments go through Square. <b>Use Stripe instead</b> above switches back.</p></section>';
   var c=pay.cfg,st,cn=(c&&c.connect)||{},due=stripeDue(cn.due),btn='<button class="btn sm" data-act="pay:reload">Check again</button>',test=c&&c.test?' (test mode)':'';
   // a company's own Stripe account: what is next, and the button to Stripe's sign-up
   var go=function(label){return '<div class="row" style="margin-top:8px"><button class="btn primary" data-act="pay:connect"'+(pay.conn.busy?' disabled':'')+'>'+(pay.conn.busy?'Opening Stripe…':label)+'</button>'+btn+'</div>'+
@@ -8028,23 +8105,62 @@ function payCardHtml(){
   else if(c.reason==='org-off')st='<div class="note"><b>Stripe is set up, but this company is not turned on for card payments yet.</b><br><small>Add it to the pay_orgs table in Supabase (the payments setup guide shows how).</small></div>'+btn;
   else if(c.reason==='no-key')st='<div class="note"><b>Not connected yet.</b><br><small>Add STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY under Supabase › Edge Functions › Secrets. The payments setup guide walks through it.</small></div>'+btn;
   else st='<div class="note"><b>The payment service did not answer.</b></div>'+btn;
-  return '<section class="card"><h2>Payments</h2>'+st+'<p class="sub">Card numbers never touch MoveCrew. Customers pay on Stripe’s own page or in Stripe’s card box, and only the brand, last four digits, expiry and name of a card kept on file are saved here.</p></section>';
+  return '<section class="card"><h2>'+(c&&c.square?'Stripe':'Payments')+'</h2>'+st+'<p class="sub">Card numbers never touch MoveCrew. Customers pay on Stripe’s own page or in Stripe’s card box, and only the brand, last four digits, expiry and name of a card kept on file are saved here.</p></section>'+sqCardHtml();
+}
+// Square, for a company that already takes cards with it (Richie, Nov 1: "There should be a place where the company
+// can link what they use then the app will auto use their connection for the payment"). Only when MoveCrew's Square
+// app is set up (the server's SQUARE_APP_ID); the owner connects on Square's own sign-in page.
+function sqCardHtml(){
+  var c=pay.cfg,s=c&&c.square;if(!s)return '';
+  var sc=s.conn,busy=pay.sq.busy,live=s.mode==='live';
+  var again='<button class="btn sm" data-act="pay:reload">Check again</button>';
+  var go=function(label,main){return '<div class="row" style="margin-top:8px"><button class="btn'+(main?' primary':'')+'" data-act="pay:sqconnect"'+(busy?' disabled':'')+'>'+(busy?'Opening Square…':label)+'</button>'+again+'</div>'+
+    (pay.sq.url?'<p class="hint">Your browser kept Square’s page from opening. <a href="'+esc(pay.sq.url)+'" target="_blank" rel="noopener">Open Square’s sign-in page</a> (the link works for a few minutes).</p>':'')+
+    (pay.sq.wait?'<p class="hint">Finished on Square’s page? Come back here; this updates by itself.</p>':'')};
+  var err=pay.sq.msg?'<p class="hint" role="alert" style="color:var(--bad)">'+esc(pay.sq.msg)+'</p>':'',h;
+  if(!s.table)h='<div class="note"><b>Square needs one step in the database first.</b><br><small>Run supabase-square.sql in the Supabase SQL editor (the Square setup guide shows how).</small></div>'+again;
+  else if(!sc)h='<p class="hint" style="margin-top:0">Already take cards with Square? Connect your Square account and MoveCrew uses it for every card: the card box, cards kept on file, pay links and the customer app. The money goes to your Square account; MoveCrew takes no cut.'+(live?'':' Square’s sandbox for now: no real money moves.')+'</p>'+go('Connect with Square',!(c.ready));
+  else if(sc.state==='ready')h='<div class="note"><b>'+(sc.active?'Card payments go through your Square account':'Square is connected')+(live?'':' (Square’s sandbox)')+'.</b><br><small>'+esc(sc.business||'Square')+(sc.location?' · '+esc(sc.location):'')+'. '+
+      (sc.active?'The card box, cards kept on file, pay links and the customer app all use Square.':'Card payments go through Stripe until you switch.')+'</small></div>'+
+    '<div class="row" style="margin-top:8px">'+(sc.active?'<button class="btn" data-act="pay:squse" data-use="stripe"'+(busy?' disabled':'')+'>Use Stripe instead</button>':'<button class="btn primary" data-act="pay:squse" data-use="square"'+(busy?' disabled':'')+'>Use Square for cards</button>')+
+    '<button class="btn danger" data-act="pay:sqoff"'+(busy?' disabled':'')+'>'+(ui.armed==='sqoff'?'Tap again to disconnect':'Disconnect Square')+'</button>'+again+'</div>'+
+    (ui.armed==='sqoff'?'<p class="hint">Square takes back MoveCrew’s access. Payments already taken stay in your Square account.</p>':'');
+  else if(sc.state==='no-location')h='<div class="note"><b>Your Square account can’t take card payments yet'+(sc.business?' ('+esc(sc.business)+')':'')+'.</b><br><small>Finish setting up card payments in Square, then connect again.</small></div>'+go('Connect again',!c.ready);
+  else h='<div class="note"><b>Square was disconnected'+(sc.business?' ('+esc(sc.business)+')':'')+'.</b><br><small>Connect again to take cards through Square. Payments already taken stay in your Square account.</small></div>'+go('Connect again',!c.ready);
+  return '<section class="card"><h2>Square</h2>'+h+err+'</section>';
+}
+// The owner connects the company's Square account on Square's own sign-in page (outside MoveCrew in the apps).
+var SQ_PAGE={name:'Square',re:/^https:\/\/connect\.squareup(sandbox)?\.com\//i};
+function sqConnectGo(){
+  if(pay.sq.busy||!window.tallyPay)return;
+  stripeOpen(function(){return window.tallyPay.sqConnect()},pay.sq,function(now){if(now)renderSettings();else softSettings()},SQ_PAGE).then(function(r){if(r&&r.ok)pay.cfgAt=0});
+}
+function sqAct(call){
+  if(pay.sq.busy||!window.tallyPay)return;
+  pay.sq.busy=true;pay.sq.msg='';ui.armed='';renderSettings();
+  Promise.resolve(call()).then(null,function(){return null}).then(function(r){
+    pay.sq.busy=false;
+    if(!r||!r.ok){pay.sq.msg=(r&&r.message)||'Could not reach the server. Try again.';renderSettings();return}
+    if(r.message)toast(r.message);
+    cardDrop();payLoad(true);
+  });
 }
 // Opens a Stripe page the server hands back (Connect sign-up, membership checkout, billing page). In a
 // browser a tab is opened on the tap itself (so it isn't blocked) and the page loads into it; the Android
 // and Windows apps hand it to the phone's or the computer's browser. st keeps {busy,url,msg,wait}: url is a link to tap when the browser
 // blocked the tab anyway, wait means "back from Stripe? this updates". Only https Stripe pages open.
-function stripeOpen(call,st,draw){
+function stripeOpen(call,st,draw,who){
+  who=who||{name:'Stripe',re:/^https:\/\/[a-z0-9.-]*stripe\.com\//i};   // Square's sign-in page too (SQ_PAGE)
   var app=inApp(),tab=null;
   if(!app){try{tab=window.open('','_blank')}catch(e){}
-    if(tab){try{tab.opener=null;tab.document.title='Opening Stripe…';tab.document.body.innerHTML='<p style="font:16px system-ui,sans-serif;padding:24px">Opening Stripe…</p>'}catch(e){}}}
+    if(tab){try{tab.opener=null;tab.document.title='Opening '+who.name+'…';tab.document.body.innerHTML='<p style="font:16px system-ui,sans-serif;padding:24px">Opening '+who.name+'…</p>'}catch(e){}}}
   st.busy=true;st.url='';st.msg='';draw(true);
   return Promise.resolve(call()).then(null,function(){return null}).then(function(r){
     st.busy=false;
     var u=r&&r.ok&&!r.done?String(r.url||''):'';
-    if(r&&r.ok&&!r.done&&!/^https:\/\/[a-z0-9.-]*stripe\.com\//i.test(u)){r={ok:false,message:'Stripe did not give a page to open. Try again.'};u=''}
+    if(r&&r.ok&&!r.done&&!who.re.test(u)){r={ok:false,message:who.name+' did not give a page to open. Try again.'};u=''}
     if(!u&&tab){try{tab.close()}catch(e){}}
-    if(!r||!r.ok){st.msg=(r&&r.message)||'Could not reach Stripe. Try again.';draw();return r}
+    if(!r||!r.ok){st.msg=(r&&r.message)||'Could not reach '+who.name+'. Try again.';draw();return r}
     if(r.done){draw();return r}
     st.wait=true;
     if(app){draw();handOff(u);return r}   // the app opens it in the phone's or the computer's browser
@@ -8068,7 +8184,7 @@ function payConnect(){
 // back in MoveCrew from Stripe's page (or after a while away): ask Stripe how the account stands
 function payBack(){
   if(document.hidden||!window.tallyPay||!pay.cfg)return;
-  var c=pay.cfg,waiting=pay.conn.wait||(!c.ready&&/^connect/.test(c.reason||''))||(c.connect&&(c.connect.due||[]).length);
+  var c=pay.cfg,waiting=pay.conn.wait||pay.sq.wait||(!c.ready&&/^connect/.test(c.reason||''))||(c.connect&&(c.connect.due||[]).length);
   if(waiting&&Date.now()-(pay.cfgAt||0)>4e3)payLoad(true,true);
 }
 function memberBack(){
@@ -8946,6 +9062,9 @@ document.addEventListener('click',function(e){
         if(r.owed<balOf(cj)-0.004){toast('Payment found.');window.tallyPay.refresh()}else toast('Nothing paid yet.')});break}
     case 'pay:reload':pay.cfg=null;payLoad(true,true);renderSettings();break;
     case 'pay:connect':payConnect();break;
+    case 'pay:sqconnect':sqConnectGo();break;
+    case 'pay:squse':sqAct(function(){return window.tallyPay.sqUse(t.dataset.use)});break;
+    case 'pay:sqoff':if(ui.armed!=='sqoff'){ui.armed='sqoff';renderSettings();break}sqAct(function(){return window.tallyPay.sqDisconnect()});break;
     case 'mem:start':memberOpen('start');break;
     case 'mem:portal':memberOpen('portal');break;
     case 'mem:reload':member.msg='';member.url='';memberLoad(true,true);break;
@@ -9005,7 +9124,7 @@ document.addEventListener('click',function(e){
     case 'st:reqform':{var rf2=S.forms.find(function(x){return x.id===t.dataset.id});if(rf2){rf2.required=!rf2.required;save();renderSettings()}break}
     case 'st:rmform':setRemove('forms',S.forms.findIndex(function(x){return x.id===t.dataset.id}));break;
     case 'st:rmvault':{var rv=state.vault.find(function(x){return x.id===t.dataset.id});
-      if(rv&&rv.via==='stripe'&&window.tallyPay&&window.tallyPay.forget){toast('Removing the card…');
+      if(rv&&(rv.via==='stripe'||rv.via==='square')&&window.tallyPay&&window.tallyPay.forget){toast('Removing the card…');
         window.tallyPay.forget(rv.id).then(function(r){if(!r||!r.ok){toast((r&&r.message)||'Could not remove the card.');return}
           state.vault=state.vault.filter(function(x){return x.id!==rv.id});save();renderSettings();toast(r.message||'Card removed.')});break}
       state.vault=state.vault.filter(function(x){return x.id!==t.dataset.id});save();renderSettings();break}

@@ -1040,6 +1040,7 @@ async function stripeV2(method: string, path: string, body?: J, idem?: string): 
 function stripeNo(e: unknown): boolean { return e instanceof StripeError && e.status >= 400 && e.status < 500; }
 // What a person sees when Stripe says no. Never includes a key.
 function stripeTrouble(e: unknown): string {
+  if (e instanceof SquareError) return e.status === 401 ? "Square turned MoveCrew down. The owner connects Square again in Setup › Payments." : "Square said: " + String(e.message || "no reason given").slice(0, 200);
   if (!(e instanceof StripeError)) return "Something went wrong on the server.";
   if (e.status === 401) return "Stripe did not accept the key. Check STRIPE_SECRET_KEY in Supabase.";
   if (e.status === 403) return "The Stripe key is missing a permission. See the payments setup guide.";
@@ -1180,6 +1181,8 @@ function payOffWhy(reason: string): string {
 }
 // The account a company takes payments on now: '' (the platform's) or its connected account; null when neither.
 async function currentAcct(org: string): Promise<string | null> {
+  const sqa = await sqActive(org);
+  if (sqa) return sqAcct(sqa.merchant_id);
   if (await payOrgOn(org)) return "";
   const row = await acctRow(org);
   return row ? row.account_id : null;
@@ -1205,9 +1208,16 @@ async function tooManyPays(org: string, by: string): Promise<boolean> {
 const TOO_MANY = "That's a lot of payments this hour. Try again in a little while.";
 // Everything a payment needs checked before it starts. Returns {err, status?} or {S, job}.
 async function payContext(org: string, me: J, jobId: string): Promise<J> {
-  if (!stripeMode()) return { err: "Card payments are not set up yet." };
-  const pa = await payAccount(org);
-  if (!pa.on) return { err: payOffWhy(pa.reason) };
+  // the company's own Square account when its cards go through Square (Setup › Payments), else Stripe
+  const sqa = await sqActive(org);
+  let acct = "";
+  if (sqa) acct = sqAcct(sqa.merchant_id);
+  else {
+    if (!stripeMode()) return { err: "Card payments are not set up yet." };
+    const pa = await payAccount(org);
+    if (!pa.on) return { err: payOffWhy(pa.reason) };
+    acct = pa.acct;
+  }
   const [S, job] = await Promise.all([getDoc(org, "org/settings"), getDoc(org, "jobs/" + jobId)]);
   if (!job) return { err: "That job is not available." };
   if (!canTakePay(me, job, S)) {
@@ -1215,10 +1225,10 @@ async function payContext(org: string, me: J, jobId: string): Promise<J> {
     return { status: 403, err: off ? (me.role === "lead" ? "The office collects payments in this company." : "Only the owner takes payments in this company.")
       : me.role === "lead" ? "You can only take payments on your own jobs." : "Crew leads and the office take payments." };
   }
-  if (job.test && liveNow()) return { err: "Test job: no real charges." };
+  if (job.test && modeLive(acct)) return { err: "Test job: no real charges." };
   if (job.status === "lost") return { err: "This job is marked lost." };
   if ((job.status === "active" || job.status === "done") && pendingForms(S, job).length) return { err: "The customer signs the required forms first." };
-  return { S, job, acct: pa.acct };
+  return { S, job, acct, sq: sqa };
 }
 // `reserved` is a card payment someone else on this job is in the middle of.
 function amountTrouble(c: number, owed: number, reserved = 0): string {
@@ -1329,7 +1339,7 @@ export async function ensureWebhook(kind: HookKind = "platform"): Promise<J> {
   }
 }
 // the webhook a company's payments need: the platform's, or the one for companies' own accounts
-const hookFor = (acct: string) => ensureWebhook(acct ? "connect" : "platform");
+const hookFor = (acct: string): Promise<J> => isSq(acct) ? Promise.resolve({ ok: true }) : ensureWebhook(acct ? "connect" : "platform");
 export async function stripeSignature(raw: string, secret: string, t: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(t + "." + raw)));
@@ -1356,12 +1366,12 @@ export async function stripeSigOk(raw: string, header: string, secrets: string[]
    customer lives on the account its payments are made on, so on a company's own account it is filed
    under "<account>|<key>") */
 async function customerFor(org: string, job: J, jobId: string, acct = ""): Promise<string> {
-  const key = payKeyOf(job, jobId), live = liveNow(), ck = acct ? acct + "|" + key : key;
+  const key = payKeyOf(job, jobId), live = modeLive(acct), ck = acct ? acct + "|" + key : key;
   const find = () => rest("GET", "pay_customers?select=customer_id&org_id=eq." + q(org) + "&cust_key=eq." + q(ck) + "&livemode=eq." + live + "&limit=1");
   const rows = await find();
   if (rows && rows[0]) return rows[0].customer_id;
   const d = job.d || {};
-  const c = await stripe("POST", "customers", {
+  const c = isSq(acct) ? await sqCustomer(org, acct, key, d) : await stripe("POST", "customers", {
     name: String(d.name || "").trim().slice(0, 200) || undefined, phone: e164(d.phone) || undefined,
     email: validEmail(d.email) || undefined, metadata: { tally_org: org, tally_cust: key.slice(0, 400) },
   }, undefined, acct);
@@ -1373,7 +1383,7 @@ async function customerFor(org: string, job: J, jobId: string, acct = ""): Promi
 // recordIntent), so a name or phone changed afterwards can't point the job at someone else's cards. If the
 // company has moved to another Stripe account since, the customer there is found again the same way.
 async function jobCustomer(org: string, jobId: string, job: J, acct = ""): Promise<J> {
-  const live = liveNow();
+  const live = modeLive(acct);
   const row = ((await rest("GET", "pay_jobs?select=cust_key,customer_id,account&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&livemode=eq." + live + "&limit=1")) || [])[0];
   if (row && (row.account || "") === acct) return { customer: row.customer_id, key: row.cust_key, bound: true };
   return { customer: await customerFor(org, job, jobId, acct), key: payKeyOf(job, jobId), bound: false };
@@ -1389,26 +1399,35 @@ async function saveCard(org: string, md: J, pi: J, pm: J, jobId: string, acct = 
   if ((pi.setup_future_usage || (opt && opt.setup_future_usage)) !== "off_session") return;
   const cust = String(md.tally_cust || "");
   if (!cust) return;
-  const card = pm.card, id = await cardId(pm.id), live = !!pi.livemode, fp = String(card.fingerprint || "");
+  const card = pm.card;
+  await fileCard(org, {
+    id: await cardId(pm.id), cust, customer: typeof pm.customer === "string" ? pm.customer : pm.customer.id, pmId: pm.id,
+    fp: String(card.fingerprint || ""), name: String((pm.billing_details && pm.billing_details.name) || "").trim().slice(0, 120),
+    ts: (Number(pm.created) || Number(pi.created) || 0) * 1000 || Date.now(), live: !!pi.livemode, acct, jobId, via: "stripe",
+    brand: BRANDS[card.brand] || "Card", last4: String(card.last4 || ""),
+    exp: card.exp_month && card.exp_year ? String(card.exp_month).padStart(2, "0") + "/" + String(card.exp_year).slice(-2) : "",
+  });
+}
+// A card kept on file, whichever processor keeps it (Stripe's saveCard, Square's sqKeepCard): the server's own
+// record of it (pay_cards) and the app's list entry (vault/<id>: brand, last four, expiry, name, the jobs it was
+// kept on). f: {id, cust, customer, pmId, fp, name, ts, live, acct, jobId, via, brand, last4, exp}.
+async function fileCard(org: string, f: J): Promise<void> {
+  const { id, cust, customer, fp, live, jobId } = f;
   // kept already: this payment was written down before (a refund, a second message), or the card was
   // taken off the list since, which this must not undo
   if (((await rest("GET", "pay_cards?select=id&id=eq." + q(id) + "&limit=1")) || []).length) return;
-  const customer = typeof pm.customer === "string" ? pm.customer : pm.customer.id;
-  const name = String((pm.billing_details && pm.billing_details.name) || "").trim().slice(0, 120);
-  const ts = (Number(pm.created) || Number(pi.created) || 0) * 1000 || Date.now();
   // the same card kept before (an earlier deposit, say) shows once on the list, as its newest entry
   const dupes = fp ? (await rest("GET", "pay_cards?select=id,job_id&org_id=eq." + q(org) + "&customer_id=eq." + q(customer) + "&fingerprint=eq." + q(fp) + "&livemode=eq." + live)) || [] : [];
   const docs = await Promise.all(dupes.map((r: J) => getDoc(org, "vault/" + r.id)));
   const jobs = Array.from(new Set([jobId].concat(dupes.map((r: J) => String(r.job_id || "")).filter(Boolean)))).slice(0, 20);
-  const newer = docs.find((d: J) => d && Number(d.ts) > ts);
+  const newer = docs.find((d: J) => d && Number(d.ts) > f.ts);
   if (newer) {
     await rest("POST", "docs?on_conflict=org_id,path", { org_id: org, path: "vault/" + newer.id, collection: "vault", doc_id: newer.id, data: { ...newer, jobs }, updated_at: nowIso() }, "resolution=merge-duplicates");
   } else {
-    const exp = card.exp_month && card.exp_year ? String(card.exp_month).padStart(2, "0") + "/" + String(card.exp_year).slice(-2) : "";
-    const data = { id, cust, type: "card", brand: BRANDS[card.brand] || "Card", last4: String(card.last4 || ""), exp, name, jobs, via: "stripe", live, ts };
+    const data = { id, cust, type: "card", brand: f.brand, last4: f.last4, exp: f.exp, name: f.name, jobs, via: f.via, live, ts: f.ts };
     await rest("POST", "docs?on_conflict=org_id,path", { org_id: org, path: "vault/" + id, collection: "vault", doc_id: id, data, updated_at: nowIso() }, "resolution=merge-duplicates");
   }
-  await rest("POST", "pay_cards?on_conflict=id", { id, org_id: org, cust_key: cust, customer_id: customer, pm_id: pm.id, fingerprint: fp, name, job_id: jobId, livemode: live, account: acct }, "resolution=merge-duplicates");
+  await rest("POST", "pay_cards?on_conflict=id", { id, org_id: org, cust_key: cust, customer_id: customer, pm_id: f.pmId, fingerprint: fp, name: f.name, job_id: jobId, livemode: live, account: f.acct }, "resolution=merge-duplicates");
   if (!newer) for (const r of dupes) if (r.id !== id) await rest("DELETE", "docs?org_id=eq." + q(org) + "&path=eq." + q("vault/" + r.id));
 }
 
@@ -1451,20 +1470,38 @@ export async function recordIntent(pi0: J, acct = ""): Promise<J> {
   const amtC = status === "succeeded" ? (Number(pi.amount_received) || Number(pi.amount) || 0) : (Number(pi.amount) || 0);
   const refunded = paidNow && ch ? Math.min(amtC, Number(ch.amount_refunded) || 0) : 0;
   const dispute = paidNow && ch && ch.disputed ? await disputeOf(pi.id, acct) : { cents: 0, lost: false };
-  const disputed = Math.min(amtC - refunded, dispute.cents);
+  const tipC = md.tally_src === "cust" ? Math.round(Number(md.tally_tip) || 0) : 0;
+  const err = pi.last_payment_error ? String(pi.last_payment_error.message || pi.last_payment_error.code || "").slice(0, 300) : null;
+  const cus = typeof pi.customer === "string" ? pi.customer : pi.customer && pi.customer.id;
+  const out = await writeDown({ lid: pi.id, org, jobId, acct, via: "Stripe", status, live, label, amtC, refunded, dispute, tipC, err,
+    src: String(md.tally_src || ""), cust: String(md.tally_cust || ""), by: String(md.tally_by || ""), customer: cus || "" });
+  if (out.ok && status === "succeeded") await saveCard(org, md, pi, pm, jobId, acct);
+  return out;
+}
+// The one place a card payment is written down, whichever processor took it (Stripe's recordIntent, Square's
+// sqRecord): the ledger (pay_log, under its own id `lid`); the job's customer, fixed by its first payment that goes
+// through; the job (the payment, and any refund or dispute as its own line taking money off). Safe to call any
+// number of times for the same payment, in any order. x: {lid, org, jobId, acct, via ('Stripe'|'Square'), status
+// (Stripe's words: succeeded, processing, requires_payment_method, canceled), live, label, amtC, refunded,
+// dispute {cents, lost}, tipC (the customer's tip in it), err, src, cust, by, customer}.
+async function writeDown(x: J): Promise<J> {
+  const { lid, org, jobId, acct, via, status, live, label, amtC } = x;
+  const paidNow = status === "succeeded" || status === "processing";
+  const refunded = paidNow ? Math.min(amtC, Number(x.refunded) || 0) : 0;
+  const dispute = paidNow && x.dispute ? x.dispute : { cents: 0, lost: false };
+  const disputed = Math.min(amtC - refunded, Number(dispute.cents) || 0);
   // a customer's tip for the crew, on the same payment (the customer side): the bill's part is the rest, and a refund
   // or a dispute comes off the bill's part first, then the tip's
-  const tipC = md.tally_src === "cust" ? Math.max(0, Math.min(amtC, Math.round(Number(md.tally_tip) || 0))) : 0, billC = amtC - tipC;
+  const tipC = x.src === "cust" ? Math.max(0, Math.min(amtC, Math.round(Number(x.tipC) || 0))) : 0, billC = amtC - tipC;
   const rfBill = Math.min(refunded, billC), dpBill = Math.min(disputed, billC - rfBill), tipBack = tipC ? Math.min(tipC, refunded + disputed - rfBill - dpBill) : 0;
-  const err = pi.last_payment_error ? String(pi.last_payment_error.message || pi.last_payment_error.code || "").slice(0, 300) : null;
   await rest("POST", "pay_log?on_conflict=pi", {
-    pi: pi.id, org_id: org, job_id: jobId, amount_cents: amtC, refunded_cents: refunded, disputed_cents: disputed, status,
-    source: String(md.tally_src || "") + (tipC ? ";tip=" + tipC : ""), method: label, cust_key: String(md.tally_cust || ""), by_staff: String(md.tally_by || ""),
-    livemode: live, error: err, updated_at: nowIso(), account: acct,
+    pi: lid, org_id: org, job_id: jobId, amount_cents: amtC, refunded_cents: refunded, disputed_cents: disputed, status,
+    source: String(x.src || "") + (tipC ? ";tip=" + tipC : ""), method: label, cust_key: String(x.cust || ""), by_staff: String(x.by || ""),
+    livemode: live, error: x.err || null, updated_at: nowIso(), account: acct,
   }, "resolution=merge-duplicates");
-  const cus = typeof pi.customer === "string" ? pi.customer : pi.customer && pi.customer.id;
+  const cus = x.customer;
   if (paidNow && cus) {
-    const bind = { cust_key: String(md.tally_cust || ""), customer_id: cus, account: acct };
+    const bind = { cust_key: String(x.cust || ""), customer_id: cus, account: acct };
     await rest("POST", "pay_jobs?on_conflict=org_id,job_id,livemode", { org_id: org, job_id: jobId, livemode: live, ...bind }, "resolution=ignore-duplicates");
     // the company moved to another Stripe account since the job's first payment: its first payment there binds it
     // again (a refund on an old payment, written down later, doesn't move it back)
@@ -1476,9 +1513,11 @@ export async function recordIntent(pi0: J, acct = ""): Promise<J> {
   if (!job) return { ok: false, reason: "no-job" };
   const pays = job.payments || {}, day = today(), now = Date.now();
   const changes: [string, J, string][] = [];
-  const pid = "st_" + pi.id, have = pays[pid];
+  const pid = "st_" + lid, have = pays[pid];
   if (paidNow) {
-    const entry: J = { id: pid, amt: billC / 100, method: label, date: (have && have.date) || day, ts: (have && have.ts) || now, stripe: pi.id, by: String(md.tally_by || ""), live };
+    // `stripe` names the ledger entry this line comes from, whichever processor took it (the database's job guard
+    // keeps such lines as the server wrote them)
+    const entry: J = { id: pid, amt: billC / 100, method: label, date: (have && have.date) || day, ts: (have && have.ts) || now, stripe: lid, by: String(x.by || ""), live };
     if (tipC) entry.tip = tipC / 100;
     if (status === "processing") entry.pending = true;
     if (!sameEntry(have, entry)) {
@@ -1489,27 +1528,26 @@ export async function recordIntent(pi0: J, acct = ""): Promise<J> {
   }
   // a refund or a dispute is its own line on the bill, taking money off
   const side = (key: string, c: number, method: string, added: string, gone: string) => {
-    const id = key + pi.id, h = pays[id];
+    const id = key + lid, h = pays[id];
     if (c > 0) {
-      const e: J = { id, amt: -c / 100, method, date: (h && h.date) || day, ts: (h && h.ts) || now, stripe: pi.id, live };
+      const e: J = { id, amt: -c / 100, method, date: (h && h.date) || day, ts: (h && h.ts) || now, stripe: lid, live };
       if (!sameEntry(h, e)) changes.push([id, e, added]);
     } else if (h) changes.push([id, null, gone]);
   };
-  const rf = pays["rf_" + pi.id], dp = pays["dp_" + pi.id], rt = pays["rt_" + pi.id];
+  const rf = pays["rf_" + lid], dp = pays["dp_" + lid], rt = pays["rt_" + lid];
   side("rf_", rfBill, "Refund · " + label,
     "Refunded " + money(rfBill) + " of the " + money(amtC) + " payment (" + label + ")",
     "The refund of " + money(Math.abs(cents(rf && rf.amt))) + " did not go through (" + label + ")");
   side("dp_", dpBill, (dispute.lost ? "Dispute lost · " : "Disputed · ") + label,
     dispute.lost ? "Dispute lost: the bank gave " + money(dpBill) + " back to the customer (" + label + ")"
-      : "The customer disputed the " + money(amtC) + " payment (" + label + "). Stripe holds " + money(dpBill) + " until the bank decides",
-    "Dispute closed: the " + money(Math.abs(cents(dp && dp.amt))) + " Stripe held came back (" + label + ")");
+      : "The customer disputed the " + money(amtC) + " payment (" + label + "). " + via + " holds " + money(dpBill) + " until the bank decides",
+    "Dispute closed: the " + money(Math.abs(cents(dp && dp.amt))) + " " + via + " held came back (" + label + ")");
   // the tip's part of a refund or a dispute: its own line, taking it off the crew's tip (nothing off the bill)
   if (tipBack > 0) {
-    const e: J = { id: "rt_" + pi.id, amt: 0, tip: -tipBack / 100, method: "Tip back " + money(tipBack) + " · " + label, date: (rt && rt.date) || day, ts: (rt && rt.ts) || now, stripe: pi.id, live };
+    const e: J = { id: "rt_" + lid, amt: 0, tip: -tipBack / 100, method: "Tip back " + money(tipBack) + " · " + label, date: (rt && rt.date) || day, ts: (rt && rt.ts) || now, stripe: lid, live };
     if (!sameEntry(rt, e)) changes.push([e.id, e, money(tipBack) + " of the crew's tip went back to the customer (" + label + ")"]);
-  } else if (rt) changes.push(["rt_" + pi.id, null, "The crew's tip stands again (" + label + ")"]);
+  } else if (rt) changes.push(["rt_" + lid, null, "The crew's tip stands again (" + label + ")"]);
   if (!changes.length) {
-    if (status === "succeeded") await saveCard(org, md, pi, pm, jobId, acct);
     return { ok: true, org, job: jobId, recorded: false, status, label, amount: amtC / 100, owed: await owedCents(org, jobId, job) };
   }
   // the bill once these are on it
@@ -1519,7 +1557,7 @@ export async function recordIntent(pi0: J, acct = ""): Promise<J> {
   const less = paidCents(after) < paidCents(pays);
   for (let i = 0; i < changes.length; i++) {
     const [id, e, ev0] = changes[i], last = i === changes.length - 1;
-    const ev = ev0 + (last && bal < 0 && !less ? ". That's " + money(-bal) + " more than the bill: refund the difference in Stripe if it was a mistake" : "");
+    const ev = ev0 + (last && bal < 0 && !less ? ". That's " + money(-bal) + " more than the bill: refund the difference in " + via + " if it was a mistake" : "");
     const ts = now + i;
     await rest("POST", "rpc/pay_record", { o: org, job: jobId, pay_id: id, payment: e, log_key: logKey(ts, ev), log_entry: { ts, ev }, mark_paid: last && bal <= 0 });
   }
@@ -1528,7 +1566,6 @@ export async function recordIntent(pi0: J, acct = ""): Promise<J> {
     const ts = now + changes.length, ev = "Back to Complete: " + money(bal) + " is owed again";
     await rest("POST", "rpc/pay_reopen", { o: org, job: jobId, log_key: logKey(ts, ev), log_entry: { ts, ev } });
   }
-  if (status === "succeeded") await saveCard(org, md, pi, pm, jobId, acct);
   return { ok: true, org, job: jobId, recorded: true, status, label, amount: amtC / 100, owed: Math.max(0, bal) };
 }
 // A card payment that was started and never finished: cancelled, so it can't be finished later on top of
@@ -1545,21 +1582,22 @@ async function cancelIntent(pi: J, acct = ""): Promise<void> {
 async function repairJob(org: string, jobId: string): Promise<number> {
   const job = await getDoc(org, "jobs/" + jobId);
   if (!job) return 0;
-  const pays = job.payments || {}, live = liveNow();
+  const pays = job.payments || {};
   let n = 0;
   for (const r of await ledgerFor(org, jobId)) {
-    if (!!r.livemode !== live || (r.status !== "succeeded" && r.status !== "processing")) continue;
+    if (!!r.livemode !== modeLive(r.account) || (r.status !== "succeeded" && r.status !== "processing")) continue;
     const missing = !pays["st_" + r.pi] || (Number(r.refunded_cents) > 0 && !pays["rf_" + r.pi]) || (Number(r.disputed_cents) > 0 && !pays["dp_" + r.pi]);
-    if (missing) { await recordIntent({ id: r.pi }, r.account || ""); n++; }
+    if (missing) { if (isSq(r.account)) await sqSettleRow(org, r); else await recordIntent({ id: r.pi }, r.account || ""); n++; }
   }
   return n;
 }
 
 /* the Stripe pages behind pay links */
-const sessionLive = (id: unknown) => /^cs_live_/.test(String(id || ""));
+const sessionLive = (id: unknown) => /^(cs_live_|sqpl_live_)/.test(String(id || ""));
 const pageEnds = (l: J) => l.session_expires || l.expires_at;
 const capOf = (l: J) => Number(l.cap_cents == null ? l.amount_cents : l.cap_cents) || 0;
-const pageUsable = (l: J) => Date.parse(pageEnds(l)) > Date.now() && sessionLive(l.session_id) === liveNow();
+const pageUsable = (l: J) => isSq(l.account) ? !(l.meta && l.meta.closed) && sessionLive(l.session_id) === modeLive(l.account)
+  : Date.parse(pageEnds(l)) > Date.now() && sessionLive(l.session_id) === liveNow();
 async function mintSession(o: J): Promise<J> {
   const d = o.job.d || {};
   const md = { ...payMeta(o.org, o.jobId, o.job, o.by, "link"), tally_link: o.token };
@@ -1585,6 +1623,7 @@ async function sessionPaid(l: J, s: J): Promise<void> {
 // Stops a Stripe page. "closed"; "paid" when the customer had just paid on it (written down now); or "open"
 // when Stripe wouldn't stop it, most likely because a payment on it is going through.
 async function closeSession(l: J): Promise<string> {
+  if (isSq(l.account)) return await sqCloseLink(l);
   const acct = l.account || "";
   try {
     await stripe("POST", "checkout/sessions/" + l.session_id + "/expire", undefined, undefined, acct);
@@ -1613,15 +1652,27 @@ async function trimSessions(org: string, jobId: string, limit: number): Promise<
 }
 // A link replaced by a newer one stops working.
 async function retireLink(l: J): Promise<string> {
-  const r = pageUsable(l) ? await closeSession(l) : "closed";
+  const r = pageUsable(l) || (isSq(l.account) && !(l.meta && l.meta.closed)) ? await closeSession(l) : "closed";
   if (r === "closed") await rest("PATCH", "pay_links?token=eq." + q(l.token) + "&status=eq.open", { status: "expired" });
   return r;
 }
 // A new Stripe page behind a pay link, for amt, on the Stripe account the company takes payments on now (acct).
 async function renewPage(l: J, job: J, S: J, amt: number, acct = ""): Promise<J> {
-  if (pageUsable(l)) {
+  if (pageUsable(l) || (isSq(l.account) && !(l.meta && l.meta.closed))) {
     const r = await closeSession(l);
     if (r !== "closed") return { state: r };
+  }
+  if (isSq(acct)) {
+    const row = await sqRowFor(l.org_id, acct);
+    if (!row || row.status !== "ready") return { state: "gone" };
+    const pg = await sqMintLink({ row, org: l.org_id, jobId: l.job_id, job, S, token: l.token, amt, tipC: 0, kind: "", back: "" });
+    const patch = { session_id: pg.id, url: pg.url, amount_cents: amt, session_expires: l.expires_at, account: acct, meta: { ...(l.meta || {}), order_id: pg.order_id, closed: false } };
+    const kept = await rest("PATCH", "pay_links?token=eq." + q(l.token) + "&status=eq.open", patch, "return=representation");
+    if (!kept || !kept.length) {   // replaced or paid meanwhile: the new Square page comes down
+      await sq(row, "DELETE", "/v2/online-checkout/payment-links/" + q(sqLinkId(pg.id))).catch(() => {});
+      return { state: "gone" };
+    }
+    return { state: "ready", link: { ...l, ...patch } };
   }
   const cus = (await jobCustomer(l.org_id, l.job_id, job, acct)).customer;
   const s = await mintSession({ org: l.org_id, jobId: l.job_id, job, S, by: l.created_by || "", token: l.token, amt, save: !!l.save_card, cus, until: Date.parse(l.expires_at), acct });
@@ -1649,8 +1700,10 @@ async function settleJob(org: string, jobId: string, o: { me?: J; reserve?: bool
   const rows = (await rest("GET", "pay_log?select=pi,status,livemode,account&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) +
     "&status=in.(requires_payment_method,requires_confirmation,requires_action,processing)")) || [];
   for (const r of rows) {
-    if (!!r.livemode !== live) continue;   // the other mode's payments can't be looked up with this key
     const acct = r.account || "";
+    // a Square payment still going through (a bank payment, an approval): looked up again
+    if (isSq(acct)) { if (!!r.livemode === sqLive()) await sqSettleRow(org, r); continue; }
+    if (!!r.livemode !== live) continue;   // the other mode's payments can't be looked up with this key
     let pi: J;
     try {
       pi = await stripe("GET", "payment_intents/" + r.pi, { expand: ["payment_method", "latest_charge"] }, undefined, acct);
@@ -1672,6 +1725,7 @@ async function settleJob(org: string, jobId: string, o: { me?: J; reserve?: bool
   const links = (await rest("GET", "pay_links?select=*&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&status=eq.open")) || [];
   for (const l of links) {
     if (!pageUsable(l)) continue;
+    if (isSq(l.account)) { await sqSettleLink(l); continue; }
     let s: J = null;
     try { s = await stripe("GET", "checkout/sessions/" + l.session_id, undefined, undefined, l.account || ""); } catch (e) { if (!stripeNo(e)) throw e; }
     if (s && s.status === "complete") await sessionPaid(l, s);
@@ -1723,10 +1777,533 @@ function connectView(row: J): J {
   return { state, due: row.due || [], disabled: row.disabled_reason || "", payouts: !!row.payouts_enabled };
 }
 
+/* ---------- Square: a company's own Square account (Nov 1, 2026) ----------
+   Richie: "For payment processing i would also like to add remedy and square card . There should be a place where the
+   company can link what they use then the app will auto use their connection for the payment". The owner connects the
+   company's Square account in Setup › Payments, on Square's own sign-in page (OAuth: MoveCrew never sees the
+   password). From then on the company's card payments go through Square: the card box (Square's Web Payments SDK,
+   whose one-use token is charged here), cards kept on file (Square's Cards API, made from a payment), pay links and
+   the customer app (Square's payment links, an order for each), and refunds and disputes made in Square come back
+   by webhook. MoveCrew takes no cut. The owner can switch back to Stripe in Setup without disconnecting.
+   Secrets (Supabase › Edge Functions › Secrets), from the app made in Square's Developer Console:
+     SQUARE_APP_ID       the application ID (sandbox-sq0idb-… while trying it in Square's sandbox)
+     SQUARE_APP_SECRET   the application secret
+     SQUARE_WEBHOOK_KEY  the webhook subscription's signature key (optional: without it, a payment on a pay link is
+                         picked up when someone looks at the job)
+   Square's tokens for each company live in pay_square, sealed (AES-GCM) with a key made from SQUARE_APP_SECRET.
+   Payments, links, cards and customers go in the same tables as Stripe's, on the account "sq:<merchant id>", and a
+   payment is written down by the same writeDown, so what is owed and the job's lines work alike for both. */
+export const SQUARE_VERSION = "2026-05-20";
+export const SQ_SCOPES = ["MERCHANT_PROFILE_READ", "PAYMENTS_READ", "PAYMENTS_WRITE", "ORDERS_READ", "ORDERS_WRITE", "CUSTOMERS_READ", "CUSTOMERS_WRITE", "DISPUTES_READ"];
+const SQ_SQL = "Square needs one step in the database first: run supabase-square.sql in the Supabase SQL editor.";
+const SQ_ACCT = /^sq:[A-Za-z0-9_-]{4,64}$/;
+export const isSq = (acct: unknown) => /^sq:/.test(String(acct || ""));
+const sqAcct = (merchant: string) => "sq:" + merchant;
+const sqPid = (lid: string) => String(lid || "").replace(/^sq_/, "");
+const sqLinkId = (sid: string) => String(sid || "").replace(/^sqpl_(live|test)_/, "");
+export function sqMode(): "" | "test" | "live" {
+  const id = env("SQUARE_APP_ID");
+  if (!id || !env("SQUARE_APP_SECRET")) return "";
+  return /^sandbox-/.test(id) ? "test" : "live";
+}
+const sqLive = () => sqMode() === "live";
+const sqHost = () => (sqLive() ? "https://connect.squareup.com" : "https://connect.squareupsandbox.com");
+// the mode a payment, link or card on this account is in: Square's sandbox or live; Stripe's test or live
+const modeLive = (acct: unknown) => (isSq(acct) ? sqLive() : liveNow());
+class SquareError extends Error {
+  status: number; errors: J[]; payment: J;
+  constructor(status: number, body: J) {
+    const errs = body && Array.isArray(body.errors) ? body.errors : [];
+    super(String((errs[0] && (errs[0].detail || errs[0].code)) || (body && body.message) || "Square error " + status));
+    this.status = status; this.errors = errs; this.payment = (body && body.payment) || null;
+  }
+}
+const sqNo = (e: unknown) => e instanceof SquareError && e.status >= 400 && e.status < 500;
+const sqCode = (e: unknown) => (e instanceof SquareError && e.errors[0] ? String(e.errors[0].code || "") : "");
+
+/* the tokens, sealed, and the sign-in's state, signed */
+const b64 = (u: Uint8Array) => { let s = ""; u.forEach((x) => { s += String.fromCharCode(x); }); return btoa(s); };
+const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const b64url = (s: string) => s.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+async function hmacB64(key: string, msg: string): Promise<string> {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return b64(new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg))));
+}
+async function sqKey(): Promise<CryptoKey> {
+  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("movecrew-square-tokens|" + env("SQUARE_APP_SECRET")));
+  return await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+export async function sqSeal(plain: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await sqKey(), new TextEncoder().encode(plain)));
+  return "v1." + b64(iv) + "." + b64(ct);
+}
+export async function sqUnseal(sealed: string): Promise<string> {
+  const m = /^v1\.([A-Za-z0-9+/=]+)\.([A-Za-z0-9+/=]+)$/.exec(String(sealed || ""));
+  if (!m) return "";
+  try { return new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(m[1]) }, await sqKey(), unb64(m[2]))); } catch { return ""; }
+}
+// which company and who started Square's sign-in, for 15 minutes; signed, so it can't be made up
+export async function sqState(org: string, uid: string, now = Date.now()): Promise<string> {
+  const body = b64url(btoa(JSON.stringify({ o: org, u: uid, t: now, m: sqMode() })));
+  return body + "." + b64url(await hmacB64("movecrew-square-state|" + env("SQUARE_APP_SECRET"), body));
+}
+async function sqStateOf(st: string): Promise<J> {
+  const i = String(st || "").indexOf(".");
+  if (i < 1) return null;
+  const body = st.slice(0, i);
+  if (!same(b64url(await hmacB64("movecrew-square-state|" + env("SQUARE_APP_SECRET"), body)), st.slice(i + 1))) return null;
+  let o: J;
+  try { o = JSON.parse(atob(body.replace(/-/g, "+").replace(/_/g, "/"))); } catch { return null; }
+  if (!o || !UUID_RE.test(String(o.o)) || typeof o.u !== "string" || !(Date.now() - Number(o.t) < 15 * 60e3) || o.m !== sqMode()) return null;
+  return o;
+}
+
+/* each company's connection */
+async function sqRows(filter: string): Promise<J[] | null> {   // null: the table isn't there yet
+  try { return (await rest("GET", "pay_square?select=*&" + filter)) || []; } catch (e) { if (/^db 404/.test(String((e as Error).message))) return null; throw e; }
+}
+const sqWhere = (row: J) => "org_id=eq." + q(row.org_id) + "&merchant_id=eq." + q(row.merchant_id) + "&livemode=eq." + !!row.livemode;
+async function sqRow(org: string): Promise<J> {
+  if (!sqMode()) return null;
+  return ((await sqRows("org_id=eq." + q(org) + "&livemode=eq." + sqLive() + "&is_current=is.true&limit=1")) || [])[0] || null;
+}
+// the connection a payment, link or card on account sq:<merchant> belongs to: the company's current one, or an
+// older one (a refund on an old payment still lands)
+async function sqRowFor(org: string, acct: string): Promise<J> {
+  if (!sqMode() || !SQ_ACCT.test(String(acct || ""))) return null;
+  return ((await sqRows("org_id=eq." + q(org) + "&merchant_id=eq." + q(acct.slice(3)) + "&livemode=eq." + sqLive() + "&limit=1")) || [])[0] || null;
+}
+// Square takes the company's cards now: connected, at a location that takes cards, and picked in Setup › Payments
+async function sqActive(org: string): Promise<J> {
+  const row = await sqRow(org);
+  return row && row.status === "ready" && row.active !== false && row.location_id ? row : null;
+}
+
+/* Square's API, with the company's token */
+async function sqOAuth(path: string, body: J, headers: Record<string, string> = {}): Promise<J> {
+  const r = await fetch(sqHost() + path, { method: "POST", headers: { "Square-Version": SQUARE_VERSION, "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new SquareError(r.status, out);
+  return out;
+}
+const sqToken0 = (body: J) => sqOAuth("/oauth2/token", { client_id: env("SQUARE_APP_ID"), client_secret: env("SQUARE_APP_SECRET"), ...body });
+async function sqFetch(token: string, method: string, path: string, body?: J): Promise<J> {
+  const r = await fetch(sqHost() + path, { method, headers: { Authorization: "Bearer " + token, "Square-Version": SQUARE_VERSION, "Content-Type": "application/json", Accept: "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new SquareError(r.status, out);
+  return out;
+}
+// The company's access token. Square's last 30 days; it is renewed when less than a week is left (the refresh token
+// from Square's sign-in doesn't run out).
+async function sqToken(row: J, force = false): Promise<string> {
+  const tok = await sqUnseal(row.access_enc);
+  if (tok && !force && Date.parse(row.expires_at || "") - Date.now() > 7 * 864e5) return tok;
+  const rt = await sqUnseal(row.refresh_enc);
+  if (!rt) throw new SquareError(401, { errors: [{ code: "UNAUTHORIZED", detail: "Square needs connecting again." }] });
+  let t: J;
+  try { t = await sqToken0({ grant_type: "refresh_token", refresh_token: rt }); } catch (e) {
+    if (e instanceof SquareError && e.status === 401) await rest("PATCH", "pay_square?" + sqWhere(row), { status: "revoked", updated_at: nowIso() });
+    throw e;
+  }
+  const patch: J = { access_enc: await sqSeal(String(t.access_token || "")), expires_at: t.expires_at || null, updated_at: nowIso() };
+  if (t.refresh_token) patch.refresh_enc = await sqSeal(String(t.refresh_token));
+  await rest("PATCH", "pay_square?" + sqWhere(row), patch);
+  Object.assign(row, patch);
+  return String(t.access_token || "");
+}
+async function sq(row: J, method: string, path: string, body?: J): Promise<J> {
+  try { return await sqFetch(await sqToken(row), method, path, body); } catch (e) {
+    if (!(e instanceof SquareError) || e.status !== 401) throw e;
+    if (sqCode(e) === "ACCESS_TOKEN_EXPIRED") return await sqFetch(await sqToken(row, true), method, path, body);
+    // the seller took MoveCrew's access back in Square: no more card payments until the owner connects again
+    await rest("PATCH", "pay_square?" + sqWhere(row), { status: "revoked", updated_at: nowIso() });
+    throw e;
+  }
+}
+
+/* connecting, picking, disconnecting (the owner, in Setup › Payments) */
+export async function sqConnect(org: string, me: J): Promise<J> {
+  if (me.role !== "owner") return { ok: false, status: 403, message: "Only the owner connects the company's Square account." };
+  if (!sqMode()) return { ok: false, message: "Square isn't set up on MoveCrew yet: SQUARE_APP_ID and SQUARE_APP_SECRET go in Supabase (the Square setup guide shows how)." };
+  if ((await sqRows("limit=1")) === null) return { ok: false, message: SQ_SQL };
+  const st = await sqState(org, String(me.uid || ""));
+  return { ok: true, url: sqHost() + "/oauth2/authorize?client_id=" + q(env("SQUARE_APP_ID")) + "&scope=" + SQ_SCOPES.join("+") + "&state=" + q(st) + (sqLive() ? "&session=false" : "") };
+}
+const takesCards = (l: J) => !!l && l.status === "ACTIVE" && (l.capabilities || []).indexOf("CREDIT_CARD_PROCESSING") >= 0 && (!l.currency || l.currency === "USD");
+// Where Square's sign-in sends the owner back: the code becomes the company's tokens, and the location cards are
+// taken at is the seller's main one (or the first that takes cards).
+export async function sqBack(url: URL): Promise<Response> {
+  const st = sqMode() ? await sqStateOf(url.searchParams.get("state") || "") : null;
+  if (!st) return text("This Square sign-in has expired. Go back to MoveCrew and press Connect with Square again.", 400);
+  const err = url.searchParams.get("error");
+  if (err) return text(err === "access_denied" ? "Square wasn't connected: the sign-in was cancelled.\n\nGo back to MoveCrew to try again." : "Square said: " + String(url.searchParams.get("error_description") || err).slice(0, 200) + "\n\nGo back to MoveCrew to try again.", 400);
+  const code = url.searchParams.get("code") || "";
+  if (!/^[A-Za-z0-9_-]{8,300}$/.test(code)) return text("Square didn't send a sign-in code. Go back to MoveCrew and try again.", 400);
+  const own = await rest("GET", "members?select=role&org_id=eq." + q(st.o) + "&user_id=eq." + q(st.u) + "&limit=1");
+  if (!(own && own[0] && own[0].role === "owner")) return text("Only the owner connects the company's Square account.", 403);
+  let t: J;
+  try { t = await sqToken0({ grant_type: "authorization_code", code }); } catch (e) {
+    console.error("square sign-in", e);
+    return text("Square didn't accept the sign-in. Go back to MoveCrew and press Connect with Square again.", 400);
+  }
+  const merchant = String(t.merchant_id || "");
+  if (!/^[A-Za-z0-9_-]{4,64}$/.test(merchant) || !t.access_token) return text("Square didn't say which account. Go back to MoveCrew and try again.", 400);
+  let loc: J = null, biz = "";
+  try {
+    const main = (await sqFetch(t.access_token, "GET", "/v2/locations/main")).location;
+    loc = takesCards(main) ? main : ((await sqFetch(t.access_token, "GET", "/v2/locations")).locations || []).find(takesCards) || null;
+    biz = String(((await sqFetch(t.access_token, "GET", "/v2/merchants/" + q(merchant))).merchant || {}).business_name || "");
+  } catch (e) { console.error("square locations", e); }
+  const live = sqLive(), now = nowIso();
+  // the company's earlier Square account stays on file for its old payments' refunds
+  await rest("PATCH", "pay_square?org_id=eq." + q(st.o) + "&livemode=eq." + live + "&merchant_id=neq." + q(merchant), { is_current: false, updated_at: now });
+  await rest("POST", "pay_square?on_conflict=org_id,merchant_id,livemode", {
+    org_id: st.o, merchant_id: merchant, livemode: live, is_current: true, active: true, status: loc ? "ready" : "no-location",
+    location_id: loc ? String(loc.id) : "", location_name: loc ? String(loc.name || "").slice(0, 120) : "", business_name: biz.slice(0, 120),
+    access_enc: await sqSeal(String(t.access_token)), refresh_enc: t.refresh_token ? await sqSeal(String(t.refresh_token)) : "", expires_at: t.expires_at || null,
+    created_by: String(st.u), updated_at: now,
+  }, "resolution=merge-duplicates");
+  if (!loc) return text("Square is connected, but this Square account can't take card payments yet.\n\nFinish setting up card payments in Square, then press Connect with Square again in MoveCrew.");
+  const S = await getDoc(st.o, "org/settings");
+  return text("Square is connected" + (biz ? " for " + biz : "") + (live ? "" : " (Square's sandbox: no real money moves)") + ".\n\nGo back to MoveCrew. Card payments for " + company(S) + " now go through Square, and Setup › Payments shows it.");
+}
+// the owner picks which one takes the company's cards: Square (connected) or Stripe
+export async function sqUse(org: string, me: J, b: J): Promise<J> {
+  if (me.role !== "owner") return { ok: false, status: 403, message: "Only the owner picks how the company takes cards." };
+  const use = String((b && b.use) || "");
+  if (use !== "square" && use !== "stripe") return { ok: false, message: "Pick Square or Stripe." };
+  const row = await sqRow(org);
+  if (!row || row.status !== "ready") return { ok: false, message: "Connect Square first." };
+  await rest("PATCH", "pay_square?" + sqWhere(row), { active: use === "square", updated_at: nowIso() });
+  return { ok: true, message: use === "square" ? "Card payments now go through Square." : "Card payments now go through Stripe." };
+}
+// MoveCrew lets go of the company's Square account (Square takes the access back too, unless another company in
+// MoveCrew uses the same Square account). Payments already taken stay in Square.
+export async function sqDisconnect(org: string, me: J): Promise<J> {
+  if (me.role !== "owner") return { ok: false, status: 403, message: "Only the owner disconnects Square." };
+  const row = await sqRow(org);
+  if (!row) return { ok: true, message: "Square isn't connected." };
+  const others = ((await sqRows("merchant_id=eq." + q(row.merchant_id) + "&livemode=eq." + !!row.livemode + "&status=eq.ready&org_id=neq." + q(org))) || []).length;
+  if (!others) {
+    try { await sqOAuth("/oauth2/revoke", { client_id: env("SQUARE_APP_ID"), merchant_id: row.merchant_id }, { Authorization: "Client " + env("SQUARE_APP_SECRET") }); }
+    catch (e) { console.error("square revoke", e); }
+  }
+  await rest("PATCH", "pay_square?" + sqWhere(row), { status: "revoked", active: false, is_current: false, access_enc: "", refresh_enc: "", updated_at: nowIso() });
+  return { ok: true, message: "Square is disconnected. Payments already taken stay in your Square account." };
+}
+// what Setup › Payments shows about Square
+async function sqView(org: string): Promise<J> {
+  const mode = sqMode();
+  if (!mode) return null;
+  const rows = await sqRows("org_id=eq." + q(org) + "&livemode=eq." + sqLive() + "&is_current=is.true&limit=1");
+  if (rows === null) return { mode, table: false };
+  const row = rows[0];
+  const v: J = { mode, table: true, appId: env("SQUARE_APP_ID"), hooks: !!env("SQUARE_WEBHOOK_KEY") };
+  if (row) v.conn = { state: row.status, active: row.active !== false, business: row.business_name || "", location: row.location_name || "", locationId: row.location_id || "" };
+  return v;
+}
+
+/* a payment through Square, written down */
+const SQ_BRANDS: J = { VISA: "Visa", MASTERCARD: "Mastercard", AMERICAN_EXPRESS: "Amex", DISCOVER: "Discover", DISCOVER_DINERS: "Diners Club", JCB: "JCB",
+  CHINA_UNIONPAY: "UnionPay", INTERAC: "Interac", EFTPOS: "EFTPOS", SQUARE_GIFT_CARD: "Square gift card" };
+export function sqLabel(p: J): string {
+  const cd = (p && p.card_details) || {}, c = cd.card;
+  if (c) {
+    const base = (SQ_BRANDS[c.card_brand] || "Card") + " ••" + (c.last_4 || ""), w = String(cd.wallet_type || "");
+    return /APPLE/.test(w) ? "Apple Pay (" + base + ")" : /GOOGLE/.test(w) ? "Google Pay (" + base + ")" : base;
+  }
+  if (p && p.source_type === "WALLET") {
+    const b = String((p.wallet_details && p.wallet_details.brand) || "");
+    return b === "CASH_APP" ? "Cash App Pay" : b === "AFTERPAY" ? "Afterpay" : "Wallet";
+  }
+  if (p && p.source_type === "BANK_ACCOUNT") {
+    const sfx = p.bank_account_details && p.bank_account_details.ach_details && p.bank_account_details.ach_details.account_number_suffix;
+    return "Bank" + (sfx ? " ••" + sfx : "");
+  }
+  return "Card";
+}
+// Square's states, in the words the ledger uses for Stripe's
+// (a failed try is over, like a declined Stripe payment once it's cancelled, so it isn't looked up again)
+const SQ_STATUS: J = { COMPLETED: "succeeded", APPROVED: "processing", PENDING: "processing", FAILED: "canceled", CANCELED: "canceled" };
+const SQ_HELD = ["EVIDENCE_REQUIRED", "PROCESSING", "LOST", "ACCEPTED"];   // disputes where the bank has taken the money back
+async function sqDisputeOf(row: J, pid: string): Promise<J> {
+  let c = 0, lost = false, cursor = "", pages = 0;
+  do {
+    const r = await sq(row, "GET", "/v2/disputes?location_id=" + q(row.location_id) + (cursor ? "&cursor=" + q(cursor) : ""));
+    for (const d of r.disputes || []) {
+      if (!d || !d.disputed_payment || d.disputed_payment.payment_id !== pid || SQ_HELD.indexOf(d.state) < 0) continue;
+      c += Number(d.amount_money && d.amount_money.amount) || 0;
+      if (d.state === "LOST" || d.state === "ACCEPTED") lost = true;
+    }
+    cursor = String(r.cursor || "");
+  } while (cursor && ++pages < 10);
+  return { cents: c, lost };
+}
+// who and what a pay link's payment was: from the link (a payment on Square's page doesn't carry MoveCrew's notes)
+function sqLinkCtx(l: J): J {
+  const m = (l && l.meta) || {}, cust = l.created_by === CUST_BY;
+  return { org: l.org_id, jobId: l.job_id, src: cust ? "cust" : "link", by: cust ? CUST_BY : l.created_by || "", cust: String(m.cust || ""), tipC: Math.max(0, Math.round(Number(m.tip) || 0)) };
+}
+// whose payment: MoveCrew's own records say (the ledger, or the pay link it came through), never the payment itself
+async function sqCtxOf(p: J): Promise<J> {
+  const led = ((await rest("GET", "pay_log?select=org_id,job_id,source,by_staff,cust_key,disputed_cents&pi=eq." + q("sq_" + p.id) + "&limit=1")) || [])[0];
+  if (led) {
+    const m = /(?:^|;)tip=(\d{1,9})(?:;|$)/.exec(String(led.source || ""));
+    return { org: led.org_id, jobId: led.job_id, src: String(led.source || "").split(";")[0], by: led.by_staff || "", cust: led.cust_key || "", tipC: m ? Number(m[1]) : 0, held: Number(led.disputed_cents) || 0 };
+  }
+  if (p.order_id) {
+    const l = ((await rest("GET", "pay_links?select=*&meta->>order_id=eq." + q(p.order_id) + "&limit=1")) || [])[0];
+    if (l) return sqLinkCtx(l);
+  }
+  return null;
+}
+// The one place a Square payment is written down (Stripe's is recordIntent): which job from MoveCrew's records,
+// the amounts and state from Square. o: who and what (when MoveCrew has just made the payment), {disputes: true} to
+// look its disputes up now (a dispute event), or nothing (look it all up).
+export async function sqRecord(p: J, row: J, o: J = {}): Promise<J> {
+  if (!p || !/^[A-Za-z0-9_-]{4,80}$/.test(String(p.id || ""))) return { ok: false, skipped: "no-payment" };
+  const ctx = o.org ? o : await sqCtxOf(p);
+  if (!ctx) return { ok: false, skipped: "not-tally" };
+  const org = String(ctx.org), jobId = String(ctx.jobId);
+  if (!UUID_RE.test(org) || !/^[A-Za-z0-9_-]{1,40}$/.test(jobId)) return { ok: false, skipped: "not-tally" };
+  if (!(await orgExists(org))) return { ok: false, skipped: "no-company" };
+  // a payment on a company's Square account only ever lands on that company's jobs
+  if (row.org_id !== org) return { ok: false, skipped: "other-account" };
+  const status = SQ_STATUS[String(p.status || "")] || "canceled", live = !!row.livemode;
+  const label = sqLabel(p) + (ctx.src === "link" ? " (pay link)" : ctx.src === "cust" ? " (customer app)" : "") + (live ? "" : " · test");
+  const tot = p.total_money && p.total_money.amount != null ? Number(p.total_money.amount) : (Number(p.amount_money && p.amount_money.amount) || 0) + (Number(p.tip_money && p.tip_money.amount) || 0);
+  const amtC = Math.max(0, Math.round(tot || 0)), refunded = Math.max(0, Math.round(Number(p.refunded_money && p.refunded_money.amount) || 0));
+  const look = status === "succeeded" && (o.disputes || Number(ctx.held) > 0);
+  const dispute = look ? await sqDisputeOf(row, p.id) : { cents: 0, lost: false };
+  const errs = p.card_details && Array.isArray(p.card_details.errors) ? p.card_details.errors : [];
+  const err = p.status === "FAILED" && errs[0] ? String(errs[0].code || "") + ": " + String(errs[0].detail || "").slice(0, 280) : null;
+  return await writeDown({ lid: "sq_" + p.id, org, jobId, acct: sqAcct(row.merchant_id), via: "Square", status, live, label, amtC, refunded, dispute,
+    tipC: ctx.tipC || 0, err, src: ctx.src || "", cust: ctx.cust || "", by: ctx.by || "", customer: String(p.customer_id || "") });
+}
+// a payment the ledger knows about, looked up again (it was pending, or a line for it went missing)
+async function sqSettleRow(org: string, r: J): Promise<J> {
+  const row = await sqRowFor(org, r.account);
+  if (!row || row.status === "revoked") return null;
+  let p: J;
+  try { p = (await sq(row, "GET", "/v2/payments/" + q(sqPid(r.pi)))).payment; } catch (e) {
+    if (!(e instanceof SquareError && e.status === 404)) throw e;
+    await rest("PATCH", "pay_log?pi=eq." + q(r.pi), { status: "canceled", updated_at: nowIso() });
+    return null;
+  }
+  return await sqRecord(p, row);
+}
+
+/* Square's payment links, behind MoveCrew's pay links (and the customer app's page) */
+// what a link's order has been paid with: its payments, looked up
+async function sqLinkPayments(row: J, l: J): Promise<J[]> {
+  const oid = l.meta && l.meta.order_id;
+  if (!oid) return [];
+  const o = (await sq(row, "GET", "/v2/orders/" + q(oid))).order || {};
+  const out: J[] = [];
+  for (const t of o.tenders || []) {
+    const id = t && (t.payment_id || t.id);
+    if (id && /^[A-Za-z0-9_-]{4,80}$/.test(id)) { const p = (await sq(row, "GET", "/v2/payments/" + q(id))).payment; if (p) out.push(p); }
+  }
+  return out;
+}
+// "paid" (written down now), "open", or "gone" (Square no longer has it)
+async function sqSettleLink(l: J): Promise<string> {
+  const row = await sqRowFor(l.org_id, l.account);
+  if (!row || row.status === "revoked") return "gone";
+  let ps: J[];
+  try { ps = await sqLinkPayments(row, l); } catch (e) {
+    if (!sqNo(e)) throw e;
+    await rest("PATCH", "pay_links?token=eq." + q(l.token), { session_expires: nowIso(), meta: { ...(l.meta || {}), closed: true } });
+    return "gone";
+  }
+  let paid = false;
+  for (const p of ps) {
+    await sqRecord(p, row, sqLinkCtx(l));
+    if (p.status === "COMPLETED" || p.status === "APPROVED" || p.status === "PENDING") paid = true;
+  }
+  if (!paid) return "open";
+  await rest("PATCH", "pay_links?token=eq." + q(l.token) + "&status=eq.open", { status: "paid" });
+  return "paid";
+}
+// stops a link's Square page: "closed", or "paid" when the customer had just paid on it (written down now)
+async function sqCloseLink(l: J): Promise<string> {
+  const row = await sqRowFor(l.org_id, l.account);
+  if (!row || row.status === "revoked") return "closed";
+  const st = await sqSettleLink(l);
+  if (st === "paid") return "paid";
+  if (st === "gone") return "closed";
+  try { await sq(row, "DELETE", "/v2/online-checkout/payment-links/" + q(sqLinkId(l.session_id))); } catch (e) { if (!sqNo(e)) throw e; }
+  await rest("PATCH", "pay_links?token=eq." + q(l.token), { meta: { ...(l.meta || {}), closed: true } });
+  return "closed";
+}
+// A Square page for amt (and the customer's tip, its own line): an order for the job, paid on Square's page, which
+// sends them back to `back` (MoveCrew's thank-you page, or the customer app).
+async function sqMintLink(o: J): Promise<J> {
+  const d = o.job.d || {}, lines: J[] = [];
+  if (o.amt > 0) lines.push({ name: (company(o.S) + (o.kind === "deposit" ? ": deposit" : ": moving services")).slice(0, 120), quantity: "1", base_price_money: { amount: o.amt, currency: "USD" }, note: gsm(d.name || "Moving job").slice(0, 200) });
+  if (o.tipC > 0) lines.push({ name: "Tip for your crew", quantity: "1", base_price_money: { amount: o.tipC, currency: "USD" }, note: "Split evenly between the movers on your move" });
+  const pre: J = {};
+  if (validEmail(d.email)) pre.buyer_email = validEmail(d.email);
+  if (e164(d.phone)) pre.buyer_phone_number = e164(d.phone);
+  const r = await sq(o.row, "POST", "/v2/online-checkout/payment-links", {
+    idempotency_key: crypto.randomUUID(),
+    order: { location_id: o.row.location_id, reference_id: o.jobId, line_items: lines, metadata: { tally_org: o.org, tally_job: o.jobId, tally_link: o.token } },
+    checkout_options: { redirect_url: o.back || base() + "/pay/done", ask_for_shipping_address: false, allow_tipping: false },
+    pre_populated_data: Object.keys(pre).length ? pre : undefined, payment_note: payWhat(o.S, o.job).slice(0, 500),
+  });
+  const pl = r.payment_link || {};
+  if (!pl.id || !(pl.url || pl.long_url)) throw new SquareError(502, { errors: [{ code: "NO_LINK", detail: "Square did not return a payment link" }] });
+  return { id: "sqpl_" + (sqLive() ? "live" : "test") + "_" + pl.id, url: String(pl.url || pl.long_url), order_id: String(pl.order_id || ""), expires: Date.now() + PAGE_HOURS * 3600e3 };
+}
+
+// a Square customer for a job's payments, made once per customer (customerFor files it, as for Stripe)
+async function sqCustomer(org: string, acct: string, key: string, d: J): Promise<J> {
+  const row = await sqRowFor(org, acct);
+  if (!row || row.status !== "ready") throw new SquareError(401, { errors: [{ code: "UNAUTHORIZED", detail: "Square isn't connected." }] });
+  const name = gsm(String(d.name || "")).trim().replace(/\s+/g, " "), sp = name.indexOf(" ");
+  const r = await sq(row, "POST", "/v2/customers", {
+    idempotency_key: "c" + (await sha([org, acct, key].join("|"))).slice(0, 40),
+    given_name: (sp > 0 ? name.slice(0, sp) : name).slice(0, 100) || undefined, family_name: sp > 0 ? name.slice(sp + 1).slice(0, 100) : undefined,
+    phone_number: e164(d.phone) || undefined, email_address: validEmail(d.email) || undefined, reference_id: key.slice(0, 40), note: "From MoveCrew",
+  });
+  return { id: String((r.customer || {}).id || "") };
+}
+
+/* taking a card through Square */
+const SQ_DECLINES: J = {
+  CARD_DECLINED: "the bank said no", GENERIC_DECLINE: "the bank said no", INSUFFICIENT_FUNDS: "not enough money on the card",
+  CVV_FAILURE: "the security code is wrong", VERIFY_CVV_FAILURE: "the security code is wrong", ADDRESS_VERIFICATION_FAILURE: "the ZIP code doesn't match the card",
+  VERIFY_AVS_FAILURE: "the ZIP code doesn't match the card", INVALID_EXPIRATION: "the expiry date is wrong", EXPIRATION_FAILURE: "the expiry date is wrong",
+  CARD_EXPIRED: "the card has expired", INVALID_CARD: "the card number is wrong", PAN_FAILURE: "the card number is wrong",
+  CARD_NOT_SUPPORTED: "this kind of card isn't taken", TRANSACTION_LIMIT: "the card is over its limit", INVALID_ACCOUNT: "the card's account is closed",
+};
+export function sqDecline(e: unknown): string {
+  if (!(e instanceof SquareError)) return "The card was not charged.";
+  const code = sqCode(e), cat = String((e.errors[0] && e.errors[0].category) || "");
+  if (code === "CARD_TOKEN_EXPIRED" || code === "CARD_TOKEN_USED") return "The card form timed out. Type the card in again.";
+  if (code === "CARD_DECLINED_VERIFICATION_REQUIRED") return "The customer's bank wants them to approve this one. Send them a pay link instead.";
+  if (SQ_DECLINES[code]) return "The card was declined: " + SQ_DECLINES[code] + ".";
+  if (cat === "PAYMENT_METHOD_ERROR") return "The card was declined: the bank said no.";
+  if (e.status === 401 || e.status === 403) return "Square turned MoveCrew down. The owner connects Square again in Setup › Payments.";
+  return "Square said: " + String((e.errors[0] && (e.errors[0].detail || e.errors[0].code)) || e.message || "no reason given").slice(0, 200);
+}
+// one charge: {payment} or {err, code, payment?} (Square says why a card was turned down)
+async function sqPay(row: J, o: J): Promise<J> {
+  try {
+    const r = await sq(row, "POST", "/v2/payments", {
+      source_id: o.source, idempotency_key: o.key, amount_money: { amount: o.amt, currency: "USD" }, location_id: row.location_id,
+      customer_id: o.customer || undefined, reference_id: o.jobId, note: payWhat(o.S, o.job).slice(0, 500), autocomplete: true,
+      buyer_email_address: validEmail((o.job.d || {}).email) || undefined,
+    });
+    return { payment: r.payment };
+  } catch (e) {
+    if (e instanceof SquareError && e.status >= 400 && e.status < 500 && e.status !== 401) return { err: sqDecline(e), code: sqCode(e), payment: e.payment };
+    throw e;
+  }
+}
+function sqPaidMsg(p: J, amt: number): J {
+  if (p.status === "COMPLETED") return { ok: true, done: true, message: "Card charged " + money(amt) + "." };
+  if (p.status === "APPROVED" || p.status === "PENDING") return { ok: true, done: true, message: "Payment of " + money(amt) + " is processing." };
+  return { ok: false, message: "The card was not charged." };
+}
+// A card typed into Square's card box: the box gives a one-use token, charged here for what the server agrees is owed.
+async function sqCharge(org: string, me: J, jobId: string, c: J, b: J): Promise<J> {
+  const amt = cents(b.amount), keep = !!b.save, by = who(me), row = c.sq, token = String(b.token || "");
+  if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
+  if (!/^[A-Za-z0-9:_+/=.-]{8,800}$/.test(token)) return { ok: false, message: "The card didn't come through. Type it in again." };
+  if (await tooManyPays(org, by)) return { ok: false, message: TOO_MANY };
+  const res = await withJobLock(org, jobId, async (): Promise<J> => {
+    const ready = await readyToCharge(org, jobId, me, amt, c.job);
+    if (!ready.ok) return ready;
+    const job = ready.job, cu = await jobCustomer(org, jobId, job, c.acct);
+    // the same card-box token never charges twice (Square keeps the key a day)
+    const r = await sqPay(row, { source: token, amt, customer: cu.customer, jobId, job, S: c.S, key: "t" + (await sha(["card", org, jobId, token].join("|"))).slice(0, 40) });
+    const ctx = { org, jobId, src: "card", by, cust: cu.key, tipC: 0 };
+    if (r.payment) await sqRecord(r.payment, row, ctx);
+    if (r.err) return { ok: false, message: r.err, needLink: r.code === "CARD_DECLINED_VERIFICATION_REQUIRED" };
+    if (keep && r.payment.status === "COMPLETED") await sqKeepCard(org, row, r.payment, cu.customer, jobId, cu.key).catch((e) => console.error("square keep card", e));
+    return sqPaidMsg(r.payment, amt);
+  });
+  return res || { ok: false, message: BUSY };
+}
+// the card that just paid, kept on file with Square for this customer (they agreed to it on the card box)
+async function sqKeepCard(org: string, row: J, p: J, customer: string, jobId: string, cust: string): Promise<void> {
+  if (!customer || !cust) return;
+  const pc = (p.card_details && p.card_details.card) || {};
+  const r = await sq(row, "POST", "/v2/cards", { idempotency_key: "k" + (await sha("card|" + p.id)).slice(0, 40), source_id: p.id,
+    card: { customer_id: customer, cardholder_name: pc.cardholder_name || undefined, reference_id: jobId } });
+  const cd = r.card || {};
+  if (!cd.id) return;
+  await fileCard(org, {
+    id: "sq_" + (await sha("card|" + cd.id)).slice(0, 20), cust, customer, pmId: String(cd.id), fp: String(cd.fingerprint || ""),
+    name: String(cd.cardholder_name || "").trim().slice(0, 120), ts: Date.now(), live: !!row.livemode, acct: sqAcct(row.merchant_id), jobId, via: "square",
+    brand: SQ_BRANDS[cd.card_brand] || "Card", last4: String(cd.last_4 || ""),
+    exp: cd.exp_month && cd.exp_year ? String(cd.exp_month).padStart(2, "0") + "/" + String(cd.exp_year).slice(-2) : "",
+  });
+}
+
+/* Square's events: payments finishing, refunds and disputes made in Square, a seller taking MoveCrew's access back */
+export async function sqSignature(url: string, raw: string, key: string): Promise<string> { return await hmacB64(key, url + raw); }
+async function handleSquare(req: Request): Promise<Response> {
+  const raw = await req.text(), key = env("SQUARE_WEBHOOK_KEY");
+  if (!key || !sqMode() || !same(await sqSignature(base() + "/square", raw, key), req.headers.get("x-square-hmacsha256-signature") || "")) return text("Bad signature", 401);
+  let ev: J;
+  try { ev = JSON.parse(raw); } catch { return text("Bad request", 400); }
+  const type = String((ev && ev.type) || ""), merchant = String((ev && ev.merchant_id) || ""), o = (ev && ev.data && ev.data.object) || {};
+  if (!/^[A-Za-z0-9_-]{4,64}$/.test(merchant)) return json({ received: true, skipped: "no-seller" });
+  try {
+    if (type === "oauth.authorization.revoked") {
+      await rest("PATCH", "pay_square?merchant_id=eq." + q(merchant) + "&livemode=eq." + sqLive(), { status: "revoked", active: false, access_enc: "", refresh_enc: "", updated_at: nowIso() });
+      return json({ received: true });
+    }
+    let pid = "", disputes = false;
+    if (/^payment\./.test(type)) pid = o.payment && o.payment.id;
+    else if (/^refund\./.test(type)) pid = o.refund && o.refund.payment_id;
+    else if (/^dispute\./.test(type)) { const d = o.dispute || o; pid = d.disputed_payment && d.disputed_payment.payment_id; disputes = true; }
+    if (!pid || !/^[A-Za-z0-9_-]{4,80}$/.test(String(pid))) return json({ received: true, skipped: "no-payment" });
+    const ev0 = o.payment && o.payment.id === pid ? o.payment : null;
+    const ctx = await sqCtxOf(ev0 || { id: pid });
+    if (!ctx) return json({ received: true, skipped: "not-tally" });
+    const row = ((await sqRows("org_id=eq." + q(ctx.org) + "&merchant_id=eq." + q(merchant) + "&livemode=eq." + sqLive() + "&limit=1")) || [])[0];
+    if (!row) return json({ received: true, skipped: "other-account" });
+    const work = async () => {
+      // the payment as Square has it now (the event may be older than another one); the event's copy when MoveCrew's
+      // access is gone (a refund after the company disconnected)
+      let p = ev0;
+      if (row.status !== "revoked") p = (await sq(row, "GET", "/v2/payments/" + q(pid)).catch((e) => { if (sqNo(e)) return null; throw e; }) || {}).payment || ev0;
+      if (!p) return null;
+      const rec = await sqRecord(p, row, { ...ctx, disputes });
+      if (rec.ok && rec.org) {
+        if (p.order_id && (p.status === "COMPLETED" || p.status === "APPROVED" || p.status === "PENDING")) await rest("PATCH", "pay_links?meta->>order_id=eq." + q(p.order_id) + "&status=eq.open", { status: "paid" });
+        await trimSessions(rec.org, rec.job, rec.owed);
+      }
+      return rec;
+    };
+    if ((await withJobLock(ctx.org, ctx.jobId, work, 5000)) === null) await work();   // still busy: write it down anyway
+  } catch (e) {
+    console.error("square event", type, e);
+    return text("Try again", 500);   // Square sends it again later
+  }
+  return json({ received: true });
+}
+
 /* the app's payment actions */
 // Whether this company can take cards now, on which account, and (for a company's own account) where its
 // Stripe sign-up stands. refresh: ask Stripe now (the owner just came back from Stripe's sign-up).
 export async function payConfig(org: string, b: J = {}): Promise<J> {
+  // a company that takes cards through its own Square account (Setup › Payments)
+  const sqv = await sqView(org);
+  if (sqv && sqv.conn && sqv.conn.state === "ready" && sqv.conn.active && sqv.conn.locationId) {
+    return { ok: true, ready: true, provider: "square", test: sqv.mode !== "live", publishableKey: "", account: "", via: "square", reason: "", square: sqv };
+  }
+  const out = await payConfigStripe(org, b);
+  if (sqv) out.square = sqv;
+  out.provider = "stripe";
+  return out;
+}
+async function payConfigStripe(org: string, b: J): Promise<J> {
   const mode = stripeMode(), test = mode === "test";
   if (!mode) return { ok: true, ready: false, test: false, publishableKey: "", reason: "no-key" };
   const pk = publishableKey();
@@ -2188,7 +2765,7 @@ async function textedLately(org: string, jobId: string): Promise<boolean> {
 export async function payLink(org: string, me: J, jobId: string, b: J): Promise<J> {
   const c = await payContext(org, me, jobId);
   if (c.err) return { ok: false, message: c.err, status: c.status };
-  const amt = cents(b.amount), save = !!b.save, by = who(me), acct = c.acct;
+  const amt = cents(b.amount), save = !!b.save && !c.sq, by = who(me), acct = c.acct;
   if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
   const wh = await hookFor(acct);
   if (!wh.ok) return wh;
@@ -2202,7 +2779,7 @@ export async function payLink(org: string, me: J, jobId: string, b: J): Promise<
     // the same request again (a second tap, the screen redrawn) gets the same link back
     const again = open.find((l: J) => l.created_by !== CUST_BY && capOf(l) === amt && !!l.save_card === save && Date.parse(l.expires_at) > Date.now() + 3600e3);
     if (again) {
-      if (again.amount_cents === amt && Date.parse(pageEnds(again)) > Date.now() + 15 * 60e3 && sessionLive(again.session_id) === liveNow() && pageOn(again, acct)) return { ok: true, link: again };
+      if (again.amount_cents === amt && pageUsable(again) && Date.parse(pageEnds(again)) > Date.now() + 15 * 60e3 && pageOn(again, acct)) return { ok: true, link: again };
       const r = await renewPage(again, job, c.S, amt, acct);
       if (r.state === "paid") return { ok: false, message: "That link was just paid. Check the bill." };
       if (r.state === "open") return { ok: false, message: PAYING };
@@ -2222,13 +2799,22 @@ export async function payLink(org: string, me: J, jobId: string, b: J): Promise<
       bad = amountTrouble(amt, owed, reserved);
       if (bad) return { ok: false, message: bad };
     }
-    const cus = (await jobCustomer(org, jobId, job, acct)).customer;
     const token = randToken(), until = Date.now() + LINK_DAYS * 86400e3;
-    const s = await mintSession({ org, jobId, job, S: c.S, by, token, amt, save, cus, until, acct });
-    const link = {
-      token, org_id: org, job_id: jobId, session_id: s.id, url: s.url, amount_cents: amt, cap_cents: amt, save_card: save, created_by: by,
-      status: "open", expires_at: new Date(until).toISOString(), session_expires: new Date(s.expires_at * 1000).toISOString(), account: acct,
-    };
+    let link: J;
+    if (c.sq) {
+      const pg = await sqMintLink({ row: c.sq, org, jobId, job, S: c.S, token, amt, tipC: 0, kind: "", back: "" });
+      link = {
+        token, org_id: org, job_id: jobId, session_id: pg.id, url: pg.url, amount_cents: amt, cap_cents: amt, save_card: false, created_by: by,
+        status: "open", expires_at: new Date(until).toISOString(), session_expires: new Date(until).toISOString(), account: acct, meta: { order_id: pg.order_id },
+      };
+    } else {
+      const cus = (await jobCustomer(org, jobId, job, acct)).customer;
+      const s = await mintSession({ org, jobId, job, S: c.S, by, token, amt, save, cus, until, acct });
+      link = {
+        token, org_id: org, job_id: jobId, session_id: s.id, url: s.url, amount_cents: amt, cap_cents: amt, save_card: save, created_by: by,
+        status: "open", expires_at: new Date(until).toISOString(), session_expires: new Date(s.expires_at * 1000).toISOString(), account: acct,
+      };
+    }
     await rest("POST", "pay_links", link);
     return { ok: true, link };
   });
@@ -2257,6 +2843,7 @@ export async function payLink(org: string, me: J, jobId: string, b: J): Promise<
 export async function payIntent(org: string, me: J, jobId: string, b: J): Promise<J> {
   const c = await payContext(org, me, jobId);
   if (c.err) return { ok: false, message: c.err, status: c.status };
+  if (c.sq) return await sqCharge(org, me, jobId, c, b);
   const amt = cents(b.amount), save = !!b.save, by = who(me), acct = c.acct;
   if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
   if (!publishableKey()) return { ok: false, message: "Typing a card in needs STRIPE_PUBLISHABLE_KEY in Supabase. Use a pay link for now." };
@@ -2285,15 +2872,16 @@ export async function payIntent(org: string, me: J, jobId: string, b: J): Promis
 export async function paySaved(org: string, me: J, jobId: string, b: J): Promise<J> {
   const c = await payContext(org, me, jobId);
   if (c.err) return { ok: false, message: c.err, status: c.status };
-  const amt = cents(b.amount), by = who(me), live = liveNow(), acct = c.acct;
+  const amt = cents(b.amount), by = who(me), acct = c.acct, live = modeLive(acct);
   if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
   const vid = String(b.vaultId || "");
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(vid)) return { ok: false, message: "Pick a saved card." };
   const card = ((await rest("GET", "pay_cards?select=*&org_id=eq." + q(org) + "&id=eq." + q(vid) + "&limit=1")) || [])[0];
   if (!card || !card.pm_id) return { ok: false, message: "That saved card can't be charged here. Use a pay link or the card itself." };
   if (!(await getDoc(org, "vault/" + vid))) return { ok: false, message: "That card is no longer on file." };
-  if (!!card.livemode !== live) return { ok: false, message: "That card was saved in Stripe " + (card.livemode ? "live" : "test") + " mode and can't be used now." };
-  if ((card.account || "") !== acct) return { ok: false, message: "That card was kept on file on a different Stripe account, so it can't be charged here. Use a pay link or the card itself." };
+  if (isSq(card.account) !== isSq(acct)) return { ok: false, message: "That card was kept on file with " + (isSq(card.account) ? "Square" : "Stripe") + ", and cards go through " + (isSq(acct) ? "Square" : "Stripe") + " now. Use a pay link or the card itself." };
+  if (!!card.livemode !== live) return { ok: false, message: "That card was saved in " + (isSq(acct) ? "Square's " + (card.livemode ? "live mode" : "sandbox") : "Stripe " + (card.livemode ? "live" : "test") + " mode") + " and can't be used now." };
+  if ((card.account || "") !== acct) return { ok: false, message: "That card was kept on file on a different " + (isSq(acct) ? "Square" : "Stripe") + " account, so it can't be charged here. Use a pay link or the card itself." };
   if (await tooManyPays(org, by)) return { ok: false, message: TOO_MANY };
   const wh = await hookFor(acct);
   if (!wh.ok) return wh;
@@ -2305,7 +2893,8 @@ export async function paySaved(org: string, me: J, jobId: string, b: J): Promise
     const ready = await readyToCharge(org, jobId, me, amt, c.job);
     if (!ready.ok) return ready;
     const job = ready.job;
-    if ((await jobCustomer(org, jobId, job, acct)).customer !== card.customer_id) return { ok: false, message: "That card belongs to a different customer." };
+    const jc = await jobCustomer(org, jobId, job, acct);
+    if (jc.customer !== card.customer_id) return { ok: false, message: "That card belongs to a different customer." };
     if (me.role === "lead" && card.job_id !== jobId) {
       const here = card.fingerprint ? await rest("GET", "pay_cards?select=id&org_id=eq." + q(org) + "&customer_id=eq." + q(card.customer_id) + "&fingerprint=eq." + q(card.fingerprint) + "&job_id=eq." + q(jobId) + "&limit=1") : [];
       if (!(here && here.length)) return { ok: false, message: "This card was kept on file on another job. The office can charge it, or send a pay link." };
@@ -2319,6 +2908,15 @@ export async function paySaved(org: string, me: J, jobId: string, b: J): Promise
     // one charge however many times this is sent: the key names the job, the card, the amount, the bill so far
     const tries = (await rest("GET", "pay_log?select=pi&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&source=eq.saved")) || [];
     const idem = "tally-saved-" + await sha([org, jobId, card.pm_id, amt, jobTotalCents(job) - ready.owed, tries.length, live, acct].join("|"));
+    if (c.sq) {
+      const r = await sqPay(c.sq, { source: card.pm_id, amt, customer: card.customer_id, jobId, job, S: c.S, key: "s" + (await sha(idem)).slice(0, 40) });
+      if (r.payment) await sqRecord(r.payment, c.sq, { org, jobId, src: "saved", by, cust: jc.key, tipC: 0 });
+      if (r.err) return { ok: false, message: r.err, needLink: r.code === "CARD_DECLINED_VERIFICATION_REQUIRED" };
+      const p = r.payment;
+      if (p.status === "COMPLETED") return { ok: true, message: "Charged " + money(amt) + " to " + sqLabel(p) + "." };
+      if (p.status === "APPROVED" || p.status === "PENDING") return { ok: true, message: "Payment of " + money(amt) + " is processing." };
+      return { ok: false, message: "The card was not charged." };
+    }
     const md = payMeta(org, jobId, job, by, "saved", me.uid);
     try {
       const pi = await stripe("POST", "payment_intents", {
@@ -2350,13 +2948,14 @@ export async function paySaved(org: string, me: J, jobId: string, b: J): Promise
 // job up to date with Stripe and the ledger, close pay link pages that ask for more than is owed now, and
 // say what is still owed.
 export async function payCheck(org: string, me: J, jobId: string, b: J): Promise<J> {
-  if (!stripeMode()) return { ok: false, message: "Card payments are not set up yet." };
-  const pa = await payAccount(org);
+  const sqa = await sqActive(org);
+  if (!sqa && !stripeMode()) return { ok: false, message: "Card payments are not set up yet." };
+  const pa: J = sqa ? { on: true, acct: sqAcct(sqa.merchant_id) } : await payAccount(org);
   if (!pa.on) return { ok: false, message: payOffWhy(pa.reason) };
   const job = await getDoc(org, "jobs/" + jobId);
   if (!job) return { ok: false, message: "That job is not available." };
   if (!canTakePay(me, job)) return { ok: false, status: 403, message: "Crew leads and the office take payments." };
-  const pid = String(b.pi || "");
+  const pid = sqa ? "" : String(b.pi || "");   // Square's payments are made by the server, never finished on the phone
   if (pid) {
     if (!/^pi_[A-Za-z0-9_]+$/.test(pid)) return { ok: false, message: "Unknown payment." };
     const md = (await stripe("GET", "payment_intents/" + pid, undefined, undefined, pa.acct)).metadata || {};
@@ -2396,7 +2995,12 @@ export async function payForget(org: string, me: J, b: J): Promise<J> {
     : [card];
   for (const r of all) {
     if (!r.pm_id) continue;
-    if (stripeMode() && !!r.livemode === liveNow()) {
+    if (isSq(r.account)) {
+      const row = await sqRowFor(org, r.account);
+      if (row && row.status !== "revoked" && !!r.livemode === sqLive() && /^[A-Za-z0-9:_-]{4,100}$/.test(r.pm_id)) {
+        try { await sq(row, "POST", "/v2/cards/" + r.pm_id + "/disable", {}); } catch (e) { if (!sqNo(e)) throw e; }
+      }
+    } else if (stripeMode() && !!r.livemode === liveNow()) {
       try { await stripe("POST", "payment_methods/" + r.pm_id + "/detach", undefined, undefined, r.account || ""); } catch (e) { if (!stripeNo(e)) throw e; }
     }
     // the entry stays behind, emptied, so writing an old payment down again can't put the card back
@@ -2425,8 +3029,9 @@ async function payRedirect(token: string): Promise<Response> {
     if ((await owedCents(l.org_id, l.job_id, job)) <= 0) return text("This bill is paid. Thank you!");
     return text("This payment link has expired. Ask " + co + " for a new one.", 410);
   }
-  const pa = stripeMode() ? await payAccount(l.org_id) : { on: false };
-  if (!pa.on || (job.test && liveNow())) return text("Card payments are paused right now. Ask " + co + " how to pay.", 503);
+  const sqa = await sqActive(l.org_id);
+  const pa: J = sqa ? { on: true, acct: sqAcct(sqa.merchant_id) } : stripeMode() ? await payAccount(l.org_id) : { on: false };
+  if (!pa.on || (job.test && modeLive(pa.acct))) return text("Card payments are paused right now. Ask " + co + " how to pay.", 503);
   const out = await withJobLock(l.org_id, l.job_id, async (): Promise<J> => {
     const { reserved } = await settleJob(l.org_id, l.job_id, { reserve: true });
     const cur = ((await rest("GET", "pay_links?select=*&token=eq." + q(token) + "&limit=1")) || [])[0] || l;
@@ -2441,7 +3046,7 @@ async function payRedirect(token: string): Promise<Response> {
         ? { msg: "A payment on this bill is going through right now. Try the link again in a few minutes.", status: 409 }
         : { msg: "What's left on this bill (" + money(owed) + ") is too small to pay by card. Pay " + co + " directly.", status: 409 };
     }
-    if (cur.amount_cents === want && Date.parse(pageEnds(cur)) > Date.now() + 10 * 60e3 && sessionLive(cur.session_id) === liveNow() && pageOn(cur, pa.acct)) return { url: cur.url };
+    if (cur.amount_cents === want && pageUsable(cur) && Date.parse(pageEnds(cur)) > Date.now() + 10 * 60e3 && pageOn(cur, pa.acct)) return { url: cur.url };
     const r = await renewPage(cur, (await getDoc(l.org_id, "jobs/" + l.job_id)) || job, S, want, pa.acct);
     if (r.state === "paid") return { msg: "This payment is done. Thank you!" };
     if (r.state === "open") return { msg: "This payment is going through. Check back in a minute.", status: 409 };
@@ -2802,6 +3407,21 @@ async function handleApp(req: Request): Promise<Response> {
         return json(out, typeof st === "number" ? st : 200);
       } catch (e) {
         console.error("pay_connect", e);
+        return json({ ok: false, message: stripeTrouble(e) });
+      }
+    }
+    // the company's own Square account (Setup › Payments, the owner)
+    const sqActs: Record<string, (o: string, m: J, x: J) => Promise<J>> = {
+      pay_sq_connect: (o: string, m: J) => sqConnect(o, m), pay_sq_use: sqUse, pay_sq_disconnect: (o: string, m: J) => sqDisconnect(o, m),
+    };
+    if (sqActs[b.action]) {
+      try {
+        const out = await sqActs[b.action](org, me, b);
+        const st = out.status;
+        delete out.status;
+        return json(out, typeof st === "number" ? st : 200);
+      } catch (e) {
+        console.error(b.action, e);
         return json({ ok: false, message: stripeTrouble(e) });
       }
     }
@@ -3169,10 +3789,11 @@ async function custPay(user: J, org: string, jobId: string, b: J): Promise<J> {
   const c = await custJob(user, org, jobId);
   if (c.err) return { ok: false, message: c.err, status: c.status };
   const S = c.S, co = company(S);
-  if (!stripeMode()) return { ok: false, message: "Card payments aren't set up yet. Call or text " + co + "." };
-  const pa = await payAccount(org);
+  const sqa = await sqActive(org);
+  if (!sqa && !stripeMode()) return { ok: false, message: "Card payments aren't set up yet. Call or text " + co + "." };
+  const pa: J = sqa ? { on: true, acct: sqAcct(sqa.merchant_id) } : await payAccount(org);
   if (!pa.on) return { ok: false, message: co + " can't take cards in the app yet. Call or text them." };
-  if (c.job.test && liveNow()) return { ok: false, message: "Test job: no real charges." };
+  if (c.job.test && modeLive(pa.acct)) return { ok: false, message: "Test job: no real charges." };
   if ((c.job.status === "active" || c.job.status === "done") && pendingForms(S, c.job).length) return { ok: false, message: "The forms are signed with your crew first." };
   const tipOk = !optOff(S, "custTips") && (c.job.status === "done" || c.job.status === "paid") && ((c.job.assign && c.job.assign.crew) || []).length > 0;
   const tipC = Math.round(Number(b.tip) || 0);
@@ -3205,8 +3826,17 @@ async function custPay(user: J, org: string, jobId: string, b: J): Promise<J> {
       const owed2 = await owedCents(org, jobId);
       if (amt > 0 && amt > owed2) return { ok: false, changed: true, message: "A payment just went through. Check what's owed and pay again." };
     }
-    const cus = (await jobCustomer(org, jobId, job, acct)).customer;
     const token = "c" + randToken(), d = job.d || {};
+    if (sqa) {
+      const back = custBack(b.back, jobId), exp = new Date(Date.now() + 3600e3).toISOString();
+      const pg = await sqMintLink({ row: sqa, org, jobId, job, S, token, amt, tipC, kind: due.kind, back });
+      await rest("POST", "pay_links", {
+        token, org_id: org, job_id: jobId, session_id: pg.id, url: pg.url, amount_cents: amt, cap_cents: amt, save_card: false, created_by: CUST_BY,
+        status: "open", expires_at: exp, session_expires: exp, account: acct, meta: { order_id: pg.order_id, tip: tipC, cust: payKeyOf(job, jobId), kind: due.kind },
+      });
+      return { ok: true, url: pg.url, amount: amt / 100, tip: tipC / 100 };
+    }
+    const cus = (await jobCustomer(org, jobId, job, acct)).customer;
     const md = { ...payMeta(org, jobId, job, CUST_BY, "cust", user.uid), tally_link: token, tally_tip: String(tipC) };
     const nowS = Math.floor(Date.now() / 1000), exp = nowS + 3600, back = custBack(b.back, jobId);
     const lines: J[] = [];
@@ -3229,7 +3859,7 @@ async function custPay(user: J, org: string, jobId: string, b: J): Promise<J> {
 async function custCheck(user: J, org: string, jobId: string): Promise<J> {
   const c = await custJob(user, org, jobId);
   if (c.err) return { ok: false, message: c.err, status: c.status };
-  if (!stripeMode()) return { ok: true };
+  if (!stripeMode() && !(await sqActive(org))) return { ok: true };
   await withJobLock(org, jobId, () => settleJob(org, jobId), 3000);
   return { ok: true };
 }
@@ -3435,11 +4065,16 @@ export async function handle(req: Request): Promise<Response> {
     // where Stripe's membership checkout and billing pages send the owner back to
     if (/^\/member\/done\/?$/.test(sub)) return text("Thanks! Your MoveCrew membership is set up.\n\nGo back to MoveCrew: Setup › Membership shows it.");
     if (/^\/member\/back\/?$/.test(sub)) return text("Go back to MoveCrew: Setup › Membership shows where your membership stands.");
+    // where Square's sign-in sends the owner back to (Connect with Square)
+    if (/^\/square\/oauth\/?$/.test(sub)) {
+      try { return await sqBack(url); } catch (e) { console.error("square sign-in", e); return text("Something went wrong connecting Square. Go back to MoveCrew and try again.", 500); }
+    }
   }
   if (req.method !== "POST") return json({ ok: false, message: "POST only" }, 405);
   if (sub === "/app" || sub === "/app/") return handleApp(req);
   if (sub === "/stripe" || sub === "/stripe/") return handleStripe(req);
   if (sub === "/stripe/connect" || sub === "/stripe/connect/") return handleStripe(req, "connect");
+  if (sub === "/square" || sub === "/square/") return handleSquare(req);
   if (/^\/cron\/tomorrow\/?$/.test(sub)) {
     const secret = env("TALLY_CRON_SECRET");
     if (!secret || !same(secret, req.headers.get("x-tally-cron") || "")) return json({ ok: false, message: "Forbidden" }, 403);
