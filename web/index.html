@@ -51,6 +51,10 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 .top{background:var(--header);color:var(--header-text);padding:8px 14px;padding-top:calc(8px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px}
 .brand{font:700 24px/1 var(--display);letter-spacing:.6px}
 .brand small{display:block;font:400 11px/1.2 var(--font);color:inherit;opacity:.92;margin-top:2px;letter-spacing:0}
+/* the company's name, for someone in more than one: a tap switches (a bigger target than it looks) */
+.brand .cosw{display:inline-flex;align-items:center;gap:2px;font:inherit;color:inherit;background:none;border:0;padding:8px 10px 8px 0;margin:-8px -10px -8px 0;cursor:pointer;text-align:left;text-decoration:underline dotted;text-underline-offset:3px}
+.brand .cosw svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.navrow .ic.coin{font:700 15px/1 var(--display);background:var(--accSoft);color:var(--text)}
 .top select{background:transparent;color:inherit;border:1px solid color-mix(in srgb, var(--header-text) 32%, transparent);border-radius:8px;padding:4px 8px;font-size:13px;min-height:32px}
 .top select option{color:#141B2D}
 .tapebar{height:3px;background:var(--tape)}
@@ -1113,7 +1117,7 @@ function css(){
   '#login{position:fixed;inset:0;z-index:120;background:#F5F6F8;color:#141B2D;display:flex;align-items:center;justify-content:center;padding:22px;font:400 16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'+
   '#login .box{width:100%;max-width:380px;background:#fff;border:1px solid #E7EAF0;border-radius:14px;padding:22px}'+
   '#login h1{font:700 30px/1 "Barlow Condensed","Arial Narrow",Arial,sans-serif;margin:0 0 4px;letter-spacing:.5px}'+
-  '#login p{margin:0 0 14px;font-size:14px;opacity:.75}'+
+  '#login p{margin:0 0 14px;font-size:14px;opacity:.75}#login p.ask{font-size:17px;font-weight:650;opacity:1;margin:6px 0 4px;text-wrap:balance}'+
   '#login label{display:block;font-size:12px;opacity:.7;margin-bottom:4px}'+
   '#login input{width:100%;font-size:16px;padding:11px 12px;border:1px solid #E7EAF0;border-radius:10px;min-height:46px;letter-spacing:0}'+
   '#login input.code{letter-spacing:8px;text-align:center;font-size:22px}'+
@@ -1191,9 +1195,39 @@ function hideLogin(){if(el){el.remove();el=null}document.documentElement.classLi
 function showLogin(){document.documentElement.classList.add('pre-auth');state.step='email';state.busy=false;state.msg='';render()}
 
 /* ---------- choose a company ---------- */
-var pick={mode:'list',orgs:[],busy:false,msg:'',kind:'',agent:false};
-function useOrg(id){try{localStorage.setItem(ORG_KEY,id)}catch(e){}reload()}
-window.tallySwitchCompany=function(){try{localStorage.removeItem(ORG_KEY)}catch(e){}reload()};
+var pick={mode:'list',orgs:[],all:[],work:[],fresh:{},hit:null,last:'',busy:false,msg:'',kind:'',agent:false};
+var ROLE_NAMES={owner:'Owner',dispatch:'Dispatch',lead:'Crew lead',crew:'Crew',callcenter:'Call center'};
+// Someone in more than one company is asked each work day which one they're working for (Richie, Nov 1: "ask them
+// when they enter the app witch company they are working for that day . But this only happens if the person gets
+// added to more than 1 company by email"). The answer is kept on this device until the next work day, which starts
+// at 4 a.m. so a move that runs past midnight is still the same day, or until their companies change (another
+// company added them). Only companies they work in count: not one they've asked to join, nor the call center's.
+var DAY_KEY='tally.orgDay';
+function workDay(){var d=new Date(Date.now()-4*3600e3);return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
+function dayTag(){return me.id+'|'+workDay()+'|'+pick.work.map(function(o){return o.id}).sort().join(',')}
+function dayPicked(){try{return localStorage.getItem(DAY_KEY)===dayTag()}catch(e){return true}}
+function dayKeep(){try{localStorage.setItem(DAY_KEY,dayTag())}catch(e){}}
+// a company picked is today's company
+function useOrg(id){try{localStorage.setItem(ORG_KEY,id)}catch(e){}dayKeep();reload()}
+// the whole list: their companies, the ones they've asked to join, and starting or joining one
+window.tallySwitchCompany=function(){try{localStorage.removeItem(ORG_KEY);sessionStorage.setItem('tally.pickAll','1')}catch(e){}reload()};
+// the company already open goes on without starting again
+function chooseOrg(id){
+  if(id&&id===ORG&&(window.__tallyBooted||pick.hit)){
+    dayKeep();
+    if(window.__tallyBooted){hideLogin();return}
+    var h=pick.hit;pick.hit=null;enterOrg(h);return;
+  }
+  useOrg(id);
+}
+// which company today: their companies, the one they had open marked, and any company that added them since
+function askToday(hit){
+  var prev='';try{prev=localStorage.getItem(DAY_KEY)||''}catch(e){}
+  var p=prev.split('|'),known=p[0]===me.id&&p[2]?p[2].split(','):null;
+  pick.fresh={};if(known)pick.work.forEach(function(o){if(known.indexOf(o.id)<0)pick.fresh[o.id]=1});
+  pick.hit=hit||null;pick.last=hit?hit.id:'';pick.orgs=pick.work;pick.mode='today';pick.msg='';pick.kind='';
+  hideLoginOnly();renderPicker();
+}
 function renderPicker(){
   if(!document.body){document.addEventListener('DOMContentLoaded',renderPicker,{once:true});return}   // the companies can come back before the page has loaded
   css();
@@ -1201,9 +1235,15 @@ function renderPicker(){
   document.documentElement.classList.add('pre-auth');
   var esc=function(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
   var body='';
-  if(pick.mode==='list'){
+  if(pick.mode==='today'){
+    body='<h1>MoveCrew</h1><p class="ask">Which company are you working for today?</p>'+pick.orgs.map(function(o){
+      var sub=[ROLE_NAMES[o.role]||o.role,o.id===pick.last?'last time':'',pick.fresh[o.id]?'new: they just added you':''].filter(Boolean).join(' · ');
+      return '<button class="org" data-org="'+esc(o.id)+'"><b>'+esc(o.name)+'</b><small>'+esc(sub)+'</small></button>'}).join('')+
+      '<p class="note2">You work for '+pick.orgs.length+' companies, so MoveCrew asks once a day. To change it later: More › Switch company.</p>'+
+      '<button class="link" id="pkAll">Start or join another company</button><button class="link" id="pkOut">Sign out ('+esc(me.email)+')</button>';
+  }else if(pick.mode==='list'){
     var rows=pick.orgs.map(function(o){
-      var sub=o.pending?'Waiting for the owner to approve you':({owner:'Owner',dispatch:'Dispatch',lead:'Crew lead',crew:'Crew',callcenter:'Call center'}[o.role]||o.role);
+      var sub=o.pending?'Waiting for the owner to approve you':(ROLE_NAMES[o.role]||o.role);
       return '<button class="org" data-org="'+esc(o.id)+'"><b>'+esc(o.name)+'</b><small>'+esc(sub)+'</small></button>'}).join('');
     // someone on MoveCrew's call center team with no company switched on yet: nothing to start or join
     if(pick.agent&&!pick.orgs.length)body='<h1>MoveCrew</h1><p>You’re on MoveCrew’s call center team. No company has the call center switched on yet; MoveCrew admin turns it on for each company that buys it.</p>'+
@@ -1222,17 +1262,18 @@ function renderPicker(){
   }
   el.innerHTML='<div class="box">'+body+'<div class="msg '+(pick.kind||'')+'">'+esc(pick.msg||'')+'</div></div>';
   var q=function(s){return el.querySelector(s)};
-  el.querySelectorAll('[data-org]').forEach(function(b){b.onclick=function(){useOrg(b.getAttribute('data-org'))}});
+  el.querySelectorAll('[data-org]').forEach(function(b){b.onclick=function(){chooseOrg(b.getAttribute('data-org'))}});
+  if(q('#pkAll'))q('#pkAll').onclick=function(){pick.mode='list';pick.orgs=pick.all;pick.msg='';renderPicker()};
   if(q('#pkNew'))q('#pkNew').onclick=function(){pick.mode='new';pick.msg='';renderPicker()};
   if(q('#pkJoin'))q('#pkJoin').onclick=function(){pick.mode='join';pick.msg='';renderPicker()};
   if(q('#pkBack'))q('#pkBack').onclick=function(){pick.mode='list';pick.msg='';renderPicker()};
-  if(q('#pkOut'))q('#pkOut').onclick=function(){sb.auth.signOut().then(function(){try{localStorage.removeItem(ORG_KEY)}catch(e){}reload()})};
+  if(q('#pkOut'))q('#pkOut').onclick=function(){window.tallySignOut()};
   if(q('#pkCreate'))q('#pkCreate').onclick=function(){
     var n=(q('#pkName').value||'').trim();if(!n){pick.msg='Give the company a name.';pick.kind='bad';return renderPicker()}
     pick.busy=true;renderPicker();
     sb.rpc('create_org',{company:n}).then(function(r){pick.busy=false;
       if(r.error||!r.data){pick.msg=(r.error&&r.error.message)||'Could not create the company.';pick.kind='bad';return renderPicker()}
-      useOrg(r.data)});
+      pick.work=pick.work.concat([{id:r.data}]);useOrg(r.data)});   // one of their companies now, so not asked again today
   };
   if(q('#pkSend'))q('#pkSend').onclick=function(){
     var c=(q('#pkCode').value||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase();
@@ -1257,23 +1298,66 @@ function onSession(session){
   // and a company MoveCrew's admin added for this email becomes theirs
   sb.rpc('claim_invites').then(function(){},function(){}).then(function(){return sb.rpc('claim_company_invites')}).then(function(){},function(){}).then(function(){return sb.rpc('claim_cc_team')}).then(function(r){pick.agent=!!(r&&r.data===true)},function(){}).then(function(){return sb.rpc('my_orgs')}).then(function(r){
     var list=r.data||[],hit=list.filter(function(o){return o.id===ORG})[0],ready=list.filter(function(o){return !o.pending});
+    pick.all=list;pick.work=ready.filter(function(o){return o.role!=='callcenter'});
+    // More › Switch company asked for the whole list (to start or join a company): no question about today first
+    var all=false;try{all=sessionStorage.getItem('tally.pickAll')==='1';sessionStorage.removeItem('tally.pickAll')}catch(e){}
     // a customer (no company of their own), or someone who asked for their own moves: the customer side
     var wantCust=false;try{wantCust=sessionStorage.getItem('tally.cust')==='1'}catch(e){}
     if(!hit&&!pick.agent&&(wantCust||!list.length))return custStart(list).then(function(ok){
       if(ok)return;
       try{sessionStorage.removeItem('tally.cust')}catch(e){}
       if(!ORG&&ready.length===1){useOrg(ready[0].id);return}
+      if(pick.work.length>1){askToday(null);return}
       pick.orgs=list;pick.mode='list';pick.msg='';pick.noMove=!list.length;hideLoginOnly();renderPicker();
     });
-    if(!hit&&!ORG&&ready.length===1){useOrg(ready[0].id);return}
+    if(!all&&!hit&&!ORG&&ready.length===1){useOrg(ready[0].id);return}
     // the call center team: any of its companies opens the Companies screen, where they pick the one on the call
-    if(!hit&&ready.length&&ready.every(function(o){return o.role==='callcenter'})){useOrg(ready[0].id);return}
+    if(!all&&!hit&&ready.length&&ready.every(function(o){return o.role==='callcenter'})){useOrg(ready[0].id);return}
+    // in two or more companies: which one today (once a work day, and whenever none is open)
+    if(!all&&pick.work.length>1&&(!hit||(hit.role!=='callcenter'&&!dayPicked()))){askToday(hit||null);return}
     if(!hit){pick.orgs=list;pick.mode='list';pick.msg='';hideLoginOnly();renderPicker();return}
-    window.tallyOrg={id:hit.id,name:hit.name,role:hit.role,join_code:hit.join_code,pending:hit.pending,plan:hit.plan};
-    hideLogin();
-    return Promise.all([refreshMe(),commsApi.refresh()]).then(function(){window.__tallyBooted=true;readyGo();custPeek()});
+    return enterOrg(hit);
   }).catch(function(){hideLoginOnly();renderPicker()});
 }
+function enterOrg(hit){
+  window.tallyOrg={id:hit.id,name:hit.name,role:hit.role,join_code:hit.join_code,pending:hit.pending,plan:hit.plan};
+  companies();
+  hideLogin();
+  return Promise.all([refreshMe(),commsApi.refresh()]).then(function(){window.__tallyBooted=true;readyGo();custPeek()});
+}
+// More › Switch company and the company's name at the top, for someone in more than one (the app reads this)
+function companies(){
+  var o=window.tallyOrg;
+  window.tallyCompanies=pick.work.length>1&&o&&o.role!=='callcenter'?{
+    list:pick.work.map(function(c){return {id:c.id,name:c.name,role:c.role}}),here:ORG,
+    use:useOrg,today:dayKeep,more:window.tallySwitchCompany}:null;
+  if(window.tallyCompaniesChanged)window.tallyCompaniesChanged();
+}
+// Back in MoveCrew on a new work day (a phone brings the app back up; the Windows app's window comes to the front),
+// or left alone for half an hour after 4 a.m. (an office computer left on overnight): which company today. Never in
+// the middle of something: not while someone is using it, and not while changes are still on their way to the
+// office. Their companies are looked at again (at most every 10 minutes), so a company that added them since shows up.
+var dayLook=Date.now(),lastTouch=Date.now();
+['pointerdown','keydown'].forEach(function(t){document.addEventListener(t,function(){lastTouch=Date.now()},true)});
+function dayCheck(quiet){
+  var o=window.tallyOrg;
+  if(!window.__tallyBooted||!o||o.role==='callcenter'||el||document.hidden)return;
+  if(quiet&&(!window.tallyCompanies||Date.now()-lastTouch<30*60e3))return;
+  if(window.tallyBusy&&window.tallyBusy())return;
+  var look=Date.now()-dayLook<10*60e3?Promise.resolve():(dayLook=Date.now(),
+    sb.rpc('claim_invites').then(function(){},function(){}).then(function(){return sb.rpc('my_orgs')}).then(function(r){
+      if(!r||r.error||!r.data)return;
+      pick.all=r.data;pick.work=r.data.filter(function(c){return !c.pending&&c.role!=='callcenter'});companies();
+    },function(){}));
+  return look.then(function(){
+    if(el||document.hidden||pick.work.length<2||dayPicked()||(window.tallyBusy&&window.tallyBusy()))return;
+    askToday(window.tallyOrg);
+  });
+}
+document.addEventListener('visibilitychange',function(){dayCheck(false)});
+window.addEventListener('focus',function(){dayCheck(false)});
+setInterval(function(){dayCheck(true)},5*60e3);
+window.__tallyDayCheck=dayCheck;   // the tests
 /* ---------- the customer side (Oct 28): a customer's moves, through the Edge Function (they are none of a company's
    people, so the database's rules give them nothing directly). The app's customer screens read window.tallyCust. ---------- */
 window.tallyCust={on:false,email:'',name:'',phone:'',moves:[],orgs:[],has:false,
@@ -1413,7 +1497,7 @@ window.claude={use:function(what){
   if(what!=='db'&&what!=='user')return Promise.resolve(null);
   return ready.then(function(){return window.tallyCust.on?null:what==='db'?db:user});   // a customer: no company's data
 }};
-window.tallySignOut=function(){sb.auth.signOut().then(function(){try{localStorage.removeItem(ORG_KEY)}catch(e){}reload()})};
+window.tallySignOut=function(){sb.auth.signOut().then(function(){try{localStorage.removeItem(ORG_KEY);localStorage.removeItem(DAY_KEY)}catch(e){}reload()})};
 
 document.documentElement.classList.add('pre-auth');
 sb.auth.getSession().then(function(r){onSession(r.data&&r.data.session)});
@@ -2686,6 +2770,10 @@ function custGo(url){if(window.__tallyGo){window.__tallyGo(url);return}try{locat
 // signed in as a customer (the hosted back end found their moves): the customer side opens
 window.tallyCustGo=function(){state.ui.role='customer';ui.tab='mymove';ui.preview=null;ui.cs=null;render();custReturn()};
 window.tallyMoreRedraw=function(){if(ui.more)renderMore()};
+// someone in more than one company (the hosted back end's window.tallyCompanies): the name at the top switches, as
+// More › Switch company does; and changes still on their way to the office hold a switch (it starts the app again)
+window.tallyCompaniesChanged=function(){brandLine();if(ui.more)renderMore()};
+window.tallyBusy=function(){return Object.keys(sync.inflight||{}).length>0};
 // back from Stripe's page (…?paid=<job>): bring the move up to date until the payment shows, then the thank you (and,
 // with the move done and paid, the review page)
 function custReturn(){
@@ -2958,6 +3046,10 @@ function renderMore(){
     el.innerHTML='<div class="scrim" data-act="more:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="See it their way">'+previewSheet()+'</div>';
     el.hidden=!ui.more;syncLock();return;
   }
+  if(ui.moreMode==='company'&&window.tallyCompanies){
+    el.innerHTML='<div class="scrim" data-act="more:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="Switch company">'+companySheet()+'</div>';
+    el.hidden=!ui.more;syncLock();return;
+  }
   // a list in three groups (Work, Company, You), with Truck down set apart at the bottom
   var row=function(act,attrs,ic,title,sub,cls){return '<button class="navrow'+(cls?' '+cls:'')+'" data-act="'+act+'"'+(attrs||'')+'><span class="ic">'+ic+'</span><span class="tx"><b>'+esc(title)+'</b>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</span><span class="go">›</span></button>'};
   var go=function(tab,title,sub){return row('more:go',' data-tab="'+tab+'"',ICON[tab]||ICON.more,title,sub)};
@@ -2973,7 +3065,8 @@ function renderMore(){
   var you=[office?'':look,canMyProfile()?row('me:open','',SICON.profile,'My profile','Your details and documents'):'',
     canPreview()?row('more:preview','',SICON.eye,'See it their way',previewing()?'Previewing '+(ui.preview.staff||KIND[ui.preview.role]||ui.preview.role):'Owner, dispatch, call center, lead or crew'):'',
     office?look:'',
-    window.tallySwitchCompany&&!(state.ui.role==='callcenter'&&!ccHouse())?row('more:company','',SICON.swap,'Switch company',(window.tallyOrg||{}).name||''):'',   // the call center switches from Companies
+    window.tallySwitchCompany&&!(state.ui.role==='callcenter'&&!ccHouse())?row('more:company','',SICON.swap,'Switch company',
+      window.tallyCompanies?'Now: '+((window.tallyOrg||{}).name||'')+' · '+window.tallyCompanies.list.length+' companies':(window.tallyOrg||{}).name||''):'',   // the call center switches from Companies
     window.tallyCust&&window.tallyCust.has&&!previewing()?row('cust:mine','',SICON.profile,'My moves','Your own moves, as a customer'):'',
     window.tallySignOut?row('more:signout','',SICON.signout,'Sign out',sync.meName||''):''];
   var sosRow=role!=='callcenter'&&(opt('truckDown')||sosActive().length)?'<div class="navlist" style="margin-top:16px">'+row('sos:open','',ICON.sos,'Truck down','Tell the office a truck broke down, and where','sosrow')+'</div>':'';
@@ -6454,8 +6547,9 @@ function inviteHtml(rec){
   var first=rec.name.split(' ')[0],ph=(rec.info&&rec.info.phone)||'',co=String((window.tallyOrg&&window.tallyOrg.name)||state.settings.company||'work').trim().replace(/[.!]+$/,'');
   // someone who works only in the office gets the Windows app; anyone in the field, the phone app
   var office=sidesOf(rec.name,rec).field==='off',link=office?(state.settings.winLink||DEFAULT_WIN_LINK):(state.settings.appLink||DEFAULT_APP_LINK);
-  var msg=office?'Hi '+first+', it\'s '+co+'. Get MoveCrew for your Windows computer here: '+link+' and sign in with '+rec.email+'.'
-    :'Hi '+first+', it\'s '+co+'. Get the MoveCrew app here: '+link+' and sign in with '+rec.email+'. You\'ll go straight to your jobs.';
+  // someone who already works for another company in MoveCrew picks this one when the app asks (Nov 1)
+  var msg=office?'Hi '+first+', it\'s '+co+'. Get MoveCrew for your Windows computer here: '+link+' and sign in with '+rec.email+'. Already use MoveCrew? Just open it and pick '+co+'.'
+    :'Hi '+first+', it\'s '+co+'. Get the MoveCrew app here: '+link+' and sign in with '+rec.email+'. You\'ll go straight to your jobs. Already use MoveCrew? Just open it and pick '+co+'.';
   return '<div class="note">'+esc(first)+' hasn\'t signed in yet.'+(ph?' <a class="btn sm" href="'+esc(smsHref(ph,msg))+'">Text '+esc(first)+' the app</a>':' Add a phone number to text them the app link.')+'</div>';
 }
 function empEditBody(){
@@ -7087,6 +7181,22 @@ function renderPvBar(){
   var p=ui.preview;
   b.innerHTML='<span class="grow">Previewing <b>'+esc(p.role==='customer'?custPvName():(p.staff||KIND[p.role]||p.role))+'</b>'+(p.staff?' · '+esc(KIND[p.role]||p.role):'')+'</span><button data-act="pv:end">Back to my view</button>';
   b.hidden=false;document.body.classList.add('previewing');
+}
+// More › Switch company, for someone in more than one company: theirs to tap. The one open now is ticked. Any other
+// starts MoveCrew again in that company, so a change still on its way to the office holds it until a second tap.
+var CO_ROLES={owner:'Owner',dispatch:'Dispatch',lead:'Crew lead',crew:'Crew'};
+function companySheet(){
+  var C=window.tallyCompanies,busy=window.tallyBusy&&window.tallyBusy();
+  var rows=C.list.map(function(o){
+    var here=o.id===C.here,armed=ui.armed==='co:'+o.id;
+    var sub=here?(CO_ROLES[o.role]||o.role||'')+' · working here now':armed?'Tap again to switch anyway':CO_ROLES[o.role]||o.role||'';
+    return '<button class="navrow" data-act="co:use" data-org="'+esc(o.id)+'"'+(here?' aria-current="true"':'')+'><span class="ic coin" aria-hidden="true">'+esc((String(o.name||'?').trim()[0]||'?').toUpperCase())+'</span>'+
+      '<span class="tx"><b>'+esc(o.name)+'</b><small>'+esc(sub)+'</small></span><span class="go">'+(here?'✓':'›')+'</span></button>'}).join('');
+  return '<div class="row between"><h2>Switch company</h2><button class="btn sm" data-act="more:close">Done</button></div>'+
+    '<p class="hint" style="margin:2px 0 8px">You work for '+C.list.length+' companies. MoveCrew shows one at a time: its jobs, its people and its chat. It asks which one each day.</p>'+
+    (busy?'<div class="note" role="status">Some changes haven’t reached the office yet. Wait a moment before switching, or they could be lost.</div>':'')+
+    '<div class="navlist cosheet">'+rows+'</div>'+
+    '<button class="btn ghost" data-act="co:other">Start or join another company</button>';
 }
 function previewSheet(){
   var roles=[['owner','Owner'],['dispatch','Dispatch'],['callcenter','Call center'],['lead','Crew lead'],['crew','Crew']];
@@ -8000,7 +8110,10 @@ function memberApply(){
 function brandLine(){
   var el=$('#brandCo');if(!el)return;
   if(custLive()){var cm=custCur();el.textContent=cm&&cm.company?cm.company:'Your move';return}
-  el.innerHTML=esc((window.tallyOrg&&window.tallyOrg.name)||state.settings.company||'Your Company')+(memberTest()?' <b class="testtag" title="A test company: never charged a membership">TEST</b>':'');
+  var co=esc((window.tallyOrg&&window.tallyOrg.name)||state.settings.company||'Your Company');
+  // in more than one company: the name switches (More › Switch company)
+  if(window.tallyCompanies&&state.ui.role!=='callcenter')co='<button class="cosw" data-act="co:open" aria-label="'+co+'. Switch company">'+co+'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>';
+  el.innerHTML=co+(memberTest()?' <b class="testtag" title="A test company: never charged a membership">TEST</b>':'');
 }
 function shortDay(iso){var d=iso?new Date(iso):null;return d&&!isNaN(d)?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):''}
 function daysLeft(iso){var t=Date.parse(iso||'');return t?Math.max(0,Math.ceil((t-Date.now())/864e5)):0}
@@ -8719,7 +8832,15 @@ document.addEventListener('click',function(e){
     case 'pv:end':endPreview();break;
     case 'more:go':ui.more=false;renderMore();if(t.dataset.tab==='history'&&ui.tab!=='history')histReset();if(t.dataset.tab==='settings'){ui.setSec=t.dataset.sec||'';ui.setQ=''}ui.tab=t.dataset.tab;ui.armed='';render();window.scrollTo(0,0);break;
     case 'more:signout':if(window.tallySignOut)window.tallySignOut();break;
-    case 'more:company':if(window.tallySwitchCompany)window.tallySwitchCompany();break;
+    case 'more:company':if(window.tallyCompanies){ui.moreMode='company';ui.armed='';renderMore()}else if(window.tallySwitchCompany)window.tallySwitchCompany();break;
+    case 'co:open':if(window.tallyCompanies){ui.more=true;ui.moreMode='company';ui.armed='';renderMore()}break;
+    case 'co:use':(function(){
+      var C=window.tallyCompanies,id=t.dataset.org;if(!C)return;
+      if(id===C.here){C.today();ui.more=false;ui.moreMode='list';renderMore();return}   // the one open: it's today's
+      if(window.tallyBusy()&&ui.armed!=='co:'+id){ui.armed='co:'+id;renderMore();return}
+      C.use(id);
+    })();break;
+    case 'co:other':if(window.tallyCompanies)window.tallyCompanies.more();break;
     case 'emp:new':openEmp({});break;
     case 'emp:open':ui.more=false;renderMore();openEmp({id:t.dataset.id,name:t.dataset.name});break;
     case 'emp:close':closeEmp();break;

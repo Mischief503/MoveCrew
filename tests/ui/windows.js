@@ -122,7 +122,7 @@ const set = (A, sel, v) => { const el = A.$(sel); el.value = v; el.dispatchEvent
   A.click('[data-act="emp:save"]'); await sleep(40);
   let sms = A.$('#emp a[href^="sms:"]');
   let body = sms ? decodeURIComponent(sms.getAttribute('href').replace(/^[^?]*\?&body=/, '')) : '';
-  ok(body === 'Hi Dana, it\'s Ace Moving. Get MoveCrew for your Windows computer here: ' + WINLINK + ' and sign in with dana@x.com.', 'someone who works only in the office is texted the Windows app: ' + body);
+  ok(body === 'Hi Dana, it\'s Ace Moving. Get MoveCrew for your Windows computer here: ' + WINLINK + ' and sign in with dana@x.com. Already use MoveCrew? Just open it and pick Ace Moving.', 'someone who works only in the office is texted the Windows app (and, if MoveCrew is already theirs for another company, to pick this one): ' + body);
   A.click('[data-act="emp:close"]'); await sleep(10);
   A.click('[data-act="emp:new"]'); await sleep(20);
   set(A, '[data-ek="name"]', 'Rico');
@@ -131,7 +131,7 @@ const set = (A, sel, v) => { const el = A.$(sel); el.value = v; el.dispatchEvent
   A.click('[data-act="emp:save"]'); await sleep(40);
   sms = A.$('#emp a[href^="sms:"]');
   body = sms ? decodeURIComponent(sms.getAttribute('href').replace(/^[^?]*\?&body=/, '')) : '';
-  ok(/Get the MoveCrew app here: https:\/\/github\.com\/Mischief503\/Tally\/releases\/latest\/download\/MoveCrew\.apk and sign in with rico@x\.com\. You'll go straight to your jobs\./.test(body), 'someone on the crew still gets the phone app');
+  ok(/Get the MoveCrew app here: https:\/\/github\.com\/Mischief503\/Tally\/releases\/latest\/download\/MoveCrew\.apk and sign in with rico@x\.com\. You'll go straight to your jobs\. Already use MoveCrew\? Just open it and pick Ace Moving\.$/.test(body), 'someone on the crew still gets the phone app');
   A.click('[data-act="emp:close"]'); await sleep(10);
   ok(A.errors.length === 0, 'no errors (' + A.errors.slice(0, 3).join(' | ') + ')');
 

@@ -86,3 +86,24 @@ few hours, downloads it in the background, and shows **A new version of MoveCrew
 
 Removing it: Windows **Settings › Apps › Installed apps › MoveCrew › Uninstall**. Your sign-in and
 settings for this computer stay in the user's AppData folder in case it's installed again.
+
+# Someone who works for more than one company
+
+Richie, Nov 1: "I need people to be able to work for multiple companys and there should be a switch
+company option in more . As well as ask them when they enter the app witch company they are working
+for that day . But this only happens if the person gets added to more than 1 company by email".
+
+- **Getting in:** each company's owner adds the person by email in Setup › Employees. One sign-in, the
+  same email, links them to every company that added them. A text from **Text Dana the app** ends
+  "Already use MoveCrew? Just open it and pick Ace Moving." for someone who has it already.
+- **Each day:** someone in two or more companies who opens MoveCrew on a new day is asked **Which
+  company are you working for today?** The answer holds until 4 a.m. the next day (a move past
+  midnight is still the same day) or until another company adds them. The phone app brought back up
+  in the morning and the Windows app's window brought to the front ask too, and so does the Windows
+  app left on overnight once nobody has touched it for half an hour. Never while someone is using it,
+  and not while changes are still on their way to the office.
+- **Switching during the day:** More › **Switch company** lists their companies, or tap the company's
+  name at the top of the app. The one open is ticked; a tap on another opens it.
+- **Kept apart:** each company's jobs, people, chat and settings stay its own, on the phone too.
+- **Never asked:** people in one company (Switch company is still in More, to start or join one), a
+  company they've only asked to join, and MoveCrew's call center team (they pick from Companies).

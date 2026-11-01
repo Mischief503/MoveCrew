@@ -181,7 +181,9 @@ function makeSupabase(db, me, calls) {
       if (name === 'claim_cc_team') return Promise.resolve({ data: !!agent });
       if (name === 'cc_me') return Promise.resolve({ data: agent || null });
       if (name === 'my_orgs') return Promise.resolve({ data: db.members.filter((m) => m.user_id === me.uid).map((m) => ({ id: m.org_id, name: (db.__orgNames || {})[m.org_id] || 'Ace Moving', role: m.role, join_code: 'ABC123' }))
-        .concat(agent ? (db.__ccOrgs || []).filter((o) => !db.members.some((m) => m.user_id === me.uid && m.org_id === o.id)).map((o) => ({ id: o.id, name: o.name, role: 'callcenter', join_code: null, pending: false })) : []) });
+        .concat(agent ? (db.__ccOrgs || []).filter((o) => !db.members.some((m) => m.user_id === me.uid && m.org_id === o.id)).map((o) => ({ id: o.id, name: o.name, role: 'callcenter', join_code: null, pending: false })) : [])
+        // companies they've asked to join (db.__pendingOrgs: [{id, name}])
+        .concat((db.__pendingOrgs || []).map((o) => ({ id: o.id, name: o.name, role: '', join_code: null, pending: true }))) });
       if (name === 'people') return Promise.resolve({ data: db.members.map((m) => ({ user_id: m.user_id, email: m.email })).concat((db.access_requests || []).map((r) => ({ user_id: r.user_id, email: r.email }))) });
       return Promise.resolve({ data: null });
     },

@@ -1,6 +1,7 @@
 // The hosted app's own screens in a real browser (Chromium, like a phone): Membership, Payments, App access,
 // Employees and one employee's file, Texts and calls, the More menu, MoveCrew admin, a job sheet with card
-// payments on, a crew lead's Today and My profile, and the company picker. On each one nothing runs off the
+// payments on, a crew lead's Today and My profile, the company picker, and for someone in two companies the
+// question about today and More › Switch company. On each one nothing runs off the
 // side, nothing to tap sits under the bars, every button is 36 px or more, and axe-core's colour-contrast
 // rule passes in light and in dark. The hosted build runs against the tests' stand-in Supabase (lib.js) and
 // a stand-in for the Edge Function's replies, so nothing leaves the machine.
@@ -28,7 +29,7 @@ function seed(twoOrgs) {
     quote: { total: 1615, cf: 958, crew: 3, hours: 7.5, lines: [{ label: '3 movers, 7.5 hr', amt: 1463 }], deposit: 386, nte: 0, kind: 'local' }, items: [], assign: { truckId: 't26', crew: ['Marcus', 'Dee'] }, tally: {},
     payments: {}, signed: {}, extras: {}, crewNotes: {}, photos: {}, materials: {}, costs: {}, log: {}, confirm: {} });
   return {
-    docs, comm_log: [], comm_lines: [{ org_id: ORG, phone_number: '+15125550000', enabled: true }],
+    docs, comm_log: [], comm_lines: [{ org_id: ORG, phone_number: '+15125550000', enabled: true }], __orgNames: { [ORG]: 'Ace Moving', 'org-2': 'Bright Moves Hauling & Storage' },
     members: [{ org_id: ORG, user_id: 'u-ana', email: 'ana@x.com', staff: 'Ana', role: 'owner', ts: 1 }, { org_id: ORG, user_id: 'u-marcus', email: 'marcus@x.com', staff: 'Marcus', role: 'lead', ts: 1 }]
       .concat(twoOrgs ? [{ org_id: 'org-2', user_id: 'u-ana', email: 'ana@x.com', staff: 'Ana', role: 'owner', ts: 1 }] : []),
     access_requests: [{ org_id: ORG, user_id: 'u-new', email: 'dee.r@x.com', ts: 1 }],
@@ -54,6 +55,9 @@ const init = (cfg) => `(function(){ ${SB}
   var R=${JSON.stringify(cfg.replies)}, of=window.fetch;
   window.fetch=function(url,init){ if(/\\/functions\\/v1\\//.test(String(url))){ var b={}; try{b=JSON.parse(init.body)}catch(e){} calls.fn.push(b); var r=R[b.action]||{ok:true,sent:0}; return Promise.resolve({ok:true,status:200,json:function(){return Promise.resolve(JSON.parse(JSON.stringify(r)))}}) } return of?of(url,init):Promise.reject(new Error('offline')) };
   try{ ${cfg.org ? `localStorage.setItem('tally.org','${cfg.org}')` : `localStorage.removeItem('tally.org')`} }catch(e){}
+  ${cfg.all ? `try{sessionStorage.setItem('tally.pickAll','1')}catch(e){}` : ''}   // More › Switch company: the whole list
+  // someone in two companies who already said which one today
+  ${cfg.today ? `try{var d=new Date(Date.now()-4*3600e3),p2=function(n){return ('0'+n).slice(-2)};localStorage.setItem('tally.orgDay',me.uid+'|'+d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+'|org-1,org-2')}catch(e){}` : ''}
   document.addEventListener('DOMContentLoaded',function(){var s=document.createElement('style');s.textContent='*{scroll-behavior:auto!important}';document.head.appendChild(s)});
 })();`;
 
@@ -80,10 +84,12 @@ const SCREENS = {
   'crew lead Jobs': [{ me: lead }, async () => {}],
   'crew lead More': [{ me: lead }, async (p) => { await tap(p, '[data-act="more:open"]', 400); }],
   'crew lead My profile': [{ me: lead }, async (p) => { await tap(p, '[data-act="more:open"]'); await tap(p, '#more [data-act="me:open"]', 700); }],
-  'the company picker': [{ org: '', twoOrgs: true }, async () => {}],
+  'the company picker': [{ org: '', twoOrgs: true, all: true }, async () => {}],
+  'which company today': [{ twoOrgs: true }, async () => {}],
+  'Switch company, two companies': [{ twoOrgs: true, today: true }, async (p) => { await tap(p, '#brandCo button.cosw', 400); }],
 };
-const NARROW = ['Setup › Membership, paying with a discount', 'Setup › Payments, ready', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker'];
-const AXE_ON = ['Setup › Membership, on trial', 'Setup › Payments, ready', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker'];
+const NARROW = ['Setup › Membership, paying with a discount', 'Setup › Payments, ready', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker', 'which company today', 'Switch company, two companies'];
+const AXE_ON = ['Setup › Membership, on trial', 'Setup › Payments, ready', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker', 'which company today', 'Switch company, two companies'];
 
 (async () => {
   const b = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
@@ -129,7 +135,7 @@ const AXE_ON = ['Setup › Membership, on trial', 'Setup › Payments, ready', '
       } catch (e) { found.push(n + ': ' + String(e).slice(0, 120)); }
       if (p) await p.context().close();
     }
-    ok(!found.length, `a phone set to ${scheme}: Membership, Payments, App access, an employee’s file, MoveCrew admin, a card payment and the company picker pass axe’s colour-contrast rule` + (found.length ? ' (' + found.slice(0, 4).join('; ') + ')' : ''));
+    ok(!found.length, `a phone set to ${scheme}: Membership, Payments, App access, an employee’s file, MoveCrew admin, a card payment, the company picker, which company today and Switch company pass axe’s colour-contrast rule` + (found.length ? ' (' + found.slice(0, 4).join('; ') + ')' : ''));
   }
   ok(!errors.length, 'no page errors' + (errors.length ? ' (' + errors.slice(0, 3).join(' | ') + ')' : ''));
   await b.close();
