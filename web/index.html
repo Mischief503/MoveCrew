@@ -5449,10 +5449,27 @@ function renderTabs(){
 }
 
 /* ---------- photos ---------- */
+/* A smaller copy of a photo (at most `max` pixels a side, as a JPEG). The picture is opened from the file itself
+   (an object URL), not from a copy of it as text, and the drawing board is let go after, so a phone's big
+   camera pictures take as little memory as they can. */
 function shrink(file,max){
   return new Promise(function(res,rej){
+    var url=null,img=new Image();
+    try{url=URL.createObjectURL(file)}catch(e){url=null}
+    var free=function(){if(url){try{URL.revokeObjectURL(url)}catch(e){}url=null}};
+    img.onload=function(){
+      try{
+        var s=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');
+        c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        var data=c.toDataURL('image/jpeg',0.6);
+        c.width=c.height=0;free();res(data);
+      }catch(e){free();rej(e)}
+    };
+    img.onerror=function(e){free();rej(e)};
+    if(url){img.src=url;return}
     var fr=new FileReader();
-    fr.onload=function(){var img=new Image();img.onload=function(){var s=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',0.6))};img.onerror=rej;img.src=fr.result};
+    fr.onload=function(){img.src=fr.result};
     fr.onerror=rej;fr.readAsDataURL(file);
   });
 }
@@ -5461,6 +5478,9 @@ var PHOTO_MAX=20;
    input that is display:none is ignored by .click() on iOS and inside an embedded
    frame, which is why the camera and gallery sheet never appeared. */
 function pickPhotos(){
+  // the Android app: which job and kind these photos are for, kept by the app in case Android closes MoveCrew
+  // while the camera or the gallery is open (the next start puts them on that job: phonePhotos)
+  if(window.TallyNative&&typeof window.TallyNative.photosFor==='function'){try{window.TallyNative.photosFor(JSON.stringify({job:ui.photoJob,kind:ui.photoKind}))}catch(e){}}
   var inp=document.createElement('input');
   inp.type='file';inp.accept='image/*';inp.multiple=true;
   inp.setAttribute('tabindex','-1');inp.setAttribute('aria-hidden','true');
@@ -5469,27 +5489,71 @@ function pickPhotos(){
   document.body.appendChild(inp);
   try{inp.click()}catch(e){var st=$('#photoIn');if(st)st.click()}
 }
-function takePhotos(fileList){
+/* opt: quiet (no toast of its own) and after(done), called once they are saved (phonePhotos uses both) */
+function takePhotos(fileList,opt){
+  opt=opt||{};
   var all=Array.prototype.slice.call(fileList||[]),j=byId(ui.photoJob),kind=ui.photoKind;
-  if(!all.length||!j)return;
+  if(!all.length||!j){if(opt.after)opt.after(0);return}
   var over=all.length>PHOTO_MAX;
   var files=all.slice(0,PHOTO_MAX),done=0,failed=0;
-  if(files.length>1)toast('Adding '+files.length+' photos…');
+  if(files.length>1&&!opt.quiet)toast('Adding '+files.length+' photos…');
   files.reduce(function(chain,f){return chain.then(function(){
     return shrink(f,560).then(function(data){
       j.photos.push({id:uid(),kind:kind,ts:Date.now(),data:data});done++;
-      if(files.length>1&&done%5===0)toast('Added '+done+' of '+files.length+'…');
+      if(files.length>1&&done%5===0&&!opt.quiet)toast('Added '+done+' of '+files.length+'…');
     }).catch(function(){failed++});
   })},Promise.resolve()).then(function(){
     if(done){logEv(j,done===1?(kind+' photo added'):(done+' '+kind.toLowerCase()+' photos added'));save()}
     var msg=done?(done===1?kind+' photo saved.':done+' photos saved.'):'Could not read those photos.';
     if(over)msg+=' 20 at a time is the limit, so '+(all.length-PHOTO_MAX)+' were left out.';
     else if(failed&&done)msg+=' '+failed+' could not be read.';
+    if(opt.after){opt.after(done);return}
     toast(msg);
     if(ui.jobId)renderSheet();else renderTab();
   });
 }
 $('#photoIn').addEventListener('change',function(e){takePhotos(e.target.files);e.target.value=''});
+/* Photos the Android app kept after Android closed MoveCrew while the camera or the gallery was open (it needs
+   the memory: Samsung phones do it often). The app makes them ready and keeps them with the job and kind the page
+   said they were for (photosFor, in pickPhotos) until this has saved them: once the company's jobs are in, they go
+   on that job, the person is shown it, and the app lets them go (photosDone). The app asks for this itself when the
+   photos are ready (window.tallyPhonePhotos), and startData asks at every start. */
+var phone={busy:false};
+function phonePhotos(){
+  var N=window.TallyNative;
+  if(!N||typeof N.pendingPhotos!=='function'||phone.busy||!sync.started)return;
+  var st;try{st=JSON.parse(N.pendingPhotos()||'{}')||{}}catch(e){return}
+  var b=(st.batches||[])[0];
+  if(!b){if(st.busy)setTimeout(phonePhotos,800);return}
+  phone.busy=true;
+  var f=b.for||{},t0=Date.now(),seen=0;
+  var finish=function(){phone.busy=false;try{N.photosDone(String(b.id))}catch(e){}setTimeout(phonePhotos,0)};
+  (function wait(){
+    var j=f.job?byId(f.job):null;
+    if(!j){
+      // the jobs come in after the start: a minute at most, and a few seconds more once they have
+      if(!seen&&sync.jobsAt)seen=Date.now();
+      if(Date.now()-t0<60000&&(!seen||Date.now()-seen<4000)){setTimeout(wait,400);return}
+      toast('MoveCrew restarted while the camera was open, and the job those photos were for isn’t here any more. Add them again from the job.');
+      finish();return;
+    }
+    Promise.all((b.names||[]).map(function(n){
+      return fetch('/picked/'+encodeURIComponent(n)).then(function(r){if(!r||!r.ok)throw new Error('gone');return r.blob()})
+        .then(function(bl){try{return new File([bl],n,{type:bl.type||'image/jpeg'})}catch(e){return bl}})
+        .catch(function(){return null});
+    })).then(function(files){
+      ui.photoJob=j.id;ui.photoKind=f.kind||'Pickup';
+      takePhotos(files.filter(Boolean),{quiet:true,after:function(done){
+        var who=j.d&&j.d.name||'the job';
+        toast(done?'MoveCrew restarted while the camera was open. '+(done===1?ui.photoKind+' photo':done+' photos')+' saved to '+who+'.'
+                  :'MoveCrew restarted while the camera was open and couldn’t read those photos. Add them again from the job.');
+        if(state.ui.role==='owner'||state.ui.role==='dispatch')openJob(j.id,true);else{ui.tab='crew';render()}
+        finish();
+      }});
+    });
+  })();
+}
+window.tallyPhonePhotos=function(){phonePhotos()};
 
 /* ---------- directory, chat, calls, location ---------- */
 var KIND={owner:'Owner',dispatch:'Dispatch',lead:'Crew lead',crew:'Crew',callcenter:'Call center',customer:'Customer'};
@@ -6260,6 +6324,7 @@ function pullSimple(snap,list,last,setList){
 }
 function pullJobs(snap){
   if(!sync.started)return;
+  sync.jobsAt=Date.now();   // the company's jobs are in (phonePhotos waits for them)
   var remote={};snap.docs.forEach(function(d){var v=d.data();if(v&&v.id)remote[v.id]=v});
   var byId={},changed=false;state.jobs.forEach(function(j){byId[j.id]=j});
   Object.keys(remote).forEach(function(id){
@@ -6338,6 +6403,7 @@ function startData(){
     sync.unsubs.push(db.collection('users').onSnapshot(function(snap){sync.users=snap.docs.map(function(d){return d.data()}).filter(function(x){return x&&x.uid});resolveNames(sync.users.map(function(x){return x.uid}));softSettings()},ef));
     pruneChat();
   }
+  setTimeout(phonePhotos,0);   // the Android app: photos picked while Android had closed MoveCrew
 }
 function resolveNames(ids){
   if(!sync.user||!ids.length||!sync.user.profiles)return;
@@ -9306,7 +9372,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
 })();
 </script>
 </body>
