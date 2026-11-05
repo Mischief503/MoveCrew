@@ -110,11 +110,21 @@ function makeSupabase(db, me, calls) {
     };
     return api;
   }
+  const authCbs = [];
+  const sessionOf = (who) => (who ? { user: { id: who.uid, email: who.email }, access_token: 'tok-' + who.uid } : null);
   return {
     __fire: fire,
+    // what Supabase tells the app: SIGNED_IN again each time the app comes back to the front (auth-js
+    // _recoverAndRefresh, on visibilitychange), SIGNED_OUT, or someone else signing in
+    __auth: (ev, who) => authCbs.forEach((cb) => cb(ev, sessionOf(who))),
     auth: {
-      getSession: () => Promise.resolve({ data: { session: me ? { user: { id: me.uid, email: me.email }, access_token: 'tok-' + me.uid } : null } }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      getSession: () => Promise.resolve({ data: { session: sessionOf(me) } }),
+      onAuthStateChange: (cb) => {
+        authCbs.push(cb);
+        // back from Google's sign-in page: supabase-js finds the session in the address and says SIGNED_IN too
+        if (db.__signedInAtStart && me) setTimeout(() => cb('SIGNED_IN', sessionOf(me)), 0);
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
       signOut: () => Promise.resolve({}), signInWithOtp: () => Promise.resolve({}), verifyOtp: () => Promise.resolve({}),
       signInWithOAuth: (o) => { calls.oauth = o; return Promise.resolve({ data: {}, error: null }); },
       updateUser: (o) => { calls.updateUser = o; return Promise.resolve({ data: {}, error: null }); },

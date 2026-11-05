@@ -975,6 +975,14 @@ function ensureChannel(){
    .on('postgres_changes',{event:'*',schema:'public',table:'access_requests',filter:'org_id=eq.'+ORG},function(){Object.keys(watchers).forEach(function(k){if(k.indexOf('requests|')===0)bump(k)})})
    .subscribe();
 }
+// Back in front after a while (a phone that was in a pocket, a window that was down): what changed meanwhile.
+// Live updates stop while MoveCrew is in the background, and the ones missed then don't come again.
+var hiddenAt=0;
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){hiddenAt=Date.now();return}
+  if(hiddenAt&&Date.now()-hiddenAt>60e3)Object.keys(watchers).forEach(bump);
+  hiddenAt=0;
+});
 function watch(key,run){
   ensureChannel();
   var w=watchers[key]||(watchers[key]={run:run,t:null,n:0});
@@ -1292,6 +1300,10 @@ function loadOrgs(){
 /* ---------- boot ---------- */
 function onSession(session){
   if(!session||!session.user){me={id:'',email:'',role:'',staff:'',isOwner:false,canEdit:false};showLogin();return}
+  // Supabase says SIGNED_IN again every time MoveCrew comes back to the front (from the camera or the photo picker,
+  // another app or tab, a window brought back up): the same person carries on where they were. Starting over here
+  // reloaded the whole app each time, and photos on their way back from the camera were lost with it.
+  if(me.id&&me.id===session.user.id)return;
   me.id=session.user.id;me.email=session.user.email||'';
   if(window.__tallyBooted){reload();return}   // a different person signed in on this device: start clean
   // a profile the owner set up with this email links now, so the person walks straight in
@@ -5489,21 +5501,35 @@ function pickPhotos(){
   document.body.appendChild(inp);
   try{inp.click()}catch(e){var st=$('#photoIn');if(st)st.click()}
 }
-/* opt: quiet (no toast of its own) and after(done), called once they are saved (phonePhotos uses both) */
+/* opt: job and kind (else the ones the photo button set), quiet (no toast of its own) and after(done), called once
+   they are saved (phonePhotos uses all of them) */
 function takePhotos(fileList,opt){
   opt=opt||{};
-  var all=Array.prototype.slice.call(fileList||[]),j=byId(ui.photoJob),kind=ui.photoKind;
-  if(!all.length||!j){if(opt.after)opt.after(0);return}
+  var all=Array.prototype.slice.call(fileList||[]),jid=opt.job||ui.photoJob,kind=opt.kind||ui.photoKind;
+  // the job by its id each time: the office's changes coming in meanwhile put a new copy of it in the list, and a
+  // photo put on the copy before was never saved
+  var job=function(){return jid?byId(jid):null};
+  if(!all.length||!jid){if(opt.after)opt.after(0);return}
+  if(!job()){
+    // the jobs aren't in yet (MoveCrew is starting again): a few seconds for them, then the person is told
+    var waited=opt.waited||0;
+    if(waited<10000){setTimeout(function(){takePhotos(all,Object.assign({},opt,{job:jid,kind:kind,waited:waited+400}))},400);return}
+    if(opt.after){opt.after(0);return}
+    toast('Those photos weren’t added: that job isn’t here any more.');
+    return;
+  }
   var over=all.length>PHOTO_MAX;
   var files=all.slice(0,PHOTO_MAX),done=0,failed=0;
   if(files.length>1&&!opt.quiet)toast('Adding '+files.length+' photos…');
   files.reduce(function(chain,f){return chain.then(function(){
     return shrink(f,560).then(function(data){
+      var j=job();if(!j){failed++;return}
       j.photos.push({id:uid(),kind:kind,ts:Date.now(),data:data});done++;
       if(files.length>1&&done%5===0&&!opt.quiet)toast('Added '+done+' of '+files.length+'…');
     }).catch(function(){failed++});
   })},Promise.resolve()).then(function(){
-    if(done){logEv(j,done===1?(kind+' photo added'):(done+' '+kind.toLowerCase()+' photos added'));save()}
+    var j=job();
+    if(done&&j){logEv(j,done===1?(kind+' photo added'):(done+' '+kind.toLowerCase()+' photos added'));save()}
     var msg=done?(done===1?kind+' photo saved.':done+' photos saved.'):'Could not read those photos.';
     if(over)msg+=' 20 at a time is the limit, so '+(all.length-PHOTO_MAX)+' were left out.';
     else if(failed&&done)msg+=' '+failed+' could not be read.';
@@ -5543,7 +5569,7 @@ function phonePhotos(){
         .catch(function(){return null});
     })).then(function(files){
       ui.photoJob=j.id;ui.photoKind=f.kind||'Pickup';
-      takePhotos(files.filter(Boolean),{quiet:true,after:function(done){
+      takePhotos(files.filter(Boolean),{job:j.id,kind:ui.photoKind,quiet:true,after:function(done){
         var who=j.d&&j.d.name||'the job';
         toast(done?'MoveCrew restarted while the camera was open. '+(done===1?ui.photoKind+' photo':done+' photos')+' saved to '+who+'.'
                   :'MoveCrew restarted while the camera was open and couldn’t read those photos. Add them again from the job.');
