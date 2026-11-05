@@ -2,7 +2,7 @@
 
 > **Since Oct 2026 you don't need this.** The crew's Android app is built by GitHub on every change
 > (`GET-THE-APP.md`), and the website your customers use is put up by GitHub too, at
-> https://mischief503.github.io/Tally/ (`CUSTOMERS.md`). The steps below are the older way, by hand.
+> https://mischief503.github.io/MoveCrew/ (`CUSTOMERS.md`). The steps below are the older way, by hand.
 
 No terminal. About 30 minutes the first time. You'll use three websites: Netlify (puts MoveCrew
 online), PWABuilder (turns it into an Android app), and your phone.

@@ -528,12 +528,12 @@ sqOn();
 
 /* ======================= the customer app's page, with a tip ======================= */
 {
-  const r = (await app("tok-lena", { action: "cust_pay", org: ORG, jobId: "j4", kind: "bill", amount: 50000, tip: 4000, back: "https://mischief503.github.io/Tally/" })).body;
+  const r = (await app("tok-lena", { action: "cust_pay", org: ORG, jobId: "j4", kind: "bill", amount: 50000, tip: 4000, back: "https://mischief503.github.io/MoveCrew/" })).body;
   const link = DB.pay_links.find((x) => x.job_id === "j4" && x.status === "open" && x.created_by === fn.CUST_BY);
   const pl = link && SQ.links[link.session_id.replace(/^sqpl_test_/, "")], ord = pl && SQ.orders[pl.order_id];
   ok(r.ok && r.url === pl.url && link.meta.tip === 4000 && ord.line_items.length === 2 && ord.line_items[1].name === "Tip for your crew" && ord.line_items[1].base_price_money.amount === 4000,
     "the customer app: Square's page with the tip as its own line: " + JSON.stringify(r).slice(0, 160));
-  ok(/^https:\/\/mischief503\.github\.io\/Tally\//.test(pl.checkout_options.redirect_url), "back to the customer's app afterwards");
+  ok(/^https:\/\/mischief503\.github\.io\/MoveCrew\//.test(pl.checkout_options.redirect_url), "back to the customer's app afterwards");
   const p = customerPaysLink(pl.id);
   const e = await event("payment.updated", { payment: clone(p) });
   const ln = lines("j4")["st_sq_" + p.id];

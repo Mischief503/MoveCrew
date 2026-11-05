@@ -7,7 +7,7 @@ yourself; it never goes in a chat or in the code.
 ## 0. GitHub: put the website up (once, 1 minute)
 
 The customer app is the MoveCrew website, which GitHub puts up from the repository. If
-`https://mischief503.github.io/Tally/` doesn't open yet: **github.com/Mischief503/Tally** › **Settings** › **Pages** ›
+`https://mischief503.github.io/MoveCrew/` doesn't open yet: **github.com/Mischief503/MoveCrew** › **Settings** › **Pages** ›
 Build and deployment › Source: **GitHub Actions**. Then **Actions** › **Website** › **Run workflow** (or wait for the next
 change). A minute later the address works.
 
@@ -28,7 +28,7 @@ change). A minute later the address works.
 
 1. **supabase.com** › your project › **Authentication** › **Sign In / Providers** (or **Providers**) › **Google**.
 2. Turn it on. Paste the **Client ID** and the **Client secret** from step 1. Save.
-3. **Authentication** › **URL Configuration** › **Redirect URLs** › Add: `https://mischief503.github.io/Tally/**`
+3. **Authentication** › **URL Configuration** › **Redirect URLs** › Add: `https://mischief503.github.io/MoveCrew/**`
    (Google sends people back to the MoveCrew website). Save.
 
 That's all: the button shows up on the sign-in screen by itself as soon as Google is on in Supabase. It doesn't show in

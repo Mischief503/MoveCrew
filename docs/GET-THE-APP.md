@@ -3,7 +3,7 @@
 ## The first time
 
 1. On the Android phone, open this repository's **Releases** page (or bookmark
-   `https://github.com/<your-account>/Tally/releases/latest`).
+   `https://github.com/<your-account>/MoveCrew/releases/latest`).
 2. Under **Assets**, tap **MoveCrew.apk**. Chrome downloads it.
 3. Tap the download. Android asks to allow installs from Chrome. Turn that on once, go back, and
    tap **Install**.
@@ -50,7 +50,7 @@ sees the sides of the app their profile gives them.
 ## The first time
 
 1. On the computer, open
-   `https://github.com/<your-account>/Tally/releases/download/windows/MoveCrew-Setup.exe`
+   `https://github.com/<your-account>/MoveCrew/releases/download/windows/MoveCrew-Setup.exe`
    (or this repository's **Releases** page › **MoveCrew for Windows** › **MoveCrew-Setup.exe**).
    The same link is in Setup › Employees.
 2. Open the download. It installs in a few seconds, for that Windows user, with no administrator

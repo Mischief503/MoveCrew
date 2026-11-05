@@ -8,7 +8,7 @@ const WINFILE = __dirname + '/../../build/tally-windows.html', WEB = __dirname +
 const ORG = 'org-1';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MoveCrew/1.0.7 Chrome/152.0.0.0 Safari/537.36 MoveCrewWindows/1.0.7';
 const SIGNUP = 'https://accounts.stripe.com/r/acct_1Blue000ABCD#alu_test_61SGhyomRuz7xsw5216';
-const WINLINK = 'https://github.com/Mischief503/Tally/releases/download/windows/MoveCrew-Setup.exe';
+const WINLINK = 'https://github.com/Mischief503/MoveCrew/releases/download/windows/MoveCrew-Setup.exe';
 const day = (n) => { const d = new Date(Date.now() + n * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
 function row(path, data) { const [collection, doc_id] = path.split('/'); return { org_id: ORG, path, collection, doc_id, data, updated_at: new Date().toISOString() }; }
@@ -131,7 +131,7 @@ const set = (A, sel, v) => { const el = A.$(sel); el.value = v; el.dispatchEvent
   A.click('[data-act="emp:save"]'); await sleep(40);
   sms = A.$('#emp a[href^="sms:"]');
   body = sms ? decodeURIComponent(sms.getAttribute('href').replace(/^[^?]*\?&body=/, '')) : '';
-  ok(/Get the MoveCrew app here: https:\/\/github\.com\/Mischief503\/Tally\/releases\/latest\/download\/MoveCrew\.apk and sign in with rico@x\.com\. You'll go straight to your jobs\. Already use MoveCrew\? Just open it and pick Ace Moving\.$/.test(body), 'someone on the crew still gets the phone app');
+  ok(/Get the MoveCrew app here: https:\/\/github\.com\/Mischief503\/MoveCrew\/releases\/latest\/download\/MoveCrew\.apk and sign in with rico@x\.com\. You'll go straight to your jobs\. Already use MoveCrew\? Just open it and pick Ace Moving\.$/.test(body), 'someone on the crew still gets the phone app');
   A.click('[data-act="emp:close"]'); await sleep(10);
   ok(A.errors.length === 0, 'no errors (' + A.errors.slice(0, 3).join(' | ') + ')');
 

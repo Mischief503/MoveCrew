@@ -360,10 +360,10 @@ r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "b1", kind: "d
 ok(!r.body.ok && r.body.changed && /What's owed now is \$250\.00/.test(r.body.message), "an out-of-date screen is told the amount to pay, not charged it: " + r.body.message);
 r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "b1", kind: "deposit", amount: 25000, tip: 500 });
 ok(!r.body.ok && /A tip goes on the bill after the move/.test(r.body.message), "no tip on a deposit");
-r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "b1", kind: "deposit", amount: 25000, tip: 0, back: "https://mischief503.github.io/Tally/" });
+r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "b1", kind: "deposit", amount: 25000, tip: 0, back: "https://mischief503.github.io/MoveCrew/" });
 let cs = ST.sessions[r.body.url.split("/").pop()];
 ok(r.body.ok && /^https:\/\/checkout\.stripe\.com\//.test(r.body.url) && cs.amount_total === 25000 && cs.items.length === 1 && /Ace Moving: deposit/.test(cs.items[0].name), "a Stripe page for the $250 deposit: " + r.body.url);
-ok(cs.params.success_url === "https://mischief503.github.io/Tally/?paid=b1" && cs.params.cancel_url === "https://mischief503.github.io/Tally/" && cs.metadata.tally_src === "cust" && cs.metadata.tally_tip === "0" && cs.metadata.tally_uid === "u-priya", "it comes back to her app, and says it's hers, from the customer app");
+ok(cs.params.success_url === "https://mischief503.github.io/MoveCrew/?paid=b1" && cs.params.cancel_url === "https://mischief503.github.io/MoveCrew/" && cs.metadata.tally_src === "cust" && cs.metadata.tally_tip === "0" && cs.metadata.tally_uid === "u-priya", "it comes back to her app, and says it's hers, from the customer app");
 ok(!Object.keys(cs.params).some((k) => /payment_method_types/.test(k)), "the page offers what Stripe allows for the company: Google Pay, Apple Pay, cards (no fixed list)");
 const link1 = DB.pay_links.find((l) => l.session_id === cs.id);
 ok(link1 && link1.created_by === fn.CUST_BY && link1.amount_cents === 25000 && link1.status === "open", "the page is kept like a pay link, so a payment elsewhere closes it");
@@ -446,22 +446,22 @@ ok(!r.body.ok && /Put in your name/.test(r.body.message), "a profile needs a nam
 /* ---------- the office texts a customer the app ---------- */
 USERS["tok-kim"] = { id: "u-kim", email: "kim@acemoving.com", email_confirmed_at: "2026-10-01T00:00:00Z" };
 DB.members.push({ org_id: ORG, user_id: "u-kim", role: "crew", staff: "Kim" });
-r = await app("tok-kim", { action: "invite_app", org: ORG, jobId: "b1", url: "https://mischief503.github.io/Tally/" });
+r = await app("tok-kim", { action: "invite_app", org: ORG, jobId: "b1", url: "https://mischief503.github.io/MoveCrew/" });
 ok(r.status === 403, "the crew don't text customers the app");
 const before2 = sent.length;
 r = await app("tok-owner", { action: "invite_app", org: ORG, jobId: "b1", url: "https://appassets.androidplatform.net/assets/index.html" });
 ok(!r.body.ok && sent.length === before2, "never the Android app's own page");
-r = await app("tok-owner", { action: "invite_app", org: ORG, jobId: "b1", url: "https://mischief503.github.io/Tally/#x" });
+r = await app("tok-owner", { action: "invite_app", org: ORG, jobId: "b1", url: "https://mischief503.github.io/MoveCrew/#x" });
 const inv = sent[sent.length - 1];
-ok(r.body.ok && sent.length === before2 + 1 && inv.To === "+15125550199" && /^Ace Moving: Hi Priya, your move is in the MoveCrew app: https:\/\/mischief503\.github\.io\/Tally\/ Sign in with PRIYANAIR@gmail\.com to see it, book, sign and pay\./.test(inv.Body), "the owner texts Priya the app, from the company line: " + inv.Body);
-r = await app("tok-owner", { action: "invite_app", org: ORG, jobId: "b1", url: "https://mischief503.github.io/Tally/" });
+ok(r.body.ok && sent.length === before2 + 1 && inv.To === "+15125550199" && /^Ace Moving: Hi Priya, your move is in the MoveCrew app: https:\/\/mischief503\.github\.io\/MoveCrew\/ Sign in with PRIYANAIR@gmail\.com to see it, book, sign and pay\./.test(inv.Body), "the owner texts Priya the app, from the company line: " + inv.Body);
+r = await app("tok-owner", { action: "invite_app", org: ORG, jobId: "b1", url: "https://mischief503.github.io/MoveCrew/" });
 ok(!r.body.ok && /a moment ago/.test(r.body.message) && sent.length === before2 + 1, "not twice in a row");
 putDoc(ORG, "jobs/n1", job("n1", { d: { ...job("x").d, email: "" } }));
-r = await app("tok-owner", { action: "invite_app", org: ORG, jobId: "n1", url: "https://mischief503.github.io/Tally/" });
+r = await app("tok-owner", { action: "invite_app", org: ORG, jobId: "n1", url: "https://mischief503.github.io/MoveCrew/" });
 ok(!r.body.ok && /Put the customer's email on the job first/.test(r.body.message), "a job with no email: put it on first");
 
 /* ---------- where Stripe sends her back ---------- */
-ok(fn.custBack("https://mischief503.github.io/Tally/#x", "d1") === "https://mischief503.github.io/Tally/?paid=d1" && /\/pay\/done$/.test(fn.custBack("https://appassets.androidplatform.net/assets/index.html", "d1")) && /\/pay\/done$/.test(fn.custBack("javascript:alert(1)", "d1")), "back to the web page she paid from; never the Android app's own page, nor anything that isn't https");
+ok(fn.custBack("https://mischief503.github.io/MoveCrew/#x", "d1") === "https://mischief503.github.io/MoveCrew/?paid=d1" && /\/pay\/done$/.test(fn.custBack("https://appassets.androidplatform.net/assets/index.html", "d1")) && /\/pay\/done$/.test(fn.custBack("javascript:alert(1)", "d1")), "back to the web page she paid from; never the Android app's own page, nor anything that isn't https");
 
 /* ---------- a bigger crew: signed in the customer app until loading starts (Richie, Oct 29) ---------- */
 settings.rates = { r2: 140, r3: 195, r4: 250 };

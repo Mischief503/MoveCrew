@@ -2763,7 +2763,7 @@ function csProfSave(){
   if(n)save();render();toast(n?'Saved. Your moving company has it.':'Saved.');
 }
 // where customers open the app: this page when it's the website, else MoveCrew's website (GitHub Pages)
-var TALLY_SITE='https://mischief503.github.io/Tally/';
+var TALLY_SITE='https://mischief503.github.io/MoveCrew/';
 function custSite(){try{if(location.protocol==='https:'&&!/androidplatform\.net$/.test(location.hostname)&&window.TALLY_SUPABASE)return location.origin+location.pathname}catch(e){}return TALLY_SITE}
 // the job sheet: text the customer the app (the company line), when the job has their email and phone
 function custInviteHtml(j){
@@ -6447,9 +6447,9 @@ var EMP_SECS=[
   {t:'Leaving',f:[['endDate','Last day','date'],['endReason','Reason','text']]}
 ];
 var DOC_TYPES=[['i9','I-9'],['w4','W-4'],['license',"Driver's license"],['dot','DOT medical card'],['background','Background check'],['handbook','Signed handbook'],['other','Other']];
-var DEFAULT_APP_LINK='https://github.com/Mischief503/Tally/releases/latest/download/MoveCrew.apk';
+var DEFAULT_APP_LINK='https://github.com/Mischief503/MoveCrew/releases/latest/download/MoveCrew.apk';
 // MoveCrew for Windows, for the office, dispatch and the call center (windows/, built by GitHub)
-var DEFAULT_WIN_LINK='https://github.com/Mischief503/Tally/releases/download/windows/MoveCrew-Setup.exe';
+var DEFAULT_WIN_LINK='https://github.com/Mischief503/MoveCrew/releases/download/windows/MoveCrew-Setup.exe';
 var people={list:[],loaded:false,loading:false,err:'',mine:null,mineState:'',docs:{},docsLoading:{}};
 function peopleHosted(){return !!window.tallyPeople}
 function canMyProfile(){return peopleHosted()&&sync.mode==='shared'&&sync.identity.status==='ok'&&!sync.isOwner}

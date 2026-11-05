@@ -1,6 +1,6 @@
 // Live check of the free map services Tally falls back to. Runs on GitHub; reports as notes.
 const A = '1600 SW Naito Pkwy, Portland, OR', B = '4800 SE Woodstock Blvd, Portland, OR';
-const UA = { 'User-Agent': 'Tally-CI (github.com/Mischief503/Tally)', Accept: 'application/json' };
+const UA = { 'User-Agent': 'MoveCrew-CI (github.com/Mischief503/MoveCrew)', Accept: 'application/json' };
 const note = (m) => console.log('::notice title=Map services::' + m);
 const warn = (m) => console.log('::warning title=Map services::' + m);
 async function j(url) { const r = await fetch(url, { headers: UA }); if (!r.ok) throw new Error(url.split('/')[2] + ' HTTP ' + r.status); return r.json(); }

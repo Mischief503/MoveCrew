@@ -10,7 +10,7 @@ the move is complete".
 
 - The office (or the call center) puts the customer's email on the quote or the job: **Email (they sign in with it to
   see their move)**. That's the link: nothing else to set up per customer.
-- The customer opens the MoveCrew website on their phone (`https://mischief503.github.io/Tally/`, also shown in Setup ›
+- The customer opens the MoveCrew website on their phone (`https://mischief503.github.io/MoveCrew/`, also shown in Setup ›
   Customer app) and signs in with **Continue with Google** (once Google sign-in is set up, see SETUP-google-signin.md)
   or with a 6-digit code sent to their email (works now).
 - A Gmail address matches with or without dots or a +tag, on gmail.com or googlemail.com (`emailKey`, the same in the
