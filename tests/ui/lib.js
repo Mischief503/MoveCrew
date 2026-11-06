@@ -116,7 +116,8 @@ function makeSupabase(db, me, calls) {
     __fire: fire,
     // what Supabase tells the app: SIGNED_IN again each time the app comes back to the front (auth-js
     // _recoverAndRefresh, on visibilitychange), SIGNED_OUT, or someone else signing in
-    __auth: (ev, who) => authCbs.forEach((cb) => cb(ev, sessionOf(who))),
+    // (the stand-in's signed-in person follows: who signed in, or no one after SIGNED_OUT)
+    __auth: (ev, who) => { if (ev === 'SIGNED_IN') me = who; if (ev === 'SIGNED_OUT') me = null; authCbs.forEach((cb) => cb(ev, sessionOf(who))); },
     auth: {
       getSession: () => Promise.resolve({ data: { session: sessionOf(me) } }),
       onAuthStateChange: (cb) => {

@@ -136,6 +136,8 @@ public class MainActivity extends Activity {
     /* The window the page runs in. Made again when Android stops the page's own process (onRenderProcessGone). */
     private void buildWeb() {
         web = new WebView(this);
+        // the loading screen's colour (the hand truck, the page's first lines) until the page draws, instead of white
+        web.setBackgroundColor(0xFF0A111C);
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         WebSettings s = web.getSettings();

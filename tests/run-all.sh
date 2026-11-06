@@ -24,7 +24,7 @@ run() {
 for ed in artifact supabase; do
   for s in regress field confirm minpay pricing history driveback options jobedit clockjob tidy polish drivers finished requote movers crewbill crewsign callcenter dayplan sides cust; do run node tests/ui/$s.js build/tally-$ed.html $s-$ed; done
 done
-for s in hosted confirm-hosted employees pay connect member sos pricing-hosted dist shop osm odometer testpack nav layout layout-hosted drivers-hosted requote-hosted movers-hosted crewsign-hosted callcenter-hosted dayplan-drag sides-hosted cust-hosted windows companies square phonephotos backtofront pwa-check; do run node tests/ui/$s.js; done
+for s in hosted confirm-hosted employees pay connect member sos pricing-hosted dist shop osm odometer testpack nav layout layout-hosted drivers-hosted requote-hosted movers-hosted crewsign-hosted callcenter-hosted dayplan-drag sides-hosted cust-hosted windows companies square phonephotos backtofront splash pwa-check; do run node tests/ui/$s.js; done
 # MoveCrew for Windows: its rules always; the real app where it has been set up (npm ci in windows/, then
 # python3 scripts/prepare_windows.py). GitHub runs both on a Windows computer for every change (windows.yml).
 run node tests/windows/rules.js
