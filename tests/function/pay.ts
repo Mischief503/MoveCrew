@@ -133,6 +133,12 @@ function unflat(p: Record<string, string>, prefix: string) {
   return out;
 }
 const expands = (p: Record<string, string>) => Object.keys(p).filter((k) => /^expand\[\d+\]$/.test(k)).map((k) => p[k]);
+// a Checkout page's total: every line (the bill, and the crew's tip when there is one) times its quantity
+function lineTotal(p: Record<string, string>) {
+  let t = 0;
+  for (let i = 0; p["line_items[" + i + "][price_data][unit_amount]"] != null; i++) t += +p["line_items[" + i + "][price_data][unit_amount]"] * (+p["line_items[" + i + "][quantity]"] || 1);
+  return t;
+}
 function piView(pi: any, exp: string[]) {
   const v = clone(pi);
   delete v.params;
@@ -177,7 +183,7 @@ function stripeApi(method: string, path: string, p: Record<string, string>, h: a
   if (method === "POST" && path === "/v1/checkout/sessions") {
     const sid = (live ? "cs_live_" : "cs_test_") + id();
     const s = { id: sid, object: "checkout.session", url: "https://checkout.stripe.com/c/pay/" + sid + "#fidkdWxOYHwnPyd1blpxYHZxWjA0", status: "open", payment_status: "unpaid",
-      expires_at: +p.expires_at, payment_intent: null, metadata: unflat(p, "metadata"), amount_total: +p["line_items[0][price_data][unit_amount]"], livemode: live, params: p };
+      expires_at: +p.expires_at, payment_intent: null, metadata: unflat(p, "metadata"), amount_total: lineTotal(p), livemode: live, params: p };
     ST.sessions[sid] = s; return reply(200, s);
   }
   if ((m = /^\/v1\/checkout\/sessions\/(\w+)(\/expire)?$/.exec(path))) {
@@ -606,6 +612,90 @@ ok(!r.body.ok && /can't be charged here/.test(r.body.message), "an old demo card
 DB.docs = DB.docs.filter((d) => d.path !== "vault/st_pm_decline");
 r = await app("tok-marcus", { action: "pay_saved", org: ORG, jobId: "j4", vaultId: "st_pm_decline", amount: 100 });
 ok(!r.body.ok && /no longer on file/.test(r.body.message), "a card taken off the list in the app can't be charged");
+
+/* ---------- the crew's tip, on the same payment as the bill (Richie, Nov 7) ---------- */
+// "the tip should come before the final bill . give a sub total then ask for a tip then give the final total",
+// everywhere the bill is paid: Collect payment sends the tip apart from the amount toward the bill
+const tipJob = (id: string, over: any = {}) => job(id, { payments: {}, assign: { truckId: "", crew: ["Dee", "Kim"] }, ...over });
+putDoc(ORG, "jobs/tp0", tipJob("tp0", { status: "booked" }));
+putDoc(ORG, "jobs/tp1", tipJob("tp1"));   // Dee's crew; $1,263.50 owed
+putDoc(ORG, "jobs/tp9", tipJob("tp9", { assign: { truckId: "", crew: [] } }));
+const tipCalls = () => calls("/v1/payment_intents") + calls("/v1/checkout/sessions");
+const tipCallsBefore = tipCalls();
+r = await app("tok-dee", { action: "pay_intent", org: ORG, jobId: "tp0", amount: 300, tip: 20 });
+ok(!r.body.ok && r.body.message === "A tip goes on the bill after the move.", "no tip on a deposit: the move isn't done yet");
+r = await app("tok-dispatch", { action: "pay_link", org: ORG, jobId: "tp9", amount: 100, tip: 20 });
+ok(!r.body.ok && r.body.message === "A tip goes on the bill after the move.", "nor with nobody on the crew to get it");
+putDoc(ORG, "org/settings", { ...settings, opt: { custTips: false } });
+r = await app("tok-dee", { action: "pay_link", org: ORG, jobId: "tp1", amount: 100, tip: 20 });
+ok(!r.body.ok && r.body.message === "A tip goes on the bill after the move.", "nor when the company has tips switched off");
+putDoc(ORG, "org/settings", settings);
+r = await app("tok-dee", { action: "pay_intent", org: ORG, jobId: "tp1", amount: 1263.5, tip: 1263.51 });
+ok(!r.body.ok && /That tip looks too big/.test(r.body.message), "a tip over the bill (and over $500) is taken for a typo");
+ok(fn.tipCents(settings, tipJob("x"), 500).tipC === 50000 && fn.tipCents(settings, tipJob("x", { quote: { total: 100 } }), 500).tipC === 50000 && !!fn.tipCents(settings, tipJob("x", { quote: { total: 100 } }), 500.01).err, "up to $500 on any bill, or up to the bill when it's bigger");
+ok(fn.tipCents(settings, tipJob("x", { status: "booked" }), 0).tipC === 0 && fn.tipCents(settings, tipJob("x"), "abc").tipC === 0 && fn.tipCents(settings, tipJob("x"), -5).tipC === 0, "no tip (or nonsense) is no tip, on any job");
+ok(tipCalls() === tipCallsBefore, "none of that reached Stripe");
+// a card typed into the app: the card box is for the final total
+r = await app("tok-dee", { action: "pay_intent", org: ORG, jobId: "tp1", amount: 1263.5, tip: 150 });
+const tpC = lastCall("/v1/payment_intents"), tpA = lastIntent();
+ok(r.body.ok && r.body.amount === 1413.5 && r.body.tip === 150, "the card box is for $1,413.50: the bill's $1,263.50 and a $150 tip");
+ok(tpC.p.amount === "141350" && tpC.p["metadata[tally_tip]"] === "15000" && tpC.p["metadata[tally_src]"] === "card" && /\+ tip$/.test(tpC.p.description), "one Stripe payment for both, the tip noted on it");
+ok(DB.pay_log.find((x) => x.pi === tpA.id)?.source === "card;tip=15000" && DB.pay_log.find((x) => x.pi === tpA.id)?.amount_cents === 141350, "the ledger keeps the tip apart from the start");
+confirms(tpA.id, "pm_mc");
+r = await app("tok-dee", { action: "pay_check", org: ORG, jobId: "tp1", pi: tpA.id });
+j = doc("jobs/tp1");
+const tpPay = j.payments["st_" + tpA.id];
+ok(r.body.ok && tpPay && tpPay.amt === 1263.5 && tpPay.tip === 150 && r.body.owed === 0, "written down as $1,263.50 toward the bill and a $150 tip; nothing owed, not $150 overpaid: " + JSON.stringify(tpPay));
+ok(j.status === "paid" && logs("tp1").indexOf("Payment $1,263.50 and a $150.00 tip for the crew (Mastercard ••4444 · test)") >= 0, "the job is Paid, and its history says the tip");
+ok(DB.pay_log.find((x) => x.pi === tpA.id)?.source === "card;tip=15000", "still apart once Stripe says it's paid");
+// the card on file (Priya's Visa, kept again on j10)
+putDoc(ORG, "jobs/tp4", tipJob("tp4"));
+r = await app("tok-dispatch", { action: "pay_saved", org: ORG, jobId: "tp4", vaultId: CARD_OK2, amount: 1263.5, tip: 200 });
+const tpS = lastCall("/v1/payment_intents");
+j = doc("jobs/tp4");
+const tpSaved: any = Object.values(j.payments).find((p: any) => p.stripe);
+ok(r.body.ok && r.body.message === "Charged $1,463.50 to Visa ••4242, with a $200.00 tip for the crew.", "the card on file is charged the final total: " + r.body.message);
+ok(tpS.p.amount === "146350" && tpS.p["metadata[tally_tip]"] === "20000" && tpS.p["metadata[tally_src]"] === "saved" && tpS.p.off_session === "true", "one charge for the bill and the tip, the tip noted on it");
+ok(tpSaved && tpSaved.amt === 1263.5 && tpSaved.tip === 200 && DB.pay_log.find((x) => x.pi === tpSaved.stripe)?.source === "saved;tip=20000", "written down as the bill's $1,263.50 and the $200 tip");
+r = await app("tok-dispatch", { action: "pay_saved", org: ORG, jobId: "tp4", vaultId: CARD_OK2, amount: 1263.5, tip: 200 });
+ok(!r.body.ok && r.body.message === "This card was just charged $1,463.50. Check the bill before charging it again.", "the same again a moment later is still caught as a double tap");
+// a pay link: the bill and the tip as two lines on Stripe's page
+putDoc(ORG, "jobs/tp2", tipJob("tp2"));
+r = await app("tok-dee", { action: "pay_link", org: ORG, jobId: "tp2", amount: 1000, tip: 25 });
+const tpL = lastCall("/v1/checkout/sessions"), tLink = r.body.url;
+ok(r.body.ok && r.body.amount === 1000 && r.body.tip === 25 && r.body.message === "Payment link ready for $1,025.00 (with a $25.00 tip for the crew).", "a link for $1,000 of the bill and a $25 tip: " + r.body.message);
+ok(tpL.p["line_items[0][price_data][unit_amount]"] === "100000" && tpL.p["line_items[1][price_data][unit_amount]"] === "2500" && tpL.p["line_items[1][price_data][product_data][name]"] === "Tip for your crew" && sessionOf(tLink).amount_total === 102500, "Stripe's page: the bill and the tip, $1,025.00 in all");
+ok(tpL.p["payment_intent_data[metadata][tally_tip]"] === "2500" && tpL.p["metadata[tally_tip]"] === "2500" && /\+ tip$/.test(tpL.p["payment_intent_data[description]"]), "the tip noted on the payment the page makes");
+ok(linkRow(tLink).amount_cents === 100000 && linkRow(tLink).cap_cents === 100000 && linkRow(tLink).meta.tip === 2500, "the link keeps the bill's part and the tip apart");
+r = await app("tok-dee", { action: "pay_link", org: ORG, jobId: "tp2", amount: 1000, tip: 25 });
+ok(r.body.url === tLink, "asking again gives the same link");
+r = await app("tok-dee", { action: "pay_link", org: ORG, jobId: "tp2", amount: 1000, tip: 30, text: true });
+const tLink2 = r.body.url, tpTx = sent[sent.length - 1];
+ok(tLink2 !== tLink && linkRow(tLink).status === "expired" && linkRow(tLink2).meta.tip === 3000, "a different tip is a new link, and the old one stops working");
+ok(r.body.texted === true && tpTx.Body === "Ace Moving: Here is your secure payment link for $1,030.00 (your bill and the tip for your crew): " + tLink2, "the text says the total and what's in it: " + tpTx.Body);
+const tpPaid = customerPays(sessionOf(tLink2).id, "pm_ok");
+h = await hook(piEvent(tpPaid));
+j = doc("jobs/tp2");
+const tpLp = j.payments["st_" + tpPaid.id];
+ok(tpPaid.amount === 103000 && tpLp && tpLp.amt === 1000 && tpLp.tip === 30 && DB.pay_log.find((x) => x.pi === tpPaid.id)?.source === "link;tip=3000", "paid on the page: $1,000 toward the bill and the $30 tip: " + JSON.stringify(tpLp));
+r = await app("tok-dee", { action: "pay_check", org: ORG, jobId: "tp2" });
+ok(r.body.ok && r.body.owed === 263.5 && j.status === "done", "$263.50 still owed: the tip doesn't count toward the bill");
+// the link's page made again for what's owed when it's opened keeps the tip
+putDoc(ORG, "jobs/tp3", tipJob("tp3"));
+r = await app("tok-dee", { action: "pay_link", org: ORG, jobId: "tp3", amount: 1263.5, tip: 50 });
+const tLink3 = r.body.url, tpS3 = sessionOf(tLink3);
+cash("tp3", 200);
+g = await getUrl("/p/" + tokenOf(tLink3));
+const tpS3b = sessionOf(tLink3);
+ok(g.status === 302 && tpS3.status === "expired" && tpS3b.id !== tpS3.id && tpS3b.params["line_items[0][price_data][unit_amount]"] === "106350" && tpS3b.params["line_items[1][price_data][unit_amount]"] === "5000" && tpS3b.amount_total === 111350 && tpS3b.params["payment_intent_data[metadata][tally_tip]"] === "5000",
+  "after $200 in cash, the texted link opens to $1,063.50 and still the $50 tip");
+// a card payment in progress elsewhere holds back only its bill's part
+putDoc(ORG, "jobs/tp5", tipJob("tp5"));
+r = await app("tok-dee", { action: "pay_intent", org: ORG, jobId: "tp5", amount: 1000, tip: 100 });
+r = await app("tok-dispatch", { action: "pay_intent", org: ORG, jobId: "tp5", amount: 263.5 });
+ok(r.body.ok, "Dee's $1,000 (and $100 tip) on the screen leaves $263.50 to charge, not $163.50");
+r = await app("tok-owner", { action: "pay_intent", org: ORG, jobId: "tp5", amount: 0.51 });
+ok(!r.body.ok && /started a moment ago/.test(r.body.message), "and nothing more past that");
 
 /* ---------- a pay link asks for what is owed when it is opened ---------- */
 putDoc(ORG, "jobs/j12", job("j12", { payments: {} }));

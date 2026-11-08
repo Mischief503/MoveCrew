@@ -1,6 +1,6 @@
 # Options: what the owner can switch on and off
 
-**Setup › Options** has 44 switches, in nine groups. They apply to everyone in the company and save
+**Setup › Options** has 45 switches, in nine groups. They apply to everyone in the company and save
 as soon as they're flipped. Each switch also sits in the Setup section it belongs to, so the Rate
 card has the pricing switches, Roles has what crew, leads and dispatch can do, and so on. Only the
 owner can change them.
@@ -73,12 +73,13 @@ The number under a switch (radius, %, $) shows only while the switch is on. See
 | Cards on file | Cards aren't kept or charged later. |
 | Cash, checks and Zelle | Not offered, unless every other way is off: then it stays, so a payment can always be recorded. |
 | Customers book their own quote | The customer app shows the quote but no **Book my move**: "Call or text us to book it." The server refuses a customer's booking too. See [CUSTOMERS.md](CUSTOMERS.md). |
-| Tips for the crew | No tip when the customer pays the bill in their app; the server takes no tip either. |
+| Tips for the crew | No tip step when the bill is paid: not in the customer app, not on the crew's or the office's Collect payment (on, Nov 7: Subtotal, then the tip, then the Final total). The server takes no tip either. |
 | Text crew when they're put on a job | No assignment texts. |
 | Text the crew when a job moves | No texts when a job changes day or time. |
 | Texts the evening before | No evening reminders or office summary. |
 | Unsigned forms alert | No text to the office about a job waiting on a signature. |
 | Short crew alert | No text to the office when a crew lead starts a job with fewer movers than quoted, or someone leaves and it drops below. The office still sees it on Today. |
+| Move requests from customers | No text to the office when a customer asks for another move in the customer app (Nov 7). The request still comes in as a lead, and Today still shows it. |
 | A driver for every truck | No driver boxes on jobs, no Who drives list in Setup › Fleet and drivers, and a truck without a driver doesn't make a job need scheduling. The texts just name the truck. |
 | Office approves new quotes from the crew (starts off) | On: a crew lead's new quote waits for the owner or dispatch to approve it (Today: *New quote to approve*), then the customer signs it. Off: the customer's signature is enough, and the office is told. |
 | Dispatch can take payments | Dispatch has no payment buttons (*The owner takes payments on this job*); the server refuses dispatch's payments too. |

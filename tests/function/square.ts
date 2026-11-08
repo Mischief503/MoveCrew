@@ -190,8 +190,10 @@ function sqApi(method: string, path: string, body: any, h: any) {
         if (saved.customer_id !== body.customer_id) return sqErr(400, "INVALID_CARD", "The card belongs to another customer");
         card = { card_brand: saved.card_brand, last_4: saved.last_4, exp_month: saved.exp_month, exp_year: saved.exp_year, fingerprint: saved.fingerprint };
       }
-      const amt = body.amount_money && body.amount_money.amount;
-      const pay: any = { id: id("PAY"), merchant: mer, status: "COMPLETED", amount_money: { amount: amt, currency: "USD" }, total_money: { amount: amt, currency: "USD" }, approved_money: { amount: amt, currency: "USD" },
+      // Square adds tip_money on top of amount_money: total_money is both
+      const amt = body.amount_money && body.amount_money.amount, tip = body.tip_money ? Number(body.tip_money.amount) || 0 : 0;
+      const pay: any = { id: id("PAY"), merchant: mer, status: "COMPLETED", amount_money: { amount: amt, currency: "USD" }, total_money: { amount: amt + tip, currency: "USD" }, approved_money: { amount: amt + tip, currency: "USD" },
+        tip_money: tip ? { amount: tip, currency: "USD" } : undefined,
         source_type: "CARD", location_id: body.location_id, order_id: id("ORDP"), reference_id: body.reference_id, note: body.note, customer_id: body.customer_id || null, buyer_email_address: body.buyer_email_address,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(), card_details: { status: "CAPTURED", entry_method: saved ? "ON_FILE" : "KEYED", card: card || { card_brand: "VISA", last_4: "0002" } } };
       const fail = (code: string, detail: string) => { pay.status = "FAILED"; pay.card_details.status = "FAILED"; pay.card_details.errors = [{ code, detail, category: "PAYMENT_METHOD_ERROR" }]; SQ.payments[pay.id] = pay; return { status: 400, body: { errors: [{ code, detail, category: "PAYMENT_METHOD_ERROR" }], payment: clone(pay) } }; };
@@ -539,6 +541,51 @@ sqOn();
   const ln = lines("j4")["st_sq_" + p.id];
   ok(e.status === 200 && ln && ln.tip === 40 && ln.amt === 500 && /customer app/.test(ln.method) && doc("jobs/j4").status === "paid", "paid: the $500 bill and the $40 tip apart, and the job is paid: " + JSON.stringify(ln));
   ok(DB.pay_links.find((x) => x.token === link.token).status === "paid" && DB.pay_log.find((x) => x.pi === "sq_" + p.id).source === "cust;tip=4000", "the page is done; the ledger keeps the tip in it");
+}
+
+/* ======================= the crew's tip on Collect payment (Richie, Nov 7) ======================= */
+// "give a sub total then ask for a tip then give the final total", everywhere the bill is paid: through Square too
+{
+  putDoc(ORG, "jobs/t1", job("t1", { payments: {} }));   // Priya again, $1,200 owed, Marcus's crew
+  putDoc(ORG, "jobs/t2", job("t2", { payments: {} }));
+  putDoc(ORG, "jobs/t3", job("t3", { payments: {} }));
+  putDoc(ORG, "jobs/t0", job("t0", { payments: {}, status: "booked" }));
+  let r = await app("tok-marcus", { action: "pay_intent", jobId: "t0", amount: 300, token: "cnon:ok-tip0", tip: 20 });
+  ok(!r.body.ok && r.body.message === "A tip goes on the bill after the move." && !SQ.calls.some((x: any) => x.body && x.body.source_id === "cnon:ok-tip0"), "no tip on a deposit, and Square isn't asked");
+  // a card typed in: tip_money on the payment, the way Square keeps a tip
+  r = await app("tok-marcus", { action: "pay_intent", jobId: "t1", amount: 1200, token: "cnon:ok-tip1", tip: 100, save: true });
+  const call = SQ.calls.filter((x: any) => x.path === "/v2/payments").pop(), pay = Object.values(SQ.payments).find((x: any) => x.reference_id === "t1" && x.status === "COMPLETED") as any;
+  ok(r.body.ok && r.body.message === "Card charged $1,300.00, with a $100.00 tip for the crew." && call.body.amount_money.amount === 120000 && call.body.tip_money.amount === 10000 && call.body.tip_money.currency === "USD",
+    "the card typed in: $1,200 for the bill with Square's tip_money of $100: " + r.body.message);
+  const ln = lines("t1")["st_sq_" + pay.id], led = DB.pay_log.find((x) => x.pi === "sq_" + pay.id);
+  ok(ln && ln.amt === 1200 && ln.tip === 100 && led.amount_cents === 130000 && led.source === "card;tip=10000" && doc("jobs/t1").status === "paid" && await fn.owedCents(ORG, "t1") === 0,
+    "written down as the bill's $1,200 and the $100 tip; nothing owed, and Paid: " + JSON.stringify(ln));
+  // the card that payment kept, charged on her next job by the office
+  const card = DB.pay_cards.find((x) => x.account === "sq:MLR1aceAAA" && x.job_id === "t1" && x.pm_id);
+  r = await app("tok-owner", { action: "pay_saved", jobId: "t2", vaultId: card.id, amount: 1200, tip: 150 });
+  const call2 = SQ.calls.filter((x: any) => x.path === "/v2/payments").pop();
+  const p2 = Object.values(SQ.payments).find((x: any) => x.reference_id === "t2") as any;
+  ok(r.body.ok && r.body.message === "Charged $1,350.00 to Visa ••1111, with a $150.00 tip for the crew." && call2.body.source_id === card.pm_id && call2.body.amount_money.amount === 120000 && call2.body.tip_money.amount === 15000,
+    "the card on file: the bill and Square's tip_money: " + r.body.message);
+  ok(lines("t2")["st_sq_" + p2.id].amt === 1200 && lines("t2")["st_sq_" + p2.id].tip === 150 && DB.pay_log.find((x) => x.pi === "sq_" + p2.id).source === "saved;tip=15000", "written down apart");
+  r = await app("tok-owner", { action: "pay_saved", jobId: "t2", vaultId: card.id, amount: 1200, tip: 150 });
+  ok(!r.body.ok && /just charged \$1,350\.00/.test(r.body.message), "the same again a moment later: caught as a double tap");
+  // a pay link: the tip as its own line on Square's page
+  r = await app("tok-owner", { action: "pay_link", jobId: "t3", amount: 1200, tip: 60 });
+  const link = DB.pay_links.find((x) => x.job_id === "t3" && x.status === "open");
+  const pl = SQ.links[link.session_id.replace(/^sqpl_test_/, "")], ord = SQ.orders[pl.order_id];
+  ok(r.body.ok && r.body.message === "Payment link ready for $1,260.00 (with a $60.00 tip for the crew)." && link.meta.tip === 6000 && link.amount_cents === 120000 && ord.line_items.length === 2 && ord.line_items[0].base_price_money.amount === 120000 &&
+    ord.line_items[1].name === "Tip for your crew" && ord.line_items[1].base_price_money.amount === 6000 && pl.checkout_options.allow_tipping === false, "a pay link: the bill and the tip as two lines on Square's page: " + r.body.message);
+  // $200 paid in cash meanwhile: the page is made again for $1,000, still with the tip
+  const t3 = doc("jobs/t3"); t3.payments = { c1: { id: "c1", amt: 200, method: "Cash", date: "2026-11-07", ts: Date.now() } }; putDoc(ORG, "jobs/t3", t3);
+  const g = await getUrl("/p/" + link.token);
+  const l3 = DB.pay_links.find((x) => x.token === link.token), pl3 = SQ.links[l3.session_id.replace(/^sqpl_test_/, "")], ord3 = SQ.orders[pl3.order_id];
+  ok(g.status === 302 && g.loc === pl3.url && pl.deleted && ord3.line_items.length === 2 && ord3.line_items[0].base_price_money.amount === 100000 && ord3.line_items[1].base_price_money.amount === 6000, "after $200 in cash the link opens to $1,000 and still the $60 tip");
+  const p3 = customerPaysLink(pl3.id);
+  const e = await event("payment.updated", { payment: clone(p3) });
+  const ln3 = lines("t3")["st_sq_" + p3.id];
+  ok(e.status === 200 && p3.total_money.amount === 106000 && ln3 && ln3.amt === 1000 && ln3.tip === 60 && DB.pay_log.find((x) => x.pi === "sq_" + p3.id).source === "link;tip=6000" && doc("jobs/t3").status === "paid",
+    "paid on the page: $1,000 toward the bill and the $60 tip, and the job is Paid: " + JSON.stringify(ln3));
 }
 
 /* ======================= switching to Stripe and back, and the seller taking access back ======================= */

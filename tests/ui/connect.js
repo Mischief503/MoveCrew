@@ -151,6 +151,7 @@ async function payScreen(A) {
   A.click('#flow [data-act="flow:method"][data-m="card"]'); await sleep(80);
   const init = rec.stripe[rec.stripe.length - 1];
   ok(init && init[0] === 'pk_test_platform' && init[1] && init[1].stripeAccount === ACCT, 'Stripe’s card box is made for the company’s own account: ' + JSON.stringify(init));
+  if (A.$('#flow [data-act="flow:tip"]')) { A.click('#flow [data-act="flow:tip"][data-t="0"]'); await sleep(30); }   // the bill after the move asks for the crew's tip first
   A.click('#flow [data-act="flow:pay"]'); await sleep(120);
   ok(rec.confirm.pop() === 'pi_9_secret_abc', 'and the card is charged there');
   A.click('#flow [data-act="flow:close"]'); await sleep(10); A.click('[data-act="sheet:close"]'); await sleep(10);

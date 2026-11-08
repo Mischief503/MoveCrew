@@ -509,5 +509,85 @@ putDoc(ORG, "jobs/bc5", job("bc5", { status: "booked", d: { ...job("x").d, email
 r = await app("tok-priya", { action: "cust_list" });
 ok(!(r.body.moves.find((m: any) => m.id === "bc4").forms || []).some((f: any) => f.kind === "crew") && !(r.body.moves.find((m: any) => m.id === "bc5").forms || []).some((f: any) => f.kind === "crew"), "a flat price, or the crew as quoted: nothing to sign");
 
+/* ---------- Book another move (Richie, Nov 7) ---------- */
+// "the customer should see who their moving service was done by and should have a way to book another move . Then they
+// can enter their items and summit to the company . The date can just be the range of days they can move . Then the
+// company can contact them back to confirm the booking"
+const dayN = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+r = await app("tok-priya", { action: "cust_list" });
+const coAce = (r.body.companies || []).find((c: any) => c.org === ORG), coBlue = (r.body.companies || []).find((c: any) => c.org === ORG2);
+ok(r.body.companies.length === 2 && coAce.name === "Ace Moving" && coAce.phone === "+15125550000" && coBlue.name === "Blue Van Co" && coBlue.phone === "", "each company she has moved with, and its line to call or text");
+const sofaIt = coAce.catalog.find((i: any) => i.id === "sofa3");
+ok(sofaIt && sofaIt.name === "Sofa (3-seat)" && sofaIt.cat === "Living room" && Object.keys(sofaIt).sort().join() === "cat,id,name" && coAce.catalog.length === fn.priceSettings(settings).catalog.length,
+  "with its list of things to move, by room (names only, not the sizes its prices come from)");
+const reqOf = (over: any = {}) => ({ action: "cust_request", org: ORG, jobId: "d1", from: "77 Ridge Rd", to: "2210 Lakeview Dr, Austin", d1: dayN(14), d2: dayN(21),
+  items: { sofa3: 1, bedq: 2, dresser: 1 }, note: "Second floor, no elevator.", name: "Priya Nair", phone: "512-555-0144", ...over });
+const jobCount = () => DB.docs.filter((x) => x.collection === "jobs").length;
+const jobsAtStart = jobCount();
+r = await app("tok-sam", reqOf());
+ok(r.status === 404, "Sam can't ask for a move from Priya's");
+r = await app("tok-priya", reqOf({ jobId: "o1" }));
+ok(r.status === 404, "nor Priya from someone else's");
+for (const [over, want] of [
+  [{ from: "  " }, "Put in the pickup address."],
+  [{ to: "" }, "Put in the drop-off address."],
+  [{ d1: "soon" }, "Pick the days you can move."],
+  [{ d1: dayN(-1) }, "The first day can't be in the past."],
+  [{ d1: dayN(21), d2: dayN(14) }, "The last day comes after the first."],
+  [{ d2: dayN(14 + 91) }, "Pick days within three months of each other."],
+  [{ d1: dayN(370), d2: dayN(372) }, "Pick days within the next year."],
+  [{ items: {} }, "Tap + on at least one thing that's moving."],
+  [{ items: { "x-grand-piano": 2, sofa3: 0 } }, "Tap + on at least one thing that's moving."],
+  [{ name: " " }, "Put in your name."],
+  [{ phone: "555-0144" }, "Put in a phone number they can reach you at."],
+] as [any, string][]) {
+  r = await app("tok-priya", reqOf(over));
+  ok(!r.body.ok && r.body.message === want, "turned back, saying what to fix: " + want);
+}
+ok(jobCount() === jobsAtStart, "none of that made a job");
+const sentReq = sent.length;
+r = await app("tok-priya", reqOf({ items: { sofa3: 1, bedq: 2, "x-grand-piano": 1, dresser: 1, tvstand: 150 } }));
+const rqId = r.body.jobId, rq = doc("jobs/" + rqId);
+ok(r.body.ok && /^r[A-Za-z0-9]{14}$/.test(rqId) && rq && jobCount() === jobsAtStart + 1, "she asks Ace Moving for another move: " + rqId);
+ok(rq.status === "lead" && rq.d.source === "Customer app" && rq.d.moveDate === "" && rq.d.time === "" && rq.d.name === "Priya Nair" && rq.d.phone === "512-555-0144" && rq.d.email === "priyanair@googlemail.com" &&
+  rq.d.from === "77 Ridge Rd" && rq.d.to === "2210 Lakeview Dr, Austin" && rq.d.notes === "From the customer: Second floor, no elevator." && rq.assign.crew.length === 0 && !rq.test,
+  "a lead in the office's list: her name and phone, the addresses, the email on her move (so it's hers in the app), no day yet");
+ok(rq.req.by === "customer" && rq.req.key === "priyanair@gmail.com" && rq.req.from === dayN(14) && rq.req.to === dayN(21) && rq.req.note === "Second floor, no elevator." && rq.req.at > 0 && !rq.req.quotedAt, "the days she can move, kept as her request");
+const rqItems = Object.fromEntries(rq.d.items.map((x: any) => [x.id, x.q]));
+ok(JSON.stringify(rqItems) === JSON.stringify({ sofa3: 1, bedq: 2, dresser: 1, tvstand: 99 }) && rq.items.length === 4 && rq.items.find((x: any) => x.id === "bedq").qty === 2 && rq.items.find((x: any) => x.id === "bedq").name === "Queen bed (frame + mattress)",
+  "what's moving: the company's own things only, at most 99 of one: " + JSON.stringify(rqItems));
+const rqPrice = fn.priceCalc({ ...rq.d, items: rqItems }, fn.priceSettings(settings));
+ok(rq.quote && rq.quote.total > 0 && rq.quote.total === rqPrice.total && rq.quote.crew === rqPrice.crew, "priced the way the app prices it (" + rq.quote.total + "), for the office to firm up when they call");
+const rqRange = fn.fmtDay(dayN(14)) + " to " + fn.fmtDay(dayN(21));
+ok(logs(rqId).indexOf("Move request from the customer app: can move " + rqRange) >= 0, "its history says what she asked");
+const rqTexts = sent.slice(sentReq);
+ok(rqTexts.length === 2 && rqTexts.every((t) => t.Body === "Ace Moving: Priya Nair asked for another move in the customer app, any day " + rqRange + ". Call them at 512-555-0144 to set it up in MoveCrew.") && rqTexts.map((t) => t.To).sort().join() === "+15125550100,+15125550199",
+  "the office is texted to call her back: " + (rqTexts[0] || {}).Body);
+r = await app("tok-priya", { action: "cust_list" });
+let rqm = r.body.moves.find((m: any) => m.id === rqId);
+ok(rqm && rqm.status === "lead" && rqm.company === "Ace Moving" && rqm.req && rqm.req.from === dayN(14) && rqm.req.to === dayN(21) && rqm.req.note === "Second floor, no elevator." && rqm.req.quoted === false && !("key" in rqm.req) && rqm.items.length === 4,
+  "her moves show the request, waiting for their call");
+const rqDoc = doc("jobs/" + rqId); rqDoc.req.quotedAt = Date.now(); rqDoc.status = "quoted"; rqDoc.d.moveDate = dayN(15); putDoc(ORG, "jobs/" + rqId, rqDoc);
+r = await app("tok-priya", { action: "cust_list" });
+rqm = r.body.moves.find((m: any) => m.id === rqId);
+ok(rqm.req.quoted === true && rqm.status === "quoted" && rqm.d.moveDate === dayN(15), "once the office makes the quote, her copy says so");
+// Options › Texts › Move requests off: no text
+settings.comms = { alerts: { custReq: false } }; putDoc(ORG, "org/settings", settings);
+const sentOff = sent.length;
+r = await app("tok-priya", reqOf({ jobId: "b1", d1: dayN(30), d2: dayN(30) }));
+ok(r.body.ok && sent.length === sentOff && logs(r.body.jobId).indexOf("Move request from the customer app: can move " + fn.fmtDay(dayN(30))) >= 0, "the office's texts for it switched off: taken, not texted (one day is fine too)");
+delete settings.comms; putDoc(ORG, "org/settings", settings);
+// from a test move: a test job, and nobody texted
+putDoc(ORG, "jobs/tm1", job("tm1", { status: "paid", test: true, d: { ...job("x").d, email: "priyanair@gmail.com", moveDate: past } }));
+const sentTest = sent.length;
+r = await app("tok-priya", reqOf({ jobId: "tm1" }));
+ok(r.body.ok && doc("jobs/" + r.body.jobId).test === true && sent.length === sentTest, "asked from a test move: a test job, and nobody's texted");
+const sentMany = sent.length, jobsMany = jobCount();
+r = await app("tok-priya", reqOf());
+ok(!r.body.ok && r.body.message === "Ace Moving has your requests from today. They'll call or text you." && sent.length === sentMany && jobCount() === jobsMany, "a fourth the same day isn't taken: a stuck button doesn't flood the office");
+const sentBlue = sent.length;
+r = await app("tok-priya", reqOf({ org: ORG2, jobId: "z1" }));
+ok(r.body.ok && doc("jobs/" + r.body.jobId, ORG2).status === "lead" && doc("jobs/" + r.body.jobId, ORG2).d.source === "Customer app" && sent.length === sentBlue, "the other company takes hers too (its own count), with no company line to text from");
+
 console.log(`\ncust: ${passes} passed, ${failures} failed`);
 if (failures) Deno.exit(1);

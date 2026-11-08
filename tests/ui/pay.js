@@ -119,10 +119,19 @@ const fnCalls = (A, act) => A.calls.fn.filter((c) => c.body.action === act);
     ok(ways() === 'vault,link,card,other' && on().m === 'vault', 'all back on: the four ways again');
   }
 
+  // ---- the tip before the final total (Richie, Nov 7: "give a sub total then ask for a tip then give the final total",
+  // everywhere the bill is paid): the move is done, so Collect payment asks for the crew's tip before charging
+  ok(/Subtotal/.test(flowText()) && /Add a tip for the crew/.test(flowText()) && $$('#flow [data-act="flow:tip"]').length === 5 && /It goes to the 2 movers on the move \(Marcus’s crew\), split evenly\./.test(flowText()) && /Final total ?\$1,000/.test(flowText()),
+    'the bill after the move: the subtotal, the crew’s tip (no tip, 10, 15, 20% or another amount), then the final total');
+  ok($('#flow [data-act="flow:pay"]').disabled && $('#flow [data-act="flow:pay"]').textContent === 'Pick a tip first', 'nothing is charged until a tip is picked (No tip counts)');
+  click('#flow [data-act="flow:tip"][data-t="15"]'); await sleep(30);
+  ok(/Final total ?\$1,150/.test(flowText()) && $('#flow [data-act="flow:pay"]').textContent === 'Charge $1,150 to the card on file' && !$('#flow [data-act="flow:pay"]').disabled, '15%: $150 on top, and the button says the final total');
+
   // ---- card on file
   click('#flow [data-act="flow:pay"]'); await sleep(60);
   let sc = fnCalls(A, 'pay_saved').pop();
-  ok(sc && sc.body.jobId === 'j2' && sc.body.vaultId === CARD && sc.body.amount === 1000 && /^t[a-z0-9]{8,}$/.test(sc.body.nonce), 'Charge sends the saved card, the amount and a one-time tap id to the server');
+  ok(sc && sc.body.jobId === 'j2' && sc.body.vaultId === CARD && sc.body.amount === 1000 && sc.body.tip === 150 && /^t[a-z0-9]{8,}$/.test(sc.body.nonce), 'Charge sends the saved card, the bill’s part, the tip apart from it and a one-time tap id to the server');
+  ok(T.ui.flow.tipDone === true && !T.flowTipAsk(T.state().jobs.find((j) => j.id === 'j2')), 'the tip went with that payment: it isn’t asked again for the rest');
   ok(/Charged \$1,000\.00 to Visa ••4242/.test($('#toast').textContent), 'and says it was charged');
   ok(T.state().jobs.find((j) => j.id === 'j2').payments.length === 0, 'nothing is added to the bill on the phone: it arrives from the server');
   ctl.saved = { ok: false, needLink: true, message: "The customer's bank wants them to approve this one. Send them a pay link instead." };
@@ -180,6 +189,26 @@ const fnCalls = (A, act) => A.calls.fn.filter((c) => c.body.action === act);
   ok(/Your card was declined/.test($('#flowErr').textContent) && !/charged/i.test($('#toast').textContent.replace(/Card charged \$300/, '')), 'a decline is shown on the screen');
   ctl.confirm = null;
 
+  // ---- a fresh Collect payment asks again: a pay link and a typed card carry the tip
+  click('#flow [data-act="flow:close"]'); await sleep(20);
+  if (!$('#sheet [data-act="flow:open"]')) { click('[data-act="job:open"][data-id="j2"]'); await sleep(40); }
+  click('#sheet [data-act="flow:open"]'); await sleep(60);
+  click('#flow [data-act="flow:method"][data-m="link"]'); await sleep(30);
+  ok($$('#flow [data-act="flow:tip"]').length === 5 && $('#flow [data-act="pay:qr"]').disabled && $('#flow [data-act="pay:qr"]').textContent === 'Pick a tip first', 'a pay link waits for the tip too');
+  click('#flow [data-act="flow:tip"][data-t="other"]'); await sleep(30);
+  const tio = $('#flowTipOther'); tio.value = '25'; tio.dispatchEvent(new w.Event('input', { bubbles: true })); await sleep(10);
+  ok(/Final total ?\$1,025/.test(flowText()), 'another amount, $25: the final total follows as it’s typed');
+  tio.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
+  click('#flow [data-act="pay:qr"]'); await sleep(60);
+  lc = fnCalls(A, 'pay_link').pop();
+  ok(lc.body.amount === 1000 && lc.body.tip === 25 && /Point the phone camera here to pay \$1,025 \(with the tip\)/.test(flowText()), 'the link: $1,000 toward the bill and the $25 tip, one payment of $1,025');
+  ok(T.state().jobs.find((j) => j.id === 'j2').log.some((l) => /Payment link made: \$1,025 \(with a \$25 tip for the crew\)/.test(l.ev)), 'the job history says so');
+  click('#flow [data-act="flow:method"][data-m="card"]'); await sleep(60);
+  click('#flow [data-act="flow:pay"]'); await sleep(80);
+  const up2 = log.filter((x) => x[0] === 'update').pop(), ic2 = fnCalls(A, 'pay_intent').pop();
+  ok(up2 && up2[1].amount === 102500 && ic2 && ic2.body.amount === 1000 && ic2.body.tip === 25, 'a typed card: Stripe’s box is told the final total ($1,025), the server the bill’s part and the tip');
+  ok(/Card charged \$1,025, with a \$25 tip for the crew/.test($('#toast').textContent), 'charged: the final total and the tip, said');
+
   // ---- the server records a payment while the screen is open: it shows at once
   const j2row = dbA.docs.find((r) => r.path === 'jobs/j2');
   j2row.data = Object.assign(clone(j2row.data), { status: 'paid',
@@ -222,6 +251,8 @@ const fnCalls = (A, act) => A.calls.fn.filter((c) => c.body.action === act);
   B.click('.crewcard [data-act="flow:open"][data-id="j2"]'); await sleep(60);
   ok(B.$('#flow [data-act="flow:method"][data-m="link"]').classList.contains('on') && !B.$('#flow [data-act="flow:method"][data-m="vault"]'), 'the lead on the job sees the pay link first; a card kept on another job is not offered to him');
   ok(/Text it from my phone/.test(B.$('#flow').textContent), 'without a company line the text comes from his own phone');
+  ok(B.$('#flow [data-act="pay:text"]').disabled && B.$$('#flow [data-act="flow:tip"]').length === 5, 'the lead hands Lena the phone for the tip first');
+  B.click('#flow [data-act="flow:tip"][data-t="0"]'); await sleep(30);
   B.click('#flow [data-act="pay:text"]'); await sleep(60);
   const sms = B.$('#flow a[href^="sms:"]');
   ok(sms && decodeURIComponent(sms.getAttribute('href')).indexOf('sms:5125550177?&body=Ace Moving: Here is your secure payment link for $1,000: ' + LINK) === 0, 'the text opens ready to send to Lena: ' + (sms && decodeURIComponent(sms.getAttribute('href'))));
@@ -237,10 +268,13 @@ const fnCalls = (A, act) => A.calls.fn.filter((c) => c.body.action === act);
   const cText = C.$('#flow').textContent.replace(/\s+/g, ' ');
   ok(/Card payments are not turned on for this company yet\. Cash and checks can still be recorded/.test(cText) && !/Demo mode/.test(cText), 'the payment screen says why cards are off, and is not the demo');
   ok(!C.$('#cardNum') && !C.$('#achRoute') && !C.$('#flow [data-act="flow:method"]') && !C.$('input[name=vaultPick]'), 'no card or bank form, no saved cards: nothing that looks like charging a card');
-  const ca = C.$('#flowAmt'); ca.value = '20000'; ca.dispatchEvent(new C.w.Event('input', { bubbles: true }));
+  ok(C.$$('#flow [data-act="flow:tip"]').length === 5 && /Subtotal/.test(cText) && /Final total/.test(cText), 'cash too: the subtotal, the crew’s tip, the final total');
+  C.click('#flow [data-act="flow:tip"][data-t="10"]'); await sleep(20);
+  const ca = C.$('#flowAmt'); ca.value = '20000'; ca.dispatchEvent(new C.w.Event('input', { bubbles: true })); await sleep(10);
+  ok(/Final total ?\$300/.test(C.$('#flow').textContent.replace(/\s+/g, ' ')) && C.$('#flow [data-act="flow:pay"]').textContent === 'Record $300', 'part of the bill in cash, $200, with the 10% tip ($100 of the $1,000 bill): $300');
   C.click('#flow [data-act="flow:pay"]'); await sleep(40);
   const cPay = C.T.state().jobs.find((j) => j.id === 'j2').payments.pop();
-  ok(cPay && cPay.amt === 200 && cPay.method === 'Cash', 'cash is recorded as cash: ' + JSON.stringify(cPay));
+  ok(cPay && cPay.amt === 200 && cPay.tip === 100 && cPay.method === 'Cash', 'cash is recorded as cash: the bill’s part, and the tip apart from it: ' + JSON.stringify(cPay));
   C.click('#flow [data-act="flow:close"]'); await sleep(10); C.click('[data-act="sheet:close"]'); await sleep(10);
   await C.go('settings', 'pay'); await sleep(20);
   ok(/not turned on for card payments yet/.test(C.$('#view').textContent), 'Setup › Payments says the company is not turned on');
@@ -264,6 +298,7 @@ const fnCalls = (A, act) => A.calls.fn.filter((c) => c.body.action === act);
   ok(G.$('#flow [data-act="flow:method"][data-m="link"]').classList.contains('on') && G.$('#flow [data-act="flow:method"][data-m="vault"]'), 'the office sees a card kept on another job, but it is not picked for them');
   G.click('#flow [data-act="flow:method"][data-m="vault"]'); await sleep(30);
   ok(!G.$('#flow input[name=vaultPick]').checked && /Pat Wu .*kept on another job/.test(G.$('#flow').textContent.replace(/\s+/g, ' ')) && /Check with Lena Wu that this is their card/.test(G.$('#flow').textContent), 'nothing is ticked, the name on the card shows, and the screen says to check with Lena first');
+  G.click('#flow [data-act="flow:tip"][data-t="0"]'); await sleep(20);
   G.click('#flow [data-act="flow:pay"]'); await sleep(40);
   ok(/Pick a saved card/.test(G.$('#flowErr').textContent) && !fnCalls(G, 'pay_saved').length, 'charging without picking the card does nothing');
   G.click('#flow [data-act="flow:method"][data-m="other"]'); await sleep(20);

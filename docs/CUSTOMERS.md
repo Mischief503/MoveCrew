@@ -4,7 +4,11 @@ Richie's words: "I want there to be a customer side as well . Where they have a 
 there phone if they would like and pay with google pay"; asked how they get in: "They open the app and sign in with their
 gmail . Their move will already be link to their gmail"; and what they do: accept their quote, follow move day, sign
 forms ahead, tip the crew, and "They should also be auto took to the review page for the company they book through after
-the move is complete".
+the move is complete". Then (Nov 7): "the tip should come before the final bill .give a sub total then ask for a tip
+then give the final total. Then the customer should see who their moving service was done by and should have a way to
+book another move . Then they can enter their items and summit to the company . The date can just be the range of days
+they can move . Then the company can contact them back to confirm the booking"; the tip step goes everywhere the bill
+is paid.
 
 ## How a customer gets in
 
@@ -41,8 +45,21 @@ most first, and a list of the rest.
   we are not with the customer yet"). See PRICING.md, A bigger crew.
 - **Move day**: the crew on the way (about when, from the arrival time at Start job), loading, on the road, unloading,
   finishing up, as the lead taps them.
-- **The bill**, once the move is done, with a **tip for the crew** (no tip, 10, 15, 20% or their own amount;
-  Options › Tips for the crew). The tip goes to the movers on the job, split evenly, apart from the bill.
+- **The bill**, once the move is done (Nov 7): **Subtotal** (the bill, after what's paid), then **Add a tip for your
+  crew** (No tip, 10, 15 or 20% of the whole bill, or Other), then the **Final total** and **Pay $…**, which waits until
+  they pick (No tip is a pick). Options › Tips for the crew. The tip goes to the movers on the job, split evenly, apart
+  from the bill. The crew's and the office's Collect payment ask the same way (the customer picks on the crew's phone),
+  for every way to pay: a card on file, a card typed in, a pay link (the tip its own line on the page) and cash.
+- **Who moved them** (Nov 7): once the move is done, **Your move was done by**: the company, the lead and the crew size
+  with the date, the company's number with Call and Text, and **Book another move**.
+- **Book another move** (Nov 7): the pickup (it starts as the last drop-off) and the drop-off, the **first and last day**
+  they can move (any day between works; within three months of each other and the next year), what's moving (the
+  company's own item list, room by room, + and −, and a search), a note, their name and phone; **Send to <company>**.
+  It reaches the company as a lead (`status:'lead'`, `req:{at, by:'customer', key, from, to, note}`, source Customer
+  app, no date), priced from those items the way the app prices it; the office gets a text (Setup › Texts › Move
+  requests from customers) and Today's **Move request: <name>** with the days, until its quote is saved. The office
+  calls back, sets the day, builds the quote and books it; the customer's app shows it as Requested, then the quote to
+  book. Three a day per customer per company.
 - **The review page**: once the move is done and paid, the app thanks them, counts down 5 seconds and opens the
   company's review page (Setup › Customer app › Review page), once. "Not now" isn't asked again.
 - **Profile**: their name and phone (kept on their account and put on their open moves) and the email they sign in with.
@@ -63,13 +80,19 @@ app, which brings the move up to date and says thank you.
 - The tip is its own line on the page. The payment says how much (metadata `tally_tip`), the ledger keeps it in its
   source (`cust;tip=<cents>`), and the job's payment carries it as `tip`: it never counts toward the bill. A refund or a
   dispute comes off the bill's part first, then the tip's (an `rt_` line).
+- The same on the crew's and the office's payments since Nov 7: the app sends `tip` (dollars) beside `amount` (the
+  bill's part) to `pay_intent`, `pay_saved` and `pay_link`; the server takes it only on a done or paid job with a crew,
+  with tips on, up to $500 or the bill (`tipCents`), charges both in one payment (`tally_tip` on Stripe, `tip_money` on
+  Square, a second line on a pay link's page) and writes the ledger's source as `card;tip=…`, `saved;tip=…` or
+  `link;tip=…`. Cash keeps it as `tip` on the payment the phone saves.
 
 ## Where it lives
 
 - The app: the customer module in `web/index.html` (`custMoveOf`, `renderMyMove`, `renderMyPay`, `renderMyProfile`, the
   `cs:` sheets), and in the hosted back end `window.tallyCust` (their moves through the Edge Function).
-- The server: the Edge Function's customer actions (`cust_list`, `cust_book`, `cust_sign`, `cust_pay`, `cust_check`,
-  `cust_reviewed`, `cust_profile`; and the office's `invite_app`). A customer is none of a company's people, so they
+- The server: the Edge Function's customer actions (`cust_list`, which also lists each company with its number and
+  item list for Book another move, `cust_book`, `cust_sign`, `cust_pay`, `cust_check`, `cust_reviewed`, `cust_profile`,
+  `cust_request`; and the office's `invite_app`). A customer is none of a company's people, so they
   never touch the database directly: the function checks their sign-in (a confirmed email) and that each move has
   that email. No new tables, no SQL to run.
 - The website: `.github/workflows/website.yml` and `scripts/prepare_site.py` put `web/` on GitHub Pages on every push,
@@ -82,4 +105,5 @@ app, which brings the move up to date and says thank you.
 - A Play Store listing for customers (the home-screen app needs none).
 - Live truck location for the customer (move day shows the steps the lead taps).
 - Customers rescheduling or cancelling in the app (they call or text the company).
+- A request picking a day itself: the customer gives the days that work, and the office sets the day when they call.
 - Tips in Reports and the crew's pay.

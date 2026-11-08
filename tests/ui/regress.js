@@ -54,6 +54,16 @@ const file = process.argv[2], label = process.argv[3] || file;
   const set = (id, v) => { const e = $(id); e.value = v; e.dispatchEvent(new w.Event('input', { bubbles: true })); };
   set('#cardNum', '4242424242424242'); set('#cardExp', '1230'); set('#cardCvc', '123');
   ok($('#cardNum').value === '4242-4242-4242-4242' && $('#cardExp').value === '12/30', label + ': card fields format');
+  // Richie, Nov 7: subtotal, then the tip, then the final total; the button waits for a pick ("No tip" is one)
+  const payB = () => $('#flow [data-act="flow:pay"]');
+  ok(payB().disabled && payB().textContent === 'Pick a tip first' && /Add a tip for the crew/.test($('#flow').textContent), label + ': the pay button waits for the customer to pick a tip');
+  click('#flow [data-act="flow:tip"][data-t="15"]'); await sleep(10);
+  const tip15 = Math.round(T.totalOf(job) * 15) / 100;
+  ok($('#cardNum').value === '4242-4242-4242-4242' && $('#cardExp').value === '12/30' && !payB().disabled && payB().textContent === 'Charge ' + T.money(Math.round((T.balOf(job) + tip15) * 100) / 100), label + ': 15% picked after the card was typed: the card stays, the button says the final total (' + payB().textContent + ')');
+  click('#flow [data-act="flow:tip"][data-t="other"]'); await sleep(10);
+  ok(!$('#flowTipOtherBox').hidden && $('#cardNum').value === '4242-4242-4242-4242' && payB().textContent === 'Charge ' + T.money(T.balOf(job)), label + ': Other opens its box (nothing typed in it yet: no tip)');
+  click('#flow [data-act="flow:tip"][data-t="0"]'); await sleep(10);
+  ok($('#flowTipOtherBox').hidden && $$('#flow [data-act="flow:tip"].on').length === 1 && $('#flow [data-act="flow:tip"][data-t="0"]').getAttribute('aria-pressed') === 'true', label + ': No tip: one chip on, the Other box shut');
   click('#flow [data-act="flow:pay"]'); await sleep(20);
   ok(job.status === 'paid' && /Paid in full/.test($('#flow').textContent), label + ': paid in full');
   ok(!JSON.stringify(T.state()).includes('4242424242424242'), label + ': full card number never stored');
@@ -65,7 +75,7 @@ const file = process.argv[2], label = process.argv[3] || file;
   // setup card on-device
   await A.go('settings', 'comms');
   ok(/Texts and calls/.test(text()) && /run on the hosted edition/.test(text()), label + ': Setup › Texts and calls explains texting runs on the hosted edition');
-  ok($$('input[data-s^="comms.alerts."]').length === 5, label + ': alert switches still editable');
+  ok($$('input[data-s^="comms.alerts."]').length === 6 && !!$('input[data-s="comms.alerts.custReq"]'), label + ': alert switches still editable (6, with Move requests from customers since Nov 7)');
 
   // money colours fixed across every theme, and every theme applies cleanly
   const themes = (w.document.querySelector('#themeBtn') && (click('#themeBtn'), await sleep(10), $$('[data-act="theme:set"]'))) || [];

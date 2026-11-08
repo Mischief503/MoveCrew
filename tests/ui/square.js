@@ -171,8 +171,10 @@ const flowText = (A) => say(A.$('#flow'));
   // cards on file: Square's only
   const vaultChip = A.$('#flow [data-act="flow:method"][data-m="vault"]');
   ok(vaultChip && A.$$('#flow input[name=vaultPick]').length === 1 && /Visa ending 1111/.test(flowText(A)) && !/Mastercard ending 4444/.test(flowText(A)), 'Card on file lists the card kept with Square, not the one kept with Stripe');
+  ok(A.$('#flow [data-act="flow:pay"]').disabled && A.$$('#flow [data-act="flow:tip"]').length === 5, 'the bill after the move: the crew’s tip is asked first');
+  A.click('#flow [data-act="flow:tip"][data-t="20"]'); await sleep(30);
   A.click('#flow [data-act="flow:pay"]'); await sleep(40);
-  ok(fnCalls(A, 'pay_saved').length === 1 && fnCalls(A, 'pay_saved')[0].body.vaultId === 'sq_aaa' && /Charged \$1,?000\.00 to Visa ••1111/.test(say(A.$('#toast'))), 'charging it: the server does it on Square');
+  ok(fnCalls(A, 'pay_saved').length === 1 && fnCalls(A, 'pay_saved')[0].body.vaultId === 'sq_aaa' && fnCalls(A, 'pay_saved')[0].body.amount === 1000 && fnCalls(A, 'pay_saved')[0].body.tip === 200 && /Charged \$1,?000\.00 to Visa ••1111/.test(say(A.$('#toast'))), 'charging it: the server does it on Square, with the 20% tip apart from the bill');
   // the card box
   await sleep(1600);
   A.click('#flow [data-act="flow:method"][data-m="card"]'); await sleep(80);
@@ -213,6 +215,7 @@ const flowText = (A) => say(A.$('#flow'));
   await openPay(A);
   A.click('#flow [data-act="flow:method"][data-m="card"]'); await sleep(80);
   ok(/The card form did not load\. Check the connection, or send a pay link\./.test(flowText(A)), 'Square’s script can’t load: say so, point to a pay link');
+  A.click('#flow [data-act="flow:tip"][data-t="0"]'); await sleep(30);
   A.click('#flow [data-act="flow:pay"]'); await sleep(30);
   ok(/still loading/.test(say(A.$('#flowErr'))) && !fnCalls(A, 'pay_intent').length, 'and nothing is charged');
   ctl = { cfg: CFG.square }; rec = rec0();

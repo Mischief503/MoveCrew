@@ -20,7 +20,13 @@ function server(moves) {
   const reply = (b) => {
     calls.push(b);
     const m = moves.find((x) => x.id === b.jobId);
-    if (b.action === 'cust_list') return { ok: true, email: 'Priya.Nair@gmail.com', name: 'Priya Nair', phone: '', moves: JSON.parse(JSON.stringify(moves)) };
+    if (b.action === 'cust_list') return { ok: true, email: 'Priya.Nair@gmail.com', name: 'Priya Nair', phone: '', moves: JSON.parse(JSON.stringify(moves)),
+      companies: [{ org: ORG, name: 'Ace Moving', phone: '+15125550000', catalog: [{ id: 'sofa3', name: 'Sofa (3-seat)', cat: 'Living room' }, { id: 'bedq', name: 'Queen bed', cat: 'Bedroom' }, { id: 'boxm', name: 'Medium box', cat: 'Boxes' }] }] };
+    if (b.action === 'cust_request') {
+      moves.push(move('r1', { status: 'lead', d: Object.assign({}, move('x').d, { moveDate: '', time: '', from: b.from, to: b.to, phone: b.phone }), items: [{ name: 'Queen bed', qty: b.items.bedq }],
+        bill: { total: 0, paid: 0, due: 0, deposit: 0 }, forms: [], req: { from: b.d1, to: b.d2, at: Date.now(), note: b.note, quoted: false } }));
+      return { ok: true, jobId: 'r1' };
+    }
     if (b.action === 'cust_book') { m.status = 'booked'; m.bookedBy = 'customer'; m.bill.deposit = 250; return { ok: true }; }
     if (b.action === 'cust_sign') { m.forms.find((f) => f.id === b.formId).signed = { name: b.name, ts: Date.now(), ahead: true }; return { ok: true }; }
     if (b.action === 'cust_pay') return { ok: true, url: 'https://checkout.stripe.com/c/pay/cs_test_9' };
@@ -75,11 +81,30 @@ const db0 = () => ({ docs: [], access_requests: [], comm_log: [], comm_lines: []
   // the bill, with a tip
   click('#view [data-act="cs:move"][data-k="' + ORG + '/d1"]'); await sleep(15);
   click('#view [data-act="cs:pay"]'); await sleep(10);
+  const so = sheet();
+  ok(so.indexOf('Subtotal') >= 0 && so.indexOf('Subtotal') < so.indexOf('Add a tip for your crew') && so.indexOf('Add a tip for your crew') < so.indexOf('Final total') && $('#csPayBtn').disabled, 'the bill: the subtotal, the tip, then the final total (Nov 7); a tip is picked before paying');
+  click('[data-act="cs:paygo"]'); await sleep(30);
+  ok(S.calls.filter((c) => c.action === 'cust_pay').length === 1, 'no payment page before the tip is picked');
   click('[data-act="cs:tip"][data-t="20"]'); await sleep(10);
   click('[data-act="cs:paygo"]'); await sleep(80);
   const pb = S.calls.filter((c) => c.action === 'cust_pay').pop();
   ok(pb.kind === 'bill' && pb.amount === 65000 && pb.tip === 18000, 'the bill ($650) and a 20% tip ($180 of the $900 bill): what the server is asked for');
   click('#cust .sheet-head [data-act="cs:close"]'); await sleep(10);
+  // after the move: who did it, and Book another move (Nov 7), through the server
+  const byc = $('#view .cm-by') ? $('#view .cm-by').textContent.replace(/\s+/g, ' ') : '';
+  ok(/Your move was done by ?Ace Moving/.test(byc) && /Marcus’s crew of 2/.test(byc) && !!$('#view .cm-by [data-act="cs:again"]'), 'the moved-by card: Ace Moving, Marcus’s crew, and Book another move');
+  click('#view [data-act="cs:again"]'); await sleep(15);
+  ok($$('#cust .rqrooms .grp').length === 3 && $('#csaFrom').value === '77 Ridge Rd', 'Book another move: Ace Moving’s own items (from the server), from her new place');
+  const fill = (id, v) => { const e = $('#' + id); e.value = v; e.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  fill('csaTo', '12 Lake Dr'); fill('csaD1', later); fill('csaPhone', '512-555-0142');
+  click('[data-act="cs:itinc"][data-id="bedq"]'); click('[data-act="cs:itinc"][data-id="bedq"]');
+  click('[data-act="cs:againgo"]'); await sleep(150);
+  const rqc = S.calls.find((c) => c.action === 'cust_request');
+  ok(rqc && rqc.org === ORG && rqc.jobId === 'd1' && rqc.from === '77 Ridge Rd' && rqc.to === '12 Lake Dr' && rqc.d1 === later && rqc.d2 === later && rqc.items.bedq === 2 && rqc.name === 'Priya Nair' && rqc.phone === '512-555-0142',
+    'sent to the server: from her move with Ace Moving, the addresses, the day (one day: first and last the same), what’s moving, her name and phone');
+  ok(/Sent!/.test(sheet()) && T.custMoves().some((m) => m.id === 'r1' && T.custStage(m) === 'request'), 'Sent, and her moves read again: the request is there');
+  click('#cust .sheet-head [data-act="cs:close"]'); await sleep(10);
+  ok(/Requested/.test(view()) && /Ace Moving will call or text you to set the day/.test(view()), 'My move opens on it: requested, Ace Moving calls back');
   click('[data-act="tab"][data-tab="myprofile"]'); await sleep(10);
   ok(/priya\.nair@gmail\.com/.test(view()) && !!$('[data-act="cs:signout"]') && !$('[data-act="cust:work"]'), 'Profile: the email she signs in with, and Sign out');
   $('#cpPhone').value = '512-555-0199'; click('[data-act="cs:prof"]'); await sleep(80);

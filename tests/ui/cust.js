@@ -25,6 +25,7 @@ const L = (m) => label + ': ' + m;
   };
   const end = async () => { click('[data-act="pv:end"]'); await sleep(15); };
   const logs = (n) => job(n).log.map((l) => l.ev);
+  const money0 = (n) => '$' + Number(n).toLocaleString('en-US');
 
   /* ---------- the owner's side: who they can see it as, Setup › Customer app, forms to sign ahead ---------- */
   click('[data-act="more:open"]'); await sleep(5); click('[data-act="more:preview"]'); await sleep(5);
@@ -124,7 +125,10 @@ const L = (m) => label + ': ' + m;
   ok(/Moved · bill due/.test(view()) && /Pay your bill: \$/.test(view()), L('the bill due, with Pay'));
   click('#view [data-act="cs:pay"]'); await sleep(15);
   const total0 = T.custMoves()[0].bill.total, dueNow = T.custMoves()[0].bill.due;
-  ok(/Pay your bill/.test(sheet()) && /Tip your crew/.test(sheet()) && /It goes to the 2 movers on your move \(Marcus’s crew\), split evenly\./.test(sheet()) && $$('[data-act="cs:tip"]').length === 5, L('the bill, and a tip for the crew: no tip, 10, 15, 20%, or another amount'));
+  ok(/Pay your bill/.test(sheet()) && /Add a tip for your crew/.test(sheet()) && /It goes to the 2 movers on your move \(Marcus’s crew\), split evenly\./.test(sheet()) && $$('[data-act="cs:tip"]').length === 5, L('the bill, and a tip for the crew: no tip, 10, 15, 20%, or another amount'));
+  // Richie, Nov 7: "the tip should come before the final bill . give a sub total then ask for a tip then give the final total"
+  const sOrder = sheet(), iSub = sOrder.indexOf('Subtotal'), iTip = sOrder.indexOf('Add a tip for your crew'), iTot = sOrder.indexOf('Final total');
+  ok(iSub >= 0 && iSub < iTip && iTip < iTot && $('#csPayBtn').disabled && $('#csPayBtn').textContent === 'Pick a tip first', L('in that order: the subtotal, the tip, the final total; nothing to pay until a tip is picked (No tip counts)'));
   click('[data-act="cs:tip"][data-t="15"]'); await sleep(10);
   const tip15 = Math.round(total0 * 15) / 100;
   ok(Math.abs(Number($('#csTotal').textContent.replace(/[$,]/g, '')) - Math.round((dueNow + tip15) * 100) / 100) < 0.001, L('15% of the bill on top: ' + $('#csTotal').textContent));
@@ -140,7 +144,62 @@ const L = (m) => label + ': ' + m;
   ok(/In the customer’s app, the review page opens now/.test(sheet()) && mj.cust && mj.cust.reviewAt > 0 && logs('Marcus Tull').indexOf('The customer app took them to the review page') >= 0, L('at zero: the review page (here it says so), written down once'));
   ok($('#cust a[data-act="cs:revlink"]').getAttribute('href') === 'https://g.page/r/your-moving-co/review' && $('#cust a[data-act="cs:revlink"]').getAttribute('target') === '_blank', L('Leave a review opens the company’s review page'));
   click('#cust .sheet-head [data-act="cs:close"]'); await sleep(10);
-  ok(/All done/.test(view()) && /Paid/.test(view()) && /thank you for the tip/.test(view()), L('My move: all done, paid, and thanks for the tip'));
+  ok(/All done/.test(view()) && /Paid/.test(view()) && /thank you for the tip/.test(view()) && !$('#view [data-act="cs:pay"]'), L('My move: all done, paid, and thanks for the tip (no second ask for a tip)'));
+  // Richie, Nov 7: "the customer should see who their moving service was done by and should have a way to book another move"
+  const by = $('#view .cm-by') ? $('#view .cm-by').textContent.replace(/\s+/g, ' ') : '';
+  ok(/Your move was done by ?Your Moving Co\./.test(by) && /Marcus’s crew of 2/.test(by) && /\(512\) 555-0100/.test(by) && $('#view .cm-by a[href^="tel:"]') && $('#view .cm-by a[href^="sms:"]') && $('#view .cm-by [data-act="cs:again"]'),
+    L('after the move: the company that did it, the crew, how to reach them, and Book another move'));
+  click('#view [data-act="cs:again"]'); await sleep(15);
+  ok(/Book another move/.test(sheet()) && $('#csaFrom').value === mj.d.to && !$('#csaTo').value && $('#csaD1') && $('#csaD2') && $$('#cust .rqrooms .grp').length >= 5 && $('#csaName').value === 'Marcus Tull',
+    L('Book another move: from their new place, the days they can move, what’s moving room by room, their name'));
+  const fill = (id, v) => { const e = $('#' + id); e.value = v; e.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  const dayN = (n) => { const d = new w.Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  click('[data-act="cs:againgo"]'); await sleep(5);
+  ok(err() === 'Put in the drop-off address.', L('the drop-off address first: ' + err()));
+  fill('csaTo', '9 Elm St, Austin'); click('[data-act="cs:againgo"]'); await sleep(5);
+  ok(err() === 'Pick the first day you can move.', L('then the days'));
+  fill('csaD1', dayN(-1)); click('[data-act="cs:againgo"]'); await sleep(5);
+  ok(err() === 'The first day can’t be in the past.', L('not a day gone by'));
+  fill('csaD1', dayN(10)); fill('csaD2', dayN(5)); click('[data-act="cs:againgo"]'); await sleep(5);
+  ok(err() === 'The last day comes after the first.' || $('#csaD2').value === dayN(10), L('the last day can’t come before the first'));
+  fill('csaD2', dayN(17)); click('[data-act="cs:againgo"]'); await sleep(5);
+  ok(err() === 'Tap + on at least one thing that’s moving.', L('then what’s moving'));
+  click('[data-act="cs:itinc"][data-id="sofa3"]'); click('[data-act="cs:itinc"][data-id="bedq"]'); click('[data-act="cs:itinc"][data-id="bedq"]'); click('[data-act="cs:itdec"][data-id="sofa3"]'); click('[data-act="cs:itinc"][data-id="sofa3"]'); await sleep(5);
+  ok($('#csi_bedq').textContent === '2' && $('#csi_sofa3').textContent === '1' && /3 items/.test($('#csaN').textContent), L('+ and −: the counts change where they are (' + $('#csaN').textContent + ')'));
+  const sr = $('#csaSearch'); sr.value = 'piano'; sr.dispatchEvent(new w.Event('input', { bubbles: true })); await sleep(5);
+  ok($$('#cust .rqrooms .item').filter((x) => !x.hidden).length === 1 && $$('#cust .rqrooms .grp').filter((g) => !g.hidden).length === 1, L('Find an item: piano'));
+  sr.value = ''; sr.dispatchEvent(new w.Event('input', { bubbles: true }));
+  fill('csaPhone', '512'); click('[data-act="cs:againgo"]'); await sleep(5);
+  ok(err() === 'Put in a phone number they can reach you at.', L('a phone number they can call'));
+  fill('csaPhone', '512-555-0199'); fill('csaNote', 'Third floor, elevator.');
+  const nJobs = st().jobs.length;
+  click('[data-act="cs:againgo"]'); await sleep(20);
+  const rq = st().jobs.find((j) => j.req && j.d.name === 'Marcus Tull');
+  ok(st().jobs.length === nJobs + 1 && rq && rq.status === 'lead' && rq.req.from === dayN(10) && rq.req.to === dayN(17) && rq.req.note === 'Third floor, elevator.' && rq.d.from === mj.d.to && rq.d.to === '9 Elm St, Austin' && rq.d.phone === '512-555-0199' && rq.d.email === mj.d.email && rq.d.items.bedq === 2 && rq.d.items.sofa3 === 1 && rq.d.source === 'Customer app' && !rq.d.moveDate,
+    L('sent: a lead for the company, with the days, the addresses, what’s moving, their phone and email, no day set'));
+  ok(/Third floor, elevator\./.test(rq.d.notes) && rq.items.length === 2 && rq.quote && rq.quote.cf > 0 && rq.log.some((l) => /Move request from the customer app: can move/.test(l.ev)), L('their note in the job notes, the items priced the company’s way, and the activity says where it came from'));
+  ok(/Sent!/.test(sheet()) && /They’ll call or text you at \(512\) 555-0199/.test(sheet()), L('Sent: they’ll be called back'));
+  click('#cust .sheet-head [data-act="cs:close"]'); await sleep(10);
+  ok(/Requested/.test(view()) && view().indexOf(T.reqRange(rq.req)) >= 0 && /will call or text you to set the day/.test(view()) && /Sent to Your Moving Co\./.test(view()) && /Your Moving Co\. calls or texts you/.test(view()) && !view().includes(money0(rq.quote.total)),
+    L('their app: the request, its days, who calls whom next, and no price yet'));
+  click('[data-act="tab"][data-tab="mypay"]'); await sleep(10);
+  ok(/Nothing to pay yet/.test(view()), L('Pay: nothing yet'));
+  click('[data-act="tab"][data-tab="mymove"]'); await sleep(10);
+  await end();
+  // the office: Today asks them to call back; the job says what was asked; making the quote answers it
+  T.render(); await sleep(10);
+  ok(/Move request: Marcus Tull/.test(view()) && view().indexOf('Can move ' + T.reqRange(rq.req)) >= 0, L('the office’s Today: the request, to call back'));
+  T.openJob(rq.id); await sleep(20);
+  const rsh = $('#sheet').textContent.replace(/\s+/g, ' ');
+  ok(/Move request from the customer app/.test(rsh) && rsh.indexOf(T.reqRange(rq.req)) >= 0 && /Third floor, elevator\./.test(rsh) && $('#sheet .reqnote a[href^="tel:"]') && /Build quote/.test(rsh), L('the job: what they asked for, call or text them, then Build quote'));
+  click('#sheet [data-act="sh:requote"]'); await sleep(20);
+  ok(st().draft.editId === rq.id && st().draft.items.bedq === 2 && /They asked in the customer app to move/.test(view()), L('Build quote: their items already in, and the days they asked for'));
+  st().draft.moveDate = dayN(12); st().draft.time = '09:00'; T.ui.qstep = 3; T.save(); T.render(); await sleep(10);
+  click('[data-act="q:save"]'); await sleep(20);
+  ok(rq.req.quotedAt > 0 && !T.reqOpen(rq) && rq.status === 'quoted' && rq.log.some((l) => /Quote made for the customer’s request/.test(l.ev)) && !/Move request: Marcus Tull/.test((T.render(), view())), L('the quote made: the request is answered, off Today'));
+  click('#sheet .sheet-head [data-act="sheet:close"]'); await sleep(10);
+  await preview('Marcus Tull');
+  ok(T.custMoves().some((m) => m.id === rq.id && T.custStage(m) === 'quote'), L('and their app shows the quote, to book'));
   await end();
   // the office sees the tip apart from the bill, and the crew's share
   T.openJob(mj.id); await sleep(20);

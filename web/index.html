@@ -612,6 +612,14 @@ nav.tabs.has-fab button.spacer{visibility:hidden;pointer-events:none}
 .cm-thanks{text-align:center;padding:18px 4px 8px}
 .cm-thanks .big{font:700 34px/1.05 var(--display);margin:0 0 6px}
 .cm-ask{margin:18px 0 0;font-size:16px}
+/* after the move: who did it, and Book another move */
+.cm-by{border-top:3px solid var(--tape)}
+.cm-lbl{display:block;color:var(--muted);font-size:12px;letter-spacing:.3px;text-transform:uppercase;font-weight:var(--w-mid)}
+.cm-co{font:700 24px/1.1 var(--display);margin:2px 0 0;overflow-wrap:anywhere}
+.cm-by .row b.grow{font-variant-numeric:tabular-nums}
+.cm-n{font:500 13px var(--font);color:var(--muted);margin-left:6px}
+#cust .rqrooms{padding:0 12px}
+#cust .rqrooms .item{gap:10px}
 .cm-count{font:700 52px/1 var(--display);margin:12px 0 2px;font-variant-numeric:tabular-nums}
 #cust[hidden]{display:none}
 #cust{position:fixed;inset:0;z-index:46}
@@ -1422,8 +1430,8 @@ setInterval(function(){dayCheck(true)},5*60e3);
 window.__tallyDayCheck=dayCheck;   // the tests
 /* ---------- the customer side (Oct 28): a customer's moves, through the Edge Function (they are none of a company's
    people, so the database's rules give them nothing directly). The app's customer screens read window.tallyCust. ---------- */
-window.tallyCust={on:false,email:'',name:'',phone:'',moves:[],orgs:[],has:false,
-  refresh:function(){return commsPost({action:'cust_list'}).then(function(r){var C=window.tallyCust;if(r&&r.ok){C.moves=r.moves||[];C.name=r.name||C.name;C.phone=r.phone||C.phone}return r})},
+window.tallyCust={on:false,email:'',name:'',phone:'',moves:[],orgs:[],cos:[],has:false,
+  refresh:function(){return commsPost({action:'cust_list'}).then(function(r){var C=window.tallyCust;if(r&&r.ok){C.moves=r.moves||[];C.cos=r.companies||[];C.name=r.name||C.name;C.phone=r.phone||C.phone}return r})},
   act:function(kind,org,id,extra){return commsPost(Object.assign({action:'cust_'+kind,org:org,jobId:id,back:location.origin+location.pathname},extra||{}))},
   saveProfile:function(p){
     var up=sb.auth.updateUser?sb.auth.updateUser({data:{name:p.name,phone:p.phone}}).catch(function(){}):Promise.resolve();
@@ -1436,7 +1444,7 @@ window.tallyCust={on:false,email:'',name:'',phone:'',moves:[],orgs:[],has:false,
 function custStart(list){
   return commsPost({action:'cust_list'}).then(function(r){
     if(!r||!r.ok||!(r.moves||[]).length)return false;
-    var C=window.tallyCust;C.on=true;C.email=me.email;C.name=r.name||'';C.phone=r.phone||'';C.moves=r.moves;C.orgs=(list||[]).filter(function(o){return !o.pending});
+    var C=window.tallyCust;C.on=true;C.email=me.email;C.name=r.name||'';C.phone=r.phone||'';C.moves=r.moves;C.cos=r.companies||[];C.orgs=(list||[]).filter(function(o){return !o.pending});
     window.tallyOrg=null;hideLogin();window.__tallyBooted=true;readyGo();
     if(window.tallyCustGo)window.tallyCustGo();
     return true;
@@ -1533,14 +1541,14 @@ window.tallyMaps={distance:function(from,to){return commsPost({action:'distance'
 window.tallyPay={
   config:function(refresh){return commsPost(refresh?{action:'pay_config',refresh:true}:{action:'pay_config'})},
   connect:function(){return commsPost({action:'pay_connect'})},
-  link:function(id,amount,save,text){return commsPost({action:'pay_link',jobId:id,amount:amount,save:!!save,text:!!text})},
+  link:function(id,amount,save,text,tip){var b={action:'pay_link',jobId:id,amount:amount,save:!!save,text:!!text};if(tip>0)b.tip=tip;return commsPost(b)},
   // token: a card typed into Square's card box (a company on Square), charged by the server; Stripe's card box finishes its own payment
-  intent:function(id,amount,save,token){var b={action:'pay_intent',jobId:id,amount:amount,save:!!save};if(token)b.token=token;return commsPost(b)},
+  intent:function(id,amount,save,token,tip){var b={action:'pay_intent',jobId:id,amount:amount,save:!!save};if(token)b.token=token;if(tip>0)b.tip=tip;return commsPost(b)},
   // the company's own Square account (Setup › Payments, the owner)
   sqConnect:function(){return commsPost({action:'pay_sq_connect'})},
   sqUse:function(use){return commsPost({action:'pay_sq_use',use:use})},
   sqDisconnect:function(){return commsPost({action:'pay_sq_disconnect'})},
-  saved:function(id,vaultId,amount,nonce){return commsPost({action:'pay_saved',jobId:id,vaultId:vaultId,amount:amount,nonce:nonce})},
+  saved:function(id,vaultId,amount,nonce,tip){var b={action:'pay_saved',jobId:id,vaultId:vaultId,amount:amount,nonce:nonce};if(tip>0)b.tip=tip;return commsPost(b)},
   check:function(id,pi){return commsPost({action:'pay_check',jobId:id,pi:pi||''})},
   forget:function(vaultId){return commsPost({action:'pay_forget',vaultId:vaultId})},
   refresh:function(){Object.keys(watchers).forEach(function(k){if(k.indexOf('jobs|')===0||k.indexOf('vault|')===0)bump(k)})}
@@ -1758,7 +1766,7 @@ function defaultSettings(){return {
     {id:'m_tape',name:'Packing tape',unit:'roll',price:5,cost:1.5},{id:'m_paper',name:'Packing paper',unit:'lb',price:3,cost:1},
     {id:'m_wrap',name:'Bubble wrap',unit:'10 ft',price:4,cost:1.5},{id:'m_stretch',name:'Stretch wrap',unit:'roll',price:16,cost:7},
     {id:'m_mbag',name:'Mattress bag',unit:'each',price:14,cost:4}
-  ],costCats:['Dump fee','Fuel','Tolls','Parking','Supplies bought','Other'],comms:{alerts:{assigned:true,moved:true,forms:true,tomorrow:true,short:true},ring:[],appUrl:''},opt:{},truckDay:{start:'07:00',hours:12,jobs:4,gap:60},daysOff:{},
+  ],costCats:['Dump fee','Fuel','Tolls','Parking','Supplies bought','Other'],comms:{alerts:{assigned:true,moved:true,forms:true,tomorrow:true,short:true,custReq:true},ring:[],appUrl:''},opt:{},truckDay:{start:'07:00',hours:12,jobs:4,gap:60},daysOff:{},
   catalog:[
     {id:'sofa3',name:'Sofa (3-seat)',cf:55,cat:'Living room'},{id:'loveseat',name:'Loveseat',cf:38,cat:'Living room'},
     {id:'chair',name:'Armchair',cf:22,cat:'Living room'},{id:'recliner',name:'Recliner',cf:30,cat:'Living room'},
@@ -1843,12 +1851,13 @@ var OPTS=[
   {g:'pay',k:'payVault',t:'Cards on file',h:'Keep a customer’s card to charge later.'},
   {g:'pay',k:'payCash',t:'Cash, checks and Zelle',h:'Record payments taken outside the app. With every other way off, this stays on.'},
   {g:'cust',k:'custBook',t:'Customers book their own quote',h:'In the customer app they accept the quote and book it. It shows in Needs scheduling for dispatch to add the truck and crew.'},
-  {g:'cust',k:'custTips',t:'Tips for the crew',h:'Customers can add a tip when they pay the bill in the customer app. It goes to the movers on the job, split evenly, apart from the bill.'},
+  {g:'cust',k:'custTips',t:'Tips for the crew',h:'When the bill is paid after the move, the customer sees the subtotal, picks a tip (or No tip), then the final total: in the customer app, and on the crew’s or the office’s Collect payment. The tip goes to the movers on the job, split evenly, apart from the bill.'},
   {g:'texts',p:'comms.alerts.assigned',t:'Text crew when they’re put on a job',h:'And when they’re taken off one.'},
   {g:'texts',p:'comms.alerts.moved',t:'Text the crew when a job moves',h:'To a new day or time.'},
   {g:'texts',p:'comms.alerts.tomorrow',t:'Texts the evening before',h:'Everyone gets their jobs for tomorrow, and the office gets who hasn’t confirmed.'},
   {g:'texts',p:'comms.alerts.forms',t:'Unsigned forms alert',h:'Text the office when a finished job is still waiting on a signature.'},
   {g:'texts',p:'comms.alerts.short',t:'Short crew alert',h:'Text the office when a crew lead starts a job with fewer movers than quoted, or someone leaves and it drops below.'},
+  {g:'texts',p:'comms.alerts.custReq',t:'Move requests from customers',h:'Text the office when a customer asks for another move in the customer app, with the days they can move and their phone.'},
   {g:'office',k:'drivers',t:'A driver for every truck',h:'Dispatch picks who drives each truck on a job. A truck with no driver shows as needing scheduling. Off: no drivers to pick.'},
   {g:'office',k:'dispatchPay',t:'Dispatch can take payments',h:'Dispatch can collect payments and send pay links.'},
   {g:'office',k:'rqOffice',def:false,t:'Office approves new quotes from the crew',h:'A crew lead’s new quote waits for the owner or dispatch to approve it, then the customer signs. Off: the customer’s signature is enough.'},
@@ -2346,8 +2355,9 @@ function addPayment(j,amt,method,extra){
   if(!(amt>0)||payLocked(j))return false;
   var p={id:uid(),amt:round2(amt),method:method,date:todayISO(),ts:Date.now()};
   if(extra)Object.assign(p,extra);
+  if(p.tip>0)p.tip=round2(p.tip);else delete p.tip;
   j.payments.push(p);
-  logEv(j,'Payment '+money(amt)+' ('+method+')');
+  logEv(j,'Payment '+money(amt)+(p.tip?' and a '+money(p.tip)+' tip for the crew':'')+' ('+method+')');
   if(j.status==='done'&&balOf(j)<=0)setStatus(j,'paid');
   return true;
 }
@@ -2575,7 +2585,8 @@ function custMoveOf(j,S){
     forms:(custCrewForm(j)?[custCrewForm(j)]:[]).concat((opt('forms',S)?(S.forms||[]).filter(function(f){return f.required}):[]).map(function(f){return {id:f.id,title:String(f.title||''),kind:f.kind==='text'?'text':'pages',text:f.kind==='text'?String(f.text||''):'',pages:f.kind==='text'?[]:(f.pages||[]).slice(),ahead:!!f.ahead,signed:signed(f.id)}})),
     day:{startedAt:j.startedAt||0,eta:j.eta&&j.eta.at?j.eta.at:0,phases:Object.assign({},j.phases||{}),finishedAt:j.finishedAt||0},
     crew:{lead:String(ld).split(' ')[0],n:crew.length},
-    tips:opt('custTips',S),book:opt('custBook',S),review:custReviewUrl(S),reviewed:!!c.reviewAt,bookedBy:c.bookedAt?'customer':''};
+    tips:opt('custTips',S),book:opt('custBook',S),review:custReviewUrl(S),reviewed:!!c.reviewAt,bookedBy:c.bookedAt?'customer':'',
+    req:j.req?{from:String(j.req.from||''),to:String(j.req.to||''),at:num(j.req.at),note:String(j.req.note||''),quoted:!!j.req.quotedAt}:null};
 }
 function custKeyOf(m){return (m.org?m.org+'/':'')+m.id}
 function custMoves(){
@@ -2583,10 +2594,10 @@ function custMoves(){
   var k=custWho(),S=state.settings;if(!k)return [];
   return state.jobs.filter(function(j){return CUST_ST.indexOf(j.status)>=0&&custOwns(j,k)}).map(function(j){return custMoveOf(j,S)});
 }
-function custStage(m){return m.status==='lead'||m.status==='quoted'?'quote':m.status==='booked'?'booked':m.status==='active'?'today':m.status==='done'&&m.bill.due>0?'due':'done'}
+function custStage(m){return m.req&&!m.req.quoted&&(m.status==='lead'||m.status==='quoted')?'request':m.status==='lead'||m.status==='quoted'?'quote':m.status==='booked'?'booked':m.status==='active'?'today':m.status==='done'&&m.bill.due>0?'due':'done'}
 // the move their screens open on: today's, a bill to pay, the next booked one, an open quote, else the latest
 function custSorted(){
-  var rank={today:0,due:1,booked:2,quote:3,done:4};
+  var rank={today:0,due:1,booked:2,quote:3,request:3,done:4};
   return custMoves().sort(function(a,b){
     var ra=rank[custStage(a)],rb=rank[custStage(b)];if(ra!==rb)return ra-rb;
     var x=a.d.moveDate||'9999-99-99',y=b.d.moveDate||'9999-99-99';
@@ -2616,10 +2627,13 @@ function custLinesHtml(m,fin){
   return '<table class="lines">'+rows+(fin?'<tr class="sub"><td>Quote</td><td>'+money(q.total)+'</td></tr><tr class="total"><td>Your bill</td><td>'+money(m.bill.total)+'</td></tr>':'<tr class="total"><td>'+(q.flat?'Price':'Estimate')+'</td><td>'+money(q.total)+'</td></tr>')+'</table>'+
     (q.flat||fin?'':'<p class="hint">Billed by the hour from your crew’s times'+(q.nte?', with an estimated top price of '+money(q.nte):'')+'.</p>');
 }
-var CUST_PILL={quote:['Quote','quoted'],booked:['Booked','booked'],today:['Moving today','active'],due:['Moved · bill due','done'],done:['Done','paid']};
+var CUST_PILL={request:['Requested','lead'],quote:['Quote','quoted'],booked:['Booked','booked'],today:['Moving today','active'],due:['Moved · bill due','done'],done:['Done','paid']};
 function custBtn(m,act,label,pri){return '<button class="btn'+(pri?' primary':'')+'" data-act="'+act+'" data-k="'+esc(custKeyOf(m))+'">'+label+'</button>'}
 function custCardHtml(m){
   var s=custStage(m),pl=CUST_PILL[s],q=m.quote,day=m.d.moveDate;
+  if(s==='request')return '<section class="card cm-card"><div class="cm-top"><span class="pill" data-s="'+pl[1]+'">'+pl[0]+'</span>'+(m.test?'<span class="pill">Test</span>':'')+'</div>'+
+    '<h2 class="cm-when">'+esc(reqRange(m.req))+'</h2><p class="cm-sub">The days you can move. '+esc(m.company||'Your mover')+' will call or text you to set the day.</p>'+custRouteHtml(m)+
+    (m.items.length?'<p class="cm-sub">'+custItemsN(m)+' things moving</p>':'')+'</section>';
   var when=day?'<h2 class="cm-when">'+esc(custLong(day))+'</h2><p class="cm-sub">'+(m.d.time?'Your move crew will arrive at '+esc(fmtTime(m.d.time)):'Arrival time to be set')+((s==='booked'||s==='quote')&&custIn(day)?' · '+custIn(day):'')+'</p>'
     :'<h2 class="cm-when">Day not set yet</h2><p class="cm-sub">Call or text us to pick a day.</p>';
   var price=s==='quote'?'<div class="cm-price"><b>'+money(q.total)+'</b><span>'+(q.flat?'Flat price':'Estimate, billed by the hour'+(q.nte?' · top price about '+money(q.nte):''))+'</span></div>':'';
@@ -2630,6 +2644,14 @@ function custStepHtml(st,title,sub,btn){return '<li class="'+st+'"><span class="
 // what's next, in order: book, sign ahead, the deposit, move day, the bill (and a tip), the review
 function custNextHtml(m){
   var s=custStage(m),A=custAhead(m),due=custDueNow(m),out=[],add=function(st,t,sub,b){out.push(custStepHtml(st,t,sub,b))};
+  if(s==='request'){
+    var co=esc(m.company||'Your mover');
+    add('done','Sent to '+co,m.req.at?'On '+esc(fmtDate(iso(new Date(m.req.at)))):'');
+    add('now',co+' calls or texts you','To set the day and the price with you.');
+    add('later','Book your move crew','Once the day and the price are set, right here.');
+    add('later','Move day','');add('later','Pay the bill',m.tips?'After the move, right here, with a tip for your crew if you like.':'After the move, right here.');
+    return '<section class="card"><h3>What’s next</h3><ol class="cm-steps">'+out.join('')+'</ol></section>';
+  }
   var past=!!m.d.moveDate&&m.d.moveDate<todayISO(),aheadAll=(m.forms||[]).filter(function(f){return f.ahead});
   if(s==='quote')add('now','Book your move crew today',!m.d.moveDate?'Call or text us to pick a day first.':past?'That day has passed. Call or text us to pick a new one.':m.book?'Check the details and book it here.':'Call or text us to book it.',m.book&&m.d.moveDate&&!past?custBtn(m,'cs:book','Book my move crew',1):'');
   else add('done','Booked',m.bookedBy==='customer'?'You booked it here.':'');
@@ -2640,8 +2662,8 @@ function custNextHtml(m){
   if(s==='quote'||s==='booked')add('later','Move day','We’ll show you here when your crew is on the way, and how the move is going.');
   else if(s==='today')add('now','Move day','Happening now.');
   else add('done','Moved',m.d.moveDate?esc(fmtDate(m.d.moveDate)):'');
-  if(s==='due')add('now','Pay your bill: '+money(m.bill.due),custTipOk(m)?'And tip your crew if you like.':'',custBtn(m,'cs:pay','Pay '+money(m.bill.due),1));
-  else if(s==='done')add('done','Paid',custTipOk(m)?(custTipped(m)?'Thank you, and thank you for the tip.':'You can still tip your crew.'):'Thank you!',custTipOk(m)&&!custTipped(m)?custBtn(m,'cs:pay','Tip your crew'):'');
+  if(s==='due')add('now','Pay your bill: '+money(m.bill.due),custTipOk(m)?'You can add a tip for your crew before the final total.':'',custBtn(m,'cs:pay','Pay my bill',1));
+  else if(s==='done')add('done','Paid',custTipped(m)?'Thank you, and thank you for the tip.':'Thank you!');
   else add('later','Pay the bill',m.tips?'After the move, right here, with a tip for your crew if you like.':'After the move, right here.');
   if(m.review)add(s==='done'?(m.reviewed?'done':'now'):'later','Tell others about '+esc(m.company||'us'),s==='done'?'':'After the move.',s==='done'?'<a class="btn" href="'+esc(m.review)+'" target="_blank" rel="noopener" data-act="cs:revlink" data-k="'+esc(custKeyOf(m))+'">Leave a review</a>':'');
   return '<section class="card"><h3>'+(s==='done'?'All done':'What’s next')+'</h3><ol class="cm-steps">'+out.join('')+'</ol></section>';
@@ -2660,6 +2682,7 @@ function custDayHtml(m){
 }
 function custDetailsHtml(m){
   var s=custStage(m),fin=s==='due'||s==='done',items=m.items.map(function(i){return esc(i.name)+(i.qty>1?' × '+i.qty:'')}).join(', ');
+  if(s==='request')return '<details class="card cm-det"><summary><span>Your request</span><b>'+custItemsN(m)+' items</b></summary>'+(items?'<h4>What’s moving</h4><p class="hint">'+items+'</p>':'')+(m.req.note?'<h4>Your note</h4><p class="hint">'+esc(m.req.note)+'</p>':'')+'</details>';
   return '<details class="card cm-det"><summary><span>'+(fin?'Your bill':'Your quote')+'</span><b>'+money(fin?m.bill.total:m.quote.total)+'</b></summary>'+custLinesHtml(m,fin)+(items?'<h4>What’s moving</h4><p class="hint">'+items+'</p>':'')+'</details>';
 }
 function custHelpHtml(m){
@@ -2677,7 +2700,7 @@ function renderMyMove(){
   var s=custStage(m),noEmail=!custLive()&&!emailKey(m.d.email);
   v.innerHTML=(noEmail?'<div class="note">This customer has no email on their move yet, so they can’t sign in to see this. Put it on the quote or the job.</div>':'')+
     '<div class="hero-day"><h1>'+esc(custHi(m.d.name))+'</h1><p class="sub">Your move with '+esc(m.company||'your moving company')+'</p></div>'+
-    custCardHtml(m)+(s==='today'?custDayHtml(m):'')+custNextHtml(m)+custDetailsHtml(m)+custHelpHtml(m)+
+    custCardHtml(m)+(s==='today'?custDayHtml(m):'')+custNextHtml(m)+(s==='done'||s==='due'?custByHtml(m)+custDetailsHtml(m):custDetailsHtml(m)+custHelpHtml(m))+
     (L.length>1?'<h3 class="cm-h3">Your moves</h3>'+custMovesHtml(L,m):'');
   custAutoThanks(m);
 }
@@ -2685,9 +2708,9 @@ function renderMyPay(){
   var v=$('#view'),m=custCur();
   if(!m){v.innerHTML='<div class="hero-day"><h1>Pay</h1></div><section class="card empty"><h3>Nothing to pay</h3><p>Your moves and bills show up here.</p></section>';return}
   var s=custStage(m),due=custDueNow(m),before=s==='quote'||s==='booked';
+  if(s==='request'){v.innerHTML='<div class="hero-day"><h1>Pay</h1><p class="sub">'+esc(m.company||'')+'</p></div><section class="card"><p class="hint" style="margin:0">Nothing to pay yet. '+esc(m.company||'Your mover')+' sets the day and the price with you first.</p></section>'+custDetailsHtml(m);return}
   var tiles=kpiRow([[before?m.quote.total:m.bill.total,before?(m.quote.flat?'Price':'Estimate'):'Bill',''],[m.bill.paid,'Paid',m.bill.paid>0?'paid':''],[due.amt>0?due.amt:m.bill.due,due.kind==='deposit'?'Deposit due':before?'After the move':'Due now',due.amt>0?'due':'']]);
-  var act=due.amt>0?custBtn(m,'cs:pay','Pay '+money(due.amt),1).replace('class="btn primary"','class="btn primary bigbtn"')+'<p class="hint cm-center">Google Pay, Apple Pay or a card'+(due.kind==='bill'&&custTipOk(m)?', with a tip for your crew if you like':'')+'.</p>'
-    :custTipOk(m)?custBtn(m,'cs:pay','Tip your crew',1).replace('class="btn primary"','class="btn primary bigbtn"')+'<p class="hint cm-center">'+esc(custTipWho(m))+'</p>'
+  var act=due.amt>0?custBtn(m,'cs:pay',due.kind==='bill'?'Pay my bill':'Pay '+money(due.amt),1).replace('class="btn primary"','class="btn primary bigbtn"')+'<p class="hint cm-center">Google Pay, Apple Pay or a card'+(due.kind==='bill'&&custTipOk(m)?'. You can add a tip for your crew before the final total':'')+'.</p>'
     :'<p class="hint" style="margin:0">'+(s==='quote'?'Nothing to pay yet. Book your move first.':s==='booked'?(m.quote.deposit>0?'Your deposit is paid. ':'')+'The bill is due after the move.':s==='today'?'Your bill is ready when the move is done.':'Nothing to pay. Thank you!')+'</p>';
   var rows=(m.pays||[]).slice().sort(function(a,b){return (b.ts||0)-(a.ts||0)}).map(function(p){return '<tr><td>'+esc(p.method||'Payment')+'<br><small>'+esc(p.date?fmtDate(p.date):'')+'</small></td><td>'+(p.amt?money(p.amt):'')+(p.tip?(p.amt?'<br>':'')+'<small>'+money(p.tip)+' tip</small>':'')+'</td></tr>'}).join('');
   v.innerHTML='<div class="hero-day"><h1>Pay</h1><p class="sub">'+esc(m.company||'')+(m.d.moveDate?' · '+esc(fmtDate(m.d.moveDate)):'')+'</p></div>'+tiles+'<section class="card">'+act+'</section>'+
@@ -2718,12 +2741,12 @@ function csOpen(kind,m,extra){clearInterval(csTimer);csTimer=null;ui.cs=Object.a
 function csClose(){clearInterval(csTimer);csTimer=null;ui.cs=null;renderCs()}
 function csFail(t){var e=$('#csErr');if(e){e.textContent=t;e.style.color='var(--bad)'}}
 function csTipAmt(m,c){if(!custTipOk(m)||!c)return 0;if(c.tip==='other')return Math.max(0,round2(num(String(c.other||'').replace(/[^0-9.]/g,''))));var p=num(c.tip);return p>0?Math.round(m.bill.total*p)/100:0}
-function csTitle(m,c){var due=custDueNow(m);return {book:'Book your move crew',sign:m.status==='active'||m.d.moveDate===todayISO()?'Sign before loading':'Sign before move day',pay:due.amt>0?(due.kind==='deposit'?'Pay your deposit':'Pay your bill'):'Tip your crew',thanks:'Your move is done'}[c.kind]||''}
+function csTitle(m,c){var due=custDueNow(m);return {book:'Book your move crew',sign:m.status==='active'||m.d.moveDate===todayISO()?'Sign before loading':'Sign before move day',pay:due.amt>0?(due.kind==='deposit'?'Pay your deposit':'Pay your bill'):'Tip your crew',thanks:'Your move is done',again:'Book another move'}[c.kind]||''}
 function renderCs(){
   var el=$('#cust');if(!el)return;
   var c=ui.cs,m=c&&isCust()?custFind(c.key):null;
   if(!c||!m){if(c){clearInterval(csTimer);csTimer=null;ui.cs=null}el.hidden=true;el.innerHTML='';syncLock();return}
-  var T=csTitle(m,c),body=c.kind==='book'?csBookHtml(m):c.kind==='sign'?csSignHtml(m):c.kind==='pay'?csPayHtml(m,c):csThanksHtml(m,c);
+  var T=csTitle(m,c),body=c.kind==='book'?csBookHtml(m):c.kind==='sign'?csSignHtml(m):c.kind==='pay'?csPayHtml(m,c):c.kind==='again'?csAgainHtml(m,c):csThanksHtml(m,c);
   var prev=$('.sheet-body',el),keep=prev&&c.kind!=='sign'?prev.scrollTop:0;
   el.innerHTML='<div class="scrim" data-act="cs:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="'+esc(T)+'"><div class="sheet-head"><div><h2>'+esc(T)+'</h2><small>'+esc(m.company||'')+'</small></div><button class="btn sm" data-act="cs:close">Close</button></div><div class="sheet-body">'+body+'</div></div>';
   el.hidden=false;syncLock();
@@ -2751,16 +2774,18 @@ function csSignHtml(m){
     '<div class="f"><span>Sign here with your finger</span></div><canvas id="sigPad" class="sigpad" aria-label="Signature pad"></canvas>'+
     '<div class="row"><button class="btn" data-act="cs:clearsig">Clear</button><button class="btn primary grow" data-act="cs:signgo" data-k="'+esc(custKeyOf(m))+'" data-fid="'+esc(f.id)+'">Sign</button></div><p class="hint" id="csErr" role="alert"></p>';
 }
-var CS_TIPS=[[0,'No tip'],[10,'10%'],[15,'15%'],[20,'20%'],['other','Other']];
+// the bill's tip is asked before the final total (Richie, Nov 7): subtotal, the tip, the final total
+function csTipAsk(m){return custTipOk(m)&&custDueNow(m).kind==='bill'}
+function csPayWord(m,c,total){return c.busy?'Opening…':csTipAsk(m)&&c.tip==null?'Pick a tip first':total>0?'Pay '+money(total):'Nothing to pay'}
 function csPayHtml(m,c){
-  var due=custDueNow(m),tipOk=custTipOk(m),tip=csTipAmt(m,c),total=round2(due.amt+tip);
-  var head=due.amt>0?'<div class="cm-total cm-first"><span>'+(due.kind==='deposit'?'Deposit for '+esc(fmtDate(m.d.moveDate)):'Your bill'+(m.bill.paid>0?', after '+money(m.bill.paid)+' paid':''))+'</span><b>'+money(due.amt)+'</b></div>'+(due.kind==='deposit'?'<p class="hint" style="margin:0 0 8px">It holds your date. The rest is due after the move.</p>':''):'';
-  var tips=tipOk?'<h3 class="cm-h3">Tip your crew</h3><p class="hint" style="margin:0 0 6px">'+esc(custTipWho(m))+'</p><div class="cm-tips">'+CS_TIPS.map(function(o){
+  var due=custDueNow(m),tipOk=csTipAsk(m),tip=csTipAmt(m,c),total=round2(due.amt+tip);
+  var head=due.amt>0?'<div class="cm-total cm-first"><span>'+(due.kind==='deposit'?'Deposit for '+esc(fmtDate(m.d.moveDate)):'Subtotal'+(m.bill.paid>0?' <small>(your bill, after '+money(m.bill.paid)+' paid)</small>':' <small>(your bill)</small>'))+'</span><b>'+money(due.amt)+'</b></div>'+(due.kind==='deposit'?'<p class="hint" style="margin:0 0 8px">It holds your date. The rest is due after the move.</p>':''):'';
+  var tips=tipOk?'<h3 class="cm-h3">Add a tip for your crew</h3><p class="hint" style="margin:0 0 6px">'+esc(custTipWho(m)+(m.bill.paid>0?' The percentages are of your whole '+money(m.bill.total)+' bill.':''))+'</p><div class="cm-tips">'+TIP_OPTS.map(function(o){
       var on=o[0]==='other'?c.tip==='other':c.tip!=null&&c.tip!=='other'&&num(c.tip)===o[0],amt=o[0]>0?money(Math.round(m.bill.total*o[0])/100):'';
       return '<button class="chip'+(on?' on':'')+'" data-act="cs:tip" data-t="'+o[0]+'" aria-pressed="'+on+'">'+o[1]+(amt?'<small>'+amt+'</small>':'')+'</button>'}).join('')+'</div>'+
     (c.tip==='other'?fld('Tip ($)','<input id="csTipOther" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" value="'+esc(c.other||'')+'">'):''):'';
-  return head+tips+'<div class="cm-total"><span>'+(tip>0?'Total with your tip':'Total')+'</span><b id="csTotal">'+money(total)+'</b></div>'+
-    '<button class="btn primary bigbtn" id="csPayBtn" data-act="cs:paygo" data-k="'+esc(custKeyOf(m))+'"'+(total>0&&!c.busy?'':' disabled')+'>'+(c.busy?'Opening…':total>0?'Pay '+money(total):'Pick a tip')+'</button>'+
+  return head+tips+'<div class="cm-total"><span>'+(tipOk?'Final total':'Total')+'</span><b id="csTotal">'+money(total)+'</b></div>'+
+    '<button class="btn primary bigbtn" id="csPayBtn" data-act="cs:paygo" data-k="'+esc(custKeyOf(m))+'"'+(total>0&&!c.busy&&!(tipOk&&c.tip==null)?'':' disabled')+'>'+csPayWord(m,c,total)+'</button>'+
     '<p class="hint cm-center">Next: Google Pay, Apple Pay or a card, on a secure payment page. '+esc(m.company||'Your mover')+' never sees your card number.</p>'+
     (custLive()?'':'<div class="note" style="margin-top:10px">Sample: nothing is charged here. In the customer’s app, Pay opens the company’s secure payment page (Stripe’s, or Square’s for a company on Square), with Google Pay on Android phones and Apple Pay on iPhones.</div>')+
     '<p class="hint" id="csErr" role="alert"></p>';
@@ -2771,6 +2796,117 @@ function csThanksHtml(m,c){
     (url?'<p class="cm-ask">Would you tell others how it went?</p>'+(c.n>0?'<p class="cm-count" id="csCount" aria-live="polite">'+c.n+'</p><p class="hint">Taking you to leave a review…</p>':'<p class="hint">'+(custLive()?'Opening the review page…':'In the customer’s app, the review page opens now.')+'</p>')+
       '<a class="btn primary bigbtn" href="'+esc(url)+'" target="_blank" rel="noopener" data-act="cs:revlink" data-k="'+esc(custKeyOf(m))+'">Leave a review</a><button class="btn ghost bigbtn" data-act="cs:norev" data-k="'+esc(custKeyOf(m))+'">Not now</button>'
      :'<button class="btn primary bigbtn" data-act="cs:close">Done</button>')+'</div>';
+}
+/* ---------- the customer's next move (Richie, Nov 7: "the customer should see who their moving service was done by
+   and should have a way to book another move . Then they can enter their items and summit to the company . The date
+   can just be the range of days they can move . Then the company can contact them back to confirm the booking").
+   After the move, a card says which company did it, with their crew, phone and Book another move. That opens a
+   request: the addresses, the days they can move (a range), what's moving (the company's own item list, room by room),
+   a note, and how to reach them. It goes to the company as a lead (j.req: {at, from, to, note}) the office calls back:
+   it makes the quote (Edit quote, the items already in), sets the day and books it. ---------- */
+// the office's job sheet: what they asked for, and the next step (call them, then make the quote)
+function reqSheetTop(j){
+  if(!reqOpen(j)||!canEditJobs())return '';
+  var r=j.req,first=String(j.d.name||'the customer').split(' ')[0],dig=String(j.d.phone||'').replace(/[^0-9+]/g,'');
+  return '<div class="note reqnote"><b>Move request from the customer app</b> <small>'+esc(r.at?madeWhen(r.at).replace(/^Made/,'sent'):'')+'</small><br>'+
+    'Can move: <b>'+esc(reqRange(r))+'</b>'+(r.note?'<br>“'+esc(r.note)+'”':'')+
+    '<br><small>Call or text '+esc(first)+' to set the day, then '+(j.status==='lead'?'Build quote':'Edit quote')+' (what’s moving is already in it) and book it.</small>'+
+    (dig?'<div class="row" style="margin-top:8px"><a class="btn sm" href="tel:'+esc(dig)+'">Call</a><a class="btn sm" href="sms:'+esc(dig)+'">Text</a></div>':'')+'</div>';
+}
+// a request from the customer app the office hasn't made the quote for yet
+function reqOpen(j){return !!(j&&j.req&&!j.req.quotedAt&&(j.status==='lead'||j.status==='quoted'))}
+function reqRange(r){if(!r||!r.from)return 'Days not set';return r.to&&r.to!==r.from?fmtDate(r.from)+' – '+fmtDate(r.to):fmtDate(r.from)}
+function custItemsN(m){return (m.items||[]).reduce(function(a,i){return a+(num(i.qty)||0)},0)}
+// the company's item list for a request: the hosted app has it from the server (names and rooms only)
+function custCatalog(m){
+  if(custLive()){var co=(window.tallyCust.cos||[]).filter(function(c){return c&&c.org===m.org})[0];return co&&Array.isArray(co.catalog)?co.catalog:[]}
+  return (state.settings.catalog||[]).map(function(i){return {id:i.id,name:i.name,cat:i.cat}});
+}
+function custCats(cat){var out=CATS.filter(function(c){return cat.some(function(i){return i.cat===c})});cat.forEach(function(i){if(out.indexOf(i.cat)<0)out.push(i.cat)});return out}
+function custCanAgain(m){return custCatalog(m).length>0}
+// after the move: who did it, how to reach them, and Book another move
+function custByHtml(m){
+  var ph=String(m.phone||''),dig=ph.replace(/[^0-9+]/g,''),co=m.company||'your moving company',n=m.crew.n,ld=m.crew.lead;
+  var crew=ld?(n>1?ld+'’s crew of '+n:ld):n?'A crew of '+n:'';
+  return '<section class="card cm-by"><small class="cm-lbl">Your move was done by</small><h2 class="cm-co">'+esc(co)+'</h2>'+
+    ((crew||m.d.moveDate)?'<p class="cm-sub">'+esc([crew,m.d.moveDate?fmtDate(m.d.moveDate):''].filter(Boolean).join(' · '))+'</p>':'')+
+    (ph?'<div class="row" style="margin-top:8px"><b class="grow">'+esc(fmtPhone(ph))+'</b>'+(dig?'<a class="btn sm" href="tel:'+esc(dig)+'">Call</a><a class="btn sm" href="sms:'+esc(dig)+'">Text</a>':'')+'</div>':'')+
+    (custCanAgain(m)?'<button class="btn primary bigbtn" data-act="cs:again" data-k="'+esc(custKeyOf(m))+'">Book another move</button><p class="hint cm-center">Tell '+esc(co)+' what’s moving and the days that work. They call you back to set it up.</p>':'')+'</section>';
+}
+function csAgainStart(m){
+  var me=custSelf();
+  csOpen('again',m,{f:{from:m.d.to||'',to:'',d1:'',d2:'',items:{},note:'',name:me.name||m.d.name||'',phone:me.phone||m.d.phone||''},sent:false});
+}
+function csAgainN(f){return Object.keys(f.items).reduce(function(a,k){return a+(f.items[k]||0)},0)}
+function csAgainHtml(m,c){
+  var f=c.f,cat=custCatalog(m),n=csAgainN(f),co=esc(m.company||'your mover'),t=todayISO();
+  if(c.sent)return '<div class="cm-thanks"><p class="big">Sent!</p><p class="hint">'+co+' has your move request: '+esc(reqRange({from:f.d1,to:f.d2}))+', '+n+' item'+(n===1?'':'s')+'. They’ll call or text you at '+esc(fmtPhone(f.phone))+' to set the day and the price.</p><button class="btn primary bigbtn" data-act="cs:close">Done</button></div>';
+  var rooms=custCats(cat).map(function(cn,gi){
+    var its=cat.filter(function(i){return i.cat===cn}),rn=its.reduce(function(a,i){return a+(f.items[i.id]||0)},0),k='csr:'+gi;
+    return '<details class="grp" data-k="'+k+'"'+(ui.open[k]?' open':'')+'><summary><span>'+esc(cn)+' <small class="rqn" id="csrn_'+gi+'">'+(rn?rn+' item'+(rn===1?'':'s'):'')+'</small></span></summary>'+
+      its.map(function(it){var v=f.items[it.id]||0;
+        return '<div class="item" data-name="'+esc(String(it.name).toLowerCase())+'" data-g="'+gi+'"><div><b>'+esc(it.name)+'</b></div><div class="stepper"><button class="btn sm" data-act="cs:itdec" data-id="'+esc(it.id)+'" aria-label="One less '+esc(it.name)+'">−</button><output id="csi_'+esc(it.id)+'">'+v+'</output><button class="btn sm" data-act="cs:itinc" data-id="'+esc(it.id)+'" aria-label="One more '+esc(it.name)+'">+</button></div></div>'}).join('')+'</details>';
+  }).join('');
+  return '<p class="hint" style="margin:0 0 4px">Tell '+co+' about your next move. They’ll call or text you to set the day and the price.</p>'+
+    '<h3 class="cm-h3">Where</h3><div class="grid2 stack">'+fld('Pickup address','<input id="csaFrom" autocomplete="street-address" value="'+esc(f.from)+'">','span2')+fld('Drop-off address','<input id="csaTo" value="'+esc(f.to)+'">','span2')+'</div>'+
+    '<h3 class="cm-h3">When</h3><p class="hint" style="margin:0 0 6px">The days you can move: any day from the first to the last works for you.</p><div class="grid2">'+
+      fld('First day','<input id="csaD1" type="date" min="'+t+'" value="'+esc(f.d1)+'">')+fld('Last day','<input id="csaD2" type="date" min="'+esc(f.d1||t)+'" value="'+esc(f.d2)+'">')+'</div>'+
+    '<h3 class="cm-h3">What’s moving <small id="csaN" class="cm-n">'+(n?n+' item'+(n===1?'':'s'):'')+'</small></h3><p class="hint" style="margin:0 0 6px">Go room by room and tap + for each thing that’s moving.</p>'+
+    '<label class="f"><span>Find an item</span><input id="csaSearch" type="search" placeholder="Sofa, bed, boxes" autocomplete="off"></label><section class="card rqrooms" style="margin-top:8px">'+rooms+'</section>'+
+    fld('Anything else they should know? (optional)','<textarea id="csaNote" maxlength="600" placeholder="Stairs or an elevator, a piano, things to pack…">'+esc(f.note)+'</textarea>')+
+    '<h3 class="cm-h3">How they reach you</h3><div class="grid2 stack">'+fld('Name','<input id="csaName" autocomplete="name" value="'+esc(f.name)+'">','span2')+fld('Phone','<input id="csaPhone" type="tel" inputmode="tel" autocomplete="tel" value="'+esc(f.phone)+'">','span2')+'</div>'+
+    '<button class="btn primary bigbtn" data-act="cs:againgo" data-k="'+esc(custKeyOf(m))+'"'+(c.busy?' disabled':'')+'>'+(c.busy?'Sending…':'Send to '+co)+'</button><p class="hint" id="csErr" role="alert"></p>';
+}
+// + or − on an item: the counts change where they are (the sheet isn't drawn again, so nothing typed is lost)
+function csAgainStep(m,id,d){
+  var c=ui.cs;if(!c||c.kind!=='again'||c.sent)return;var f=c.f,cat=custCatalog(m),it=cat.filter(function(i){return i.id===id})[0];if(!it)return;
+  var v=Math.max(0,Math.min(99,(f.items[id]||0)+d));if(v)f.items[id]=v;else delete f.items[id];
+  var o=$('#csi_'+id);if(o)o.textContent=v;
+  var gi=custCats(cat).indexOf(it.cat),rn=cat.filter(function(i){return i.cat===it.cat}).reduce(function(a,i){return a+(f.items[i.id]||0)},0),g=$('#csrn_'+gi);if(g)g.textContent=rn?rn+' item'+(rn===1?'':'s'):'';
+  var n=csAgainN(f),t=$('#csaN');if(t)t.textContent=n?n+' item'+(n===1?'':'s'):'';
+}
+function csAgainFilter(txt){
+  txt=String(txt||'').trim().toLowerCase();
+  $$('#cust .rqrooms .grp').forEach(function(g){
+    var any=false;$$('.item',g).forEach(function(it){var hit=!txt||it.dataset.name.indexOf(txt)>=0;it.hidden=!hit;if(hit)any=true});
+    g.hidden=txt?!any:false;if(txt&&any)g.open=true;
+  });
+}
+// what the request says, checked the way the server checks it
+function csAgainWhy(f){
+  var t=todayISO();
+  if(!String(f.from).trim())return 'Put in the pickup address.';
+  if(!String(f.to).trim())return 'Put in the drop-off address.';
+  if(!f.d1)return 'Pick the first day you can move.';
+  if(f.d1<t)return 'The first day can’t be in the past.';
+  if(f.d2&&f.d2<f.d1)return 'The last day comes after the first.';
+  if(f.d2&&Math.round((parseISO(f.d2)-parseISO(f.d1))/864e5)>90)return 'Pick days within three months of each other.';
+  if(f.d1>addDays(t,365))return 'Pick days within the next year.';
+  if(!csAgainN(f))return 'Tap + on at least one thing that’s moving.';
+  if(!String(f.name).trim())return 'Put in your name.';
+  if(String(f.phone).replace(/\D/g,'').length<10)return 'Put in a phone number they can reach you at.';
+  return '';
+}
+function csAgainGo(m){
+  var c=ui.cs;if(!c||c.kind!=='again'||c.busy||c.sent)return;var f=c.f;
+  f.d2=f.d2||f.d1;
+  var why=csAgainWhy(f);if(why)return csFail(why);
+  var body={from:String(f.from).trim(),to:String(f.to).trim(),d1:f.d1,d2:f.d2,items:clone(f.items),note:String(f.note||'').trim().slice(0,600),name:String(f.name).trim(),phone:String(f.phone).trim()};
+  if(custLive()){
+    c.busy=true;renderCs();
+    custAct('request',m,body).then(function(r){
+      c.busy=false;
+      if(!r||!r.ok){renderCs();csFail((r&&r.message)||'Could not send it. Try again.');return}
+      c.sent=true;window.tallyCust.refresh().then(function(){if(r.jobId)ui.csMove=(m.org?m.org+'/':'')+r.jobId;render();renderCs()});
+    });
+    return;
+  }
+  var S=state.settings,j=newJob(Object.assign(blankDraft(),{name:body.name,phone:body.phone,email:m.d.email||'',source:'Customer app',time:'',from:body.from,to:body.to,items:clone(body.items),
+    notes:body.note?'From the customer: '+body.note:''}),S,'lead');
+  j.req={at:Date.now(),by:'customer',from:body.d1,to:body.d2,note:body.note};
+  logEv(j,'Move request from the customer app: can move '+reqRange(j.req));
+  state.jobs.push(j);save();
+  ui.csMove=j.id;c.sent=true;render();renderCs();
 }
 // the count down to the review page, once per move
 function csCount(){
@@ -2856,6 +2992,7 @@ function custPaidHere(j,amt,tip,method){
 function csPayGo(m,c){
   var due=custDueNow(m),tip=csTipAmt(m,c),total=round2(due.amt+tip),key=custKeyOf(m);
   if(!(total>0)||c.busy)return;
+  if(csTipAsk(m)&&c.tip==null)return csFail('Pick a tip first (or No tip).');
   if(c.tip==='other'&&tip>Math.max(500,m.bill.total))return csFail('That tip looks too big. Check the amount.');
   if(custLive()){
     c.busy=true;renderCs();
@@ -2939,6 +3076,9 @@ document.addEventListener('click',function(e){
     case 'cs:norev':if(m)custReviewed(m,'not now');csClose();break;
     case 'cs:revlink':if(m)custReviewed(m,'went');clearInterval(csTimer);csTimer=null;setTimeout(function(){if(ui.cs&&ui.cs.kind==='thanks')csClose();else render()},300);break;   // the link opens the page itself
     case 'cs:prof':csProfSave();break;
+    case 'cs:again':if(m)csAgainStart(m);break;
+    case 'cs:itinc':case 'cs:itdec':if(m)csAgainStep(m,t.dataset.id,a==='cs:itinc'?1:-1);break;
+    case 'cs:againgo':if(m)csAgainGo(m);break;
     case 'cs:install':{var ip=window.__tallyInstall;if(!ip)break;window.__tallyInstall=null;try{ip.prompt();(ip.userChoice||Promise.resolve()).then(function(){renderTab()},function(){renderTab()})}catch(x){renderTab()}break}
     case 'cs:signout':if(window.tallySignOut)window.tallySignOut();break;
   }
@@ -2953,17 +3093,59 @@ document.addEventListener('click',function(e){
   var j=byId(t.dataset.id);if(!j||!window.tallyComms||!window.tallyComms.custInvite)return;
   t.disabled=true;window.tallyComms.custInvite(j.id,custSite()).then(function(r){t.disabled=false;toast((r&&r.message)||'The text did not go out.');if(ui.jobId===j.id&&typeof commsLoadLog==='function')commsLoadLog(j.id)});
 });
+var CSA_FIELDS={csaFrom:'from',csaTo:'to',csaD1:'d1',csaD2:'d2',csaNote:'note',csaName:'name',csaPhone:'phone'};
+document.addEventListener('input',function(e){
+  var t=e.target;if(!t||!ui.cs||ui.cs.kind!=='again')return;
+  if(t.id==='csaSearch'){csAgainFilter(t.value);return}
+  var k=CSA_FIELDS[t.id];if(!k)return;ui.cs.f[k]=t.value;
+  if(k==='d1'){var d2=$('#csaD2');if(d2){d2.min=t.value||todayISO();if(ui.cs.f.d2&&t.value&&ui.cs.f.d2<t.value){ui.cs.f.d2=t.value;d2.value=t.value}}}
+});
 document.addEventListener('input',function(e){
   var t=e.target;if(!t||t.id!=='csTipOther'||!ui.cs)return;
   ui.cs.other=t.value;var m=custFind(ui.cs.key);if(!m)return;
   var tot=round2(custDueNow(m).amt+csTipAmt(m,ui.cs)),b=$('#csPayBtn'),o=$('#csTotal');
-  if(o)o.textContent=money(tot);if(b){b.disabled=!(tot>0);b.textContent=tot>0?'Pay '+money(tot):'Pick a tip'}
+  if(o)o.textContent=money(tot);if(b){b.disabled=!(tot>0)||(csTipAsk(m)&&ui.cs.tip==null);b.textContent=csPayWord(m,ui.cs,tot)}
 });
 // Add to home screen: Chrome offers it once the page qualifies; the Profile tab's button asks for it
 window.addEventListener('beforeinstallprompt',function(e){if(!window.TALLY_SUPABASE)return;try{e.preventDefault()}catch(x){}window.__tallyInstall=e;if(isCust()&&ui.tab==='myprofile')renderTab()});
 var SAMPLE_AGREE='I have checked my quote: what is moving, the addresses, the day and the arrival time.\n\nI understand the bill follows the crew’s time (or the flat price on my quote), plus any charges I agree to on the day, and that my deposit holds my date.\n\nSomeone will be there to let the crew in and to sign at the end of the move.\n\nI will tell the company before move day about anything fragile, valuable or hard to move.';
 // the customer's tips on a job, kept apart from the bill: the crew's, split evenly
 function tipsOf(j){return round2((j.payments||[]).reduce(function(a,p){return a+(num(p.tip)>0&&(!p.stripe||payCounts(p))?num(p.tip):0)},0))}
+/* The tip comes before the final total, wherever the bill is paid (Richie, Nov 7: "the tip should come before the final
+   bill . give a sub total then ask for a tip then give the final total", and everywhere the bill is paid): the customer
+   app's Pay, and the crew's or the office's Collect payment, where the customer picks on their phone. One payment: the
+   bill's part and the tip, which is the crew's, kept apart from the bill. */
+var TIP_OPTS=[[0,'No tip'],[10,'10%'],[15,'15%'],[20,'20%'],['other','Other']];
+function tipWho(n,lead){return n>1?'It goes to the '+n+' movers on the move'+(lead?' ('+lead+'’s crew)':'')+', split evenly.':lead?'It goes to '+lead+', who did the move.':'It goes to the crew.'}
+// a tip is asked for: the move is done (the bill is final), there's a crew to tip, tips are on, and no tip yet
+function tipAskJ(j){return opt('custTips')&&(j.status==='done'||j.status==='paid')&&((j.assign&&j.assign.crew)||[]).length>0&&!(tipsOf(j)>0)}
+function flowTipAsk(j){var f=ui.flow;return !!f&&!f.tipDone&&tipAskJ(j)}
+function flowTipAmt(j){
+  var f=ui.flow;if(!flowTipAsk(j)||f.tip==null)return 0;
+  if(f.tip==='other')return Math.max(0,round2(num(String(f.tipOther||'').replace(/[^0-9.]/g,''))));
+  var p=num(f.tip);return p>0?Math.round(totalOf(j)*p)/100:0;
+}
+function flowTipPicked(j){return !flowTipAsk(j)||ui.flow.tip!=null}
+// the subtotal, the tip question and the final total (subtotal + tip), between the amount and the ways to pay
+function flowTipHtml(j,amt){
+  if(!flowTipAsk(j))return '';
+  var f=ui.flow,bill=totalOf(j),crew=j.assign.crew||[];
+  var chips=TIP_OPTS.map(function(o){var on=o[0]==='other'?f.tip==='other':f.tip!=null&&f.tip!=='other'&&num(f.tip)===o[0],a=o[0]>0?money(Math.round(bill*o[0])/100):'';
+    return '<button class="chip'+(on?' on':'')+'" data-act="flow:tip" data-t="'+o[0]+'" aria-pressed="'+on+'">'+o[1]+(a?'<small>'+a+'</small>':'')+'</button>'}).join('');
+  // the percentages are of the whole bill, not of what's left after a deposit (the customer app's are too)
+  var whole=paidOf(j)>0?' The percentages are of the whole '+money(bill)+' bill.':'';
+  return '<h3 class="cm-h3">Add a tip for the crew</h3><p class="hint" style="margin:0 0 6px">'+esc(tipWho(crew.length,String(leadOf(j)||'').split(' ')[0])+whole)+' Hand the phone to '+esc(String(j.d.name||'the customer').split(' ')[0])+' to pick.</p><div class="cm-tips">'+chips+'</div>'+
+    '<div id="flowTipOtherBox"'+(f.tip==='other'?'':' hidden')+'>'+fld('Tip ($)','<input id="flowTipOther" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" value="'+esc(f.tipOther||'')+'">')+'</div>'+
+    '<div class="cm-total"><span>Final total</span><b id="flowTotal">'+money(round2(amt+flowTipAmt(j)))+'</b></div>';
+}
+// what the pay button says once a tip is asked: the final total in its words ({t}), after the tip is picked
+function flowPayLabel(j,tmpl,amt){if(!flowTipPicked(j))return 'Pick a tip first';return tmpl.replace('{t}',money(round2(amt+flowTipAmt(j))))}
+// the final total and the buttons, as the subtotal or the tip is typed
+function flowTotUpd(){
+  var f=ui.flow,j=f&&byId(f.jobId);if(!j||!flowTipAsk(j))return;
+  var amt=flowAmt(),o=$('#flowTotal');if(o)o.textContent=money(round2(amt+flowTipAmt(j)));
+  $$('#flow [data-tipword]').forEach(function(b){if(!pay.busy){b.textContent=flowPayLabel(j,b.dataset.tipword,amt);b.disabled=!flowTipPicked(j)}});
+}
 function tipLine(j){var t=tipsOf(j);if(!(t>0))return '';var n=((j.assign&&j.assign.crew)||[]).length;return '<p class="hint money-paid" style="margin:6px 0 0">Tip from the customer: '+money(t)+(n>1?', '+money(Math.floor(t*100/n)/100)+' each':'')+'</p>'}
 /* ---------- trucks and drivers on a job ----------
    A job's trucks are assign.truckId (the first one, which older copies of the app read too) and
@@ -3118,6 +3300,8 @@ function renderToday(){
   // a truck that is down comes first
   sosActive().forEach(function(a){A.push(alertRow('bad','Truck down: '+esc(sosTruck(a)),esc(a.from)+(a.job?' · '+esc(a.job):'')+' · sent '+fmtClock(a.ts),'sos:open',''))});
   rqAlerts(A);   // a crew lead's new quote: to approve, or signed on site
+  // a customer's request from the customer app: call them back
+  state.jobs.filter(reqOpen).sort(function(a,b){return (a.req.at||0)-(b.req.at||0)}).forEach(function(j){A.push(alertRow('warn','Move request: '+esc(j.d.name||'a customer'),'Can move '+esc(reqRange(j.req))+' · call to set the day','job:open',j.id))});
   var need=state.jobs.filter(needsSched);
   if(need.length)A.push('<button class="alert" data-act="tab" data-tab="dispatch"><span class="ic warn">!</span><span class="tx"><b>'+need.length+' job'+(need.length===1?'':'s')+' need scheduling</b><small>'+esc(need.map(function(j){return j.d.name}).join(', '))+'</small></span><span class="go">›</span></button>');
   // booked moves whose day went by without being started in the app: finish them, move them or mark them lost
@@ -3219,7 +3403,7 @@ function renderQuote(){
   var srcOpts=S.sources.map(function(s){return '<option'+(d.source===s?' selected':'')+'>'+esc(s)+'</option>'}).join('');
   var truckOpts='<option value="">Auto (best fit)</option>'+S.trucks.map(function(t){return '<option value="'+t.id+'"'+(d.truckId===t.id?' selected':'')+'>'+esc(t.name)+', '+fmtInt(t.cf)+' cu ft</option>'}).join('');
   v.innerHTML=
-   (d.editId?'<div class="note">Editing the quote for '+esc(d.name||'this job')+'. Save changes to update the job.</div>':'')+
+   (d.editId?'<div class="note">Editing the quote for '+esc(d.name||'this job')+'. Save changes to update the job.'+(reqOpen(byId(d.editId))?' They asked in the customer app to move <b>'+esc(reqRange(byId(d.editId).req))+'</b>.':'')+'</div>':'')+
    '<div class="steps">'+[['Who and where',1],['What is moving',2],['Price and book',3]].map(function(x){return '<button data-act="q:step" data-s="'+x[1]+'" class="'+(step===x[1]?'on':(step>x[1]?'done':''))+'"><i></i><span>'+x[0]+'</span></button>'}).join('')+'</div>'+
    '<section class="card hero"><div class="row between" style="margin-bottom:4px"><small>'+(d.editId?'Editing a quote':'New quote')+'</small>'+(d.editId?'<button class="btn sm ghost" data-act="q:cancel">Cancel edit</button>':'<button class="btn sm ghost" data-act="q:clear">Clear</button>')+'</div><div id="qMeter"></div><div id="qStats" class="stats"></div><p class="hint" id="qHint"></p></section>'+
    (step===1?'<section class="card"><h2>Customer</h2><div class="grid2 stack">'+
@@ -3313,6 +3497,7 @@ function saveQuote(kind){
   if(j){
     var oldNotes=String(j.d.notes||'');
     var hadOk=!!(j.quote&&j.quote.rqOk);j.d=clone(d);delete j.d.editId;j.quote=q;if(hadOk)q.rqOk=null;j.items=itemsOf(d,S);logEv(j,'Quote updated');
+    if(reqOpen(j)){j.req.quotedAt=Date.now();logEv(j,'Quote made for the customer’s request'+(who?' by '+who:''))}
     if(String(j.d.notes||'')!==oldNotes){j.d.notesBy=myName()||'Office';j.d.notesAt=Date.now();logEv(j,'Job notes updated by '+j.d.notesBy)}
     if(kind==='book'&&(j.status==='lead'||j.status==='quoted')){setStatus(j,'booked');if(cc)logEv(j,'Booked by '+ccWho());daySlot(j,fit)}
     else if(j.status==='lead'&&q.cf)setStatus(j,'quoted');
@@ -3573,7 +3758,7 @@ function renderSheet(){
   el.innerHTML='<div class="scrim" data-act="sheet:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="Job details">'+
    '<div class="sheet-head"><div><h2>'+esc(j.d.name||'Unnamed')+'</h2><div style="margin-top:4px">'+pill(j.status)+(j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'')+' <small>'+fmtInt(q.cf)+' cu ft · '+q.crew+' movers · '+q.hours+' h'+(q.kind==='mileage'?' · mileage move':q.kind==='local'?' · local move':'')+'</small></div></div><button class="btn sm" data-act="sheet:close" id="sheetClose">Close</button></div>'+
    '<div class="sheet-body">'+lateNote+rail+
-   sheetMoney(j)+rqSheetTop(j)+
+   sheetMoney(j)+rqSheetTop(j)+reqSheetTop(j)+
    '<div class="row sec">'+(na?'<button class="btn primary grow" data-act="'+na.act+'"'+(na.attrs||'')+'>'+na.label+'</button>':'')+(na&&na.act==='sh:requote'?'':'<button class="btn grow" data-act="sh:requote">Edit quote</button>')+'</div>'+
    '<div class="sec" data-meta="'+esc(fmtDate(j.d.moveDate)+(j.d.moveDate&&j.d.time?' · '+fmtTime(j.d.time):''))+'"><h3>Schedule</h3>'+clash+'<div class="grid2 stack">'+
      fld('Date','<input type="date" data-j="moveDate" data-re="1" value="'+esc(j.d.moveDate)+'">')+
@@ -4738,7 +4923,7 @@ function ccFill(){
 function ccCard(j){
   var q=j.quote||{},a='cc:lost:'+j.id,by=j.createdBy?' by '+esc(j.createdBy):'';
   return '<section class="card qcard" data-job="'+esc(j.id)+'"><div class="row between" style="align-items:flex-start;gap:8px"><h3 style="margin:0">'+esc(j.d.name||'Customer')+'</h3>'+pill(j.status)+'</div>'+
-    '<div class="cc-sub">'+(j.d.moveDate?esc(fmtDate(j.d.moveDate)+' · '+fmtTime(j.d.time)):'No move date yet')+'</div>'+
+    '<div class="cc-sub">'+(j.d.moveDate?esc(fmtDate(j.d.moveDate)+' · '+fmtTime(j.d.time)):reqOpen(j)?'Asked in the customer app: can move '+esc(reqRange(j.req)):'No move date yet')+'</div>'+
     ((j.d.from||j.d.to)?'<div class="route">'+esc((j.d.from||'?')+' → '+(j.d.to||'?'))+'</div>':'')+
     '<div class="row between" style="margin-top:4px"><b>'+(num(q.total)>0?money(q.total):'No price yet')+'</b><small>'+esc(j.createdAt?madeWhen(j.createdAt):'')+by+'</small></div>'+
     '<div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button class="btn primary sm" data-act="cc:open" data-id="'+esc(j.id)+'">Open quote</button>'+
@@ -8133,7 +8318,8 @@ function payBusy(on,label){
   pay.busy=on;
   $$('#flow [data-busy],#sheet [data-busy]').forEach(function(b){b.disabled=on;if(on){if(!b.dataset.was)b.dataset.was=b.textContent;b.textContent=label||'Working…'}else if(b.dataset.was){b.textContent=b.dataset.was;delete b.dataset.was}});
 }
-function payDone(j,msg){
+function payDone(j,msg,tip){
+  if(tip>0&&ui.flow){ui.flow.tipDone=true;ui.flow.tip=null;ui.flow.tipOther=''}
   toast(msg);cardDrop();
   if(window.tallyPay.refresh)window.tallyPay.refresh();
   setTimeout(function(){if(ui.flow&&ui.flow.jobId===j.id)renderFlow()},1500);
@@ -8143,17 +8329,18 @@ function payByCard(j){
   if(sqOn())return payBySquare(j);
   var amt=flowAmt(),keepCard=!!(d0('#saveCard')||{}).checked,bad=payAmtCheck(j,amt);
   if(bad)return flowFail(bad);
+  if(!flowTipPicked(j))return flowFail('Pick a tip first (or No tip).');
   if(!pay.elements||!pay.stripe)return flowFail('The card form is still loading.');
-  var E=pay.elements,cents=Math.round(amt*100);
+  var tip=flowTipAmt(j),E=pay.elements,cents=Math.round(round2(amt+tip)*100);
   payBusy(true,'Charging…');flowFail('');
   Promise.resolve(E.update(cardOpts(cents,keepCard))).then(function(){return E.submit()})
-    .then(function(r){if(r&&r.error)throw {msg:r.error.message};return window.tallyPay.intent(j.id,amt,keepCard)})
+    .then(function(r){if(r&&r.error)throw {msg:r.error.message};return window.tallyPay.intent(j.id,amt,keepCard,null,tip)})
     .then(function(r){if(!r||!r.ok)throw {msg:(r&&r.message)||'The payment did not start.'};
       return pay.stripe.confirmPayment({elements:E,clientSecret:r.clientSecret,confirmParams:{return_url:r.returnUrl},redirect:'if_required'})})
     .then(function(res){
       if(res&&res.error)throw {msg:res.error.message};
       var pi=res&&res.paymentIntent;if(!pi)throw {msg:'The card was not charged.'};
-      return window.tallyPay.check(j.id,pi.id).then(function(){payDone(j,pi.status==='processing'?'Payment processing.':'Card charged '+money(amt)+'.')});
+      return window.tallyPay.check(j.id,pi.id).then(function(){payDone(j,pi.status==='processing'?'Payment processing.':'Card charged '+money(round2(amt+tip))+(tip>0?', with a '+money(tip)+' tip for the crew':'')+'.',tip)});
     })
     .catch(function(e){flowFail((e&&e.msg)||'The card was not charged.')})
     .then(function(){payBusy(false)});
@@ -8163,17 +8350,19 @@ function payByCard(j){
 function payBySquare(j){
   var amt=flowAmt(),keepCard=!!(d0('#saveCard')||{}).checked,bad=payAmtCheck(j,amt);
   if(bad)return flowFail(bad);
+  if(!flowTipPicked(j))return flowFail('Pick a tip first (or No tip).');
   if(!pay.sqCard)return flowFail('The card form is still loading.');
+  var tip=flowTipAmt(j);
   var d=j.d||{},nm=String(d.name||'').trim().split(/\s+/),bc={givenName:nm[0]||'',familyName:nm.slice(1).join(' ')};
   if(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(d.email||'').trim()))bc.email=String(d.email).trim();
   payBusy(true,'Charging…');flowFail('');
-  Promise.resolve(pay.sqCard.tokenize({amount:amt.toFixed(2),currencyCode:'USD',intent:'CHARGE',customerInitiated:true,sellerKeyedIn:true,billingContact:bc}))
+  Promise.resolve(pay.sqCard.tokenize({amount:round2(amt+tip).toFixed(2),currencyCode:'USD',intent:'CHARGE',customerInitiated:true,sellerKeyedIn:true,billingContact:bc}))
     .then(function(r){
       if(!r||r.status!=='OK'||!r.token)throw {msg:(r&&r.errors&&r.errors[0]&&r.errors[0].message)||'Check the card details.'};
-      return window.tallyPay.intent(j.id,amt,keepCard,r.token);
+      return window.tallyPay.intent(j.id,amt,keepCard,r.token,tip);
     })
     .then(function(r){
-      if(r&&r.ok){payDone(j,r.message||'Card charged '+money(amt)+'.');return}
+      if(r&&r.ok){payDone(j,r.message||'Card charged '+money(round2(amt+tip))+'.',tip);return}
       if(r&&r.needLink){ui.flow.method='link';payBusy(false);renderFlow();flowFail(r.message);return}
       throw {msg:(r&&r.message)||'The card was not charged.'};
     })
@@ -8183,35 +8372,39 @@ function payBySquare(j){
 function payBySaved(j){
   var amt=flowAmt(),pick=d0('input[name=vaultPick]:checked'),bad=payAmtCheck(j,amt);
   if(bad)return flowFail(bad);
+  if(!flowTipPicked(j))return flowFail('Pick a tip first (or No tip).');
   if(!pick)return flowFail('Pick a saved card.');
+  var tip=flowTipAmt(j);
   payBusy(true,'Charging…');flowFail('');
-  window.tallyPay.saved(j.id,pick.value,amt,'t'+uid()+uid()).then(function(r){
-    if(r&&r.ok){payDone(j,r.message||'Charged.');return}
+  window.tallyPay.saved(j.id,pick.value,amt,'t'+uid()+uid(),tip).then(function(r){
+    if(r&&r.ok){payDone(j,r.message||'Charged.',tip);return}
     if(r&&r.needLink){ui.flow.method='link';payBusy(false);renderFlow();flowFail(r.message);return}
     flowFail((r&&r.message)||'The card was not charged.');
   }).then(function(){payBusy(false)});
 }
-function linkFor(j,amt,save){var l=pay.links[j.id];return l&&Math.abs(l.amount-amt)<0.004&&l.save===!!save&&Date.now()-l.at<20*3600e3?l:null}
+// a link for amt toward the bill (and the crew's tip on top, when one was picked: one payment)
+function linkFor(j,amt,save,tip){var l=pay.links[j.id];return l&&Math.abs(l.amount-amt)<0.004&&Math.abs((l.tip||0)-(tip||0))<0.004&&l.save===!!save&&Date.now()-l.at<20*3600e3?l:null}
 function payLinkText(amt,url){return (state.settings.company||'Your movers')+': Here is your secure payment link for '+money(amt)+': '+url}
-function makeLink(j,amt,keep,text){
-  var bad=payAmtCheck(j,amt);
+function makeLink(j,amt,keep,text,tip){
+  var bad=payAmtCheck(j,amt);tip=round2(tip||0);
   if(bad)return Promise.resolve({ok:false,message:bad});
   payBusy(true,text?'Texting…':'Making the link…');
-  return window.tallyPay.link(j.id,amt,keep,text).then(function(r){
+  return window.tallyPay.link(j.id,amt,keep,text,tip).then(function(r){
     payBusy(false);
-    if(r&&r.ok){pay.links[j.id]={url:r.url,amount:amt,save:!!keep&&!sqOn(),at:Date.now()};logEv(j,(text&&r.texted?'Payment link texted: ':'Payment link made: ')+money(amt));save()}
+    if(r&&r.ok){pay.links[j.id]={url:r.url,amount:amt,tip:tip,save:!!keep&&!sqOn(),at:Date.now()};logEv(j,(text&&r.texted?'Payment link texted: ':'Payment link made: ')+money(round2(amt+tip))+(tip>0?' (with a '+money(tip)+' tip for the crew)':''));save()}
     return r||{ok:false,message:'Could not make the link.'};
   });
 }
 function payLinkPanel(j,amt){
-  var vaultOk=opt('payVault')&&!sqOn(),dflt=amt<balOf(j)-0.004,keep=vaultOk&&(ui.flow.saveLink!=null?ui.flow.saveLink:dflt),l=linkFor(j,amt,keep),who=esc(j.d.name||'the customer'),co=commsReady();
+  var vaultOk=opt('payVault')&&!sqOn(),dflt=amt<balOf(j)-0.004,keep=vaultOk&&(ui.flow.saveLink!=null?ui.flow.saveLink:dflt),tip=flowTipAmt(j),tot=round2(amt+tip),l=linkFor(j,amt,keep,tip),who=esc(j.d.name||'the customer'),co=commsReady();
+  var wait=flowTipAsk(j)&&!flowTipPicked(j),off=wait?' disabled':'';
   var h=vaultOk?'<label class="check"><input type="checkbox" id="saveLink"'+(keep?' checked':'')+'> Keep the card on file for the rest of the bill</label>':'';
-  if(!l)return h+'<div class="row" style="margin-top:8px"><button class="btn primary grow" data-act="pay:qr" data-busy="1">Show a QR code</button>'+
-    (j.d.phone?'<button class="btn grow" data-act="pay:text" data-busy="1">'+(co?'Text it to '+who:'Text it from my phone')+'</button>':'')+'</div>'+
+  if(!l)return h+'<div class="row" style="margin-top:8px"><button class="btn primary grow" data-act="pay:qr" data-busy="1"'+off+'>'+(wait?'Pick a tip first':'Show a QR code')+'</button>'+
+    (j.d.phone?'<button class="btn grow" data-act="pay:text" data-busy="1"'+off+'>'+(co?'Text it to '+who:'Text it from my phone')+'</button>':'')+'</div>'+
     '<p class="hint">'+who+' pays on their own phone, with Apple Pay, Google Pay or a card. This screen updates when they have paid.</p>';
-  return h+'<div class="qrwrap">'+qrSvg(l.url)+'</div><p class="hint" style="text-align:center;margin:4px 0 8px">Point the phone camera here to pay '+money(amt)+'</p>'+
+  return h+'<div class="qrwrap">'+qrSvg(l.url)+'</div><p class="hint" style="text-align:center;margin:4px 0 8px">Point the phone camera here to pay '+money(tot)+(tip>0?' (with the tip)':'')+'</p>'+
     '<div class="linkbox"><code id="payUrl">'+esc(l.url)+'</code></div>'+
-    '<div class="row" style="margin-top:8px">'+(j.d.phone?(co?'<button class="btn grow" data-act="pay:text" data-busy="1">Text it to '+who+'</button>':'<a class="btn grow" href="'+esc(smsHref(j.d.phone,payLinkText(amt,l.url)))+'">Text it from my phone</a>'):'')+
+    '<div class="row" style="margin-top:8px">'+(j.d.phone?(co?'<button class="btn grow" data-act="pay:text" data-busy="1">Text it to '+who+'</button>':'<a class="btn grow" href="'+esc(smsHref(j.d.phone,payLinkText(tot,l.url)))+'">Text it from my phone</a>'):'')+
     '<button class="btn" data-act="pay:copy" data-url="'+esc(l.url)+'">Copy link</button></div>'+
     '<p class="hint" id="payWait">Waiting for '+who+' to pay. This updates by itself. <button class="btn sm ghost" data-act="pay:check" data-busy="1">Check now</button></p>';
 }
@@ -8225,26 +8418,26 @@ function payQuick(j){
 }
 function payStepStripe(j){
   var bal=balOf(j),cards=stripeCards(j),m=flowMethodStripe(j),f=ui.flow;
-  var amt=flowAmtNow(j);
+  var amt=flowAmtNow(j),tipQ=flowTipAsk(j),off=tipQ&&!flowTipPicked(j)?' disabled':'';
   var WAY={vault:'Card on file',link:'Pay link',card:'Card',other:'Cash or check'},methods=stripeWays(j).map(function(k){return [k,WAY[k]]});
   var chips=methods.map(function(x){return '<button class="chip'+(m===x[0]?' on':'')+'" data-act="flow:method" data-m="'+x[0]+'" aria-pressed="'+(m===x[0])+'">'+x[1]+'</button>'}).join('');
-  var panel='',btn='';
+  var panel='',btn='',pb=function(plain,tmpl,busy){return '<button class="btn primary bigbtn" data-act="flow:pay"'+(busy?' data-busy="1"':'')+(tipQ?' data-tipword="'+esc(tmpl)+'"':'')+off+'>'+esc(tipQ?flowPayLabel(j,tmpl,amt):plain)+'</button>'};
   if(m==='vault'){
     var pick=cards.filter(function(v){return cardFits(j,v)})[0];
     panel=cards.map(function(v){var here=(v.jobs||[]).indexOf(j.id)>=0;return '<label class="pick"><input type="radio" name="vaultPick" value="'+esc(v.id)+'"'+(v===pick?' checked':'')+'><span>'+esc(v.brand)+' ending '+esc(v.last4)+(v.name?' · '+esc(v.name):'')+' <small>exp '+esc(v.exp||'')+' · '+(here?'kept on this job':'kept on another job')+'</small></span></label>'}).join('')+
       (pick?'':'<p class="hint">Check with '+esc(j.d.name||'the customer')+' that this is their card before charging it.</p>');
-    btn='<button class="btn primary bigbtn" data-act="flow:pay" data-busy="1">Charge the card on file</button>';
+    btn=pb('Charge the card on file','Charge {t} to the card on file',1);
   }else if(m==='link')panel=payLinkPanel(j,amt);
   else if(m==='card'){
     panel='<div id="stripeCard" class="stripe-box"><p class="hint">Loading the card form…</p></div>'+(opt('payVault')?'<label class="check"><input type="checkbox" id="saveCard"> Keep this card on file for this customer</label>':'');
-    btn='<button class="btn primary bigbtn" data-act="flow:pay" data-busy="1">Charge the card</button>';
+    btn=pb('Charge the card','Charge {t} to the card',1);
   }else{
     panel='<div class="grid2 stack">'+fld('Method','<select id="otherMethod"><option>Cash</option><option>Check</option><option>Zelle or app</option></select>')+fld('Check number or reference (optional)','<input id="otherRef">')+'</div>';
-    btn='<button class="btn primary bigbtn" data-act="flow:pay">Record payment</button>';
+    btn=pb('Record payment','Record {t}',0);
   }
   return '<h2>'+payTitle(j)+'</h2>'+(pay.cfg.test?'<div class="note">'+(sqOn()?'Square’s sandbox: no real money moves. Test card 4111 1111 1111 1111, any future date, CVV 111, ZIP 94103.':'Stripe test mode: no real money moves. Test card 4242 4242 4242 4242, any future date, any security code.')+'</div>':'')+
     payTiles(j)+
-    fld('Amount','<input id="flowAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+fmtCents(Math.round(amt*100))+'">')+payQuick(j)+'<div class="methods">'+chips+'</div>'+panel+btn+'<p class="hint" id="flowErr" role="alert"></p>';
+    fld(tipQ?'Subtotal':'Amount','<input id="flowAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+fmtCents(Math.round(amt*100))+'">')+payQuick(j)+flowTipHtml(j,amt)+'<div class="methods">'+chips+'</div>'+panel+btn+'<p class="hint" id="flowErr" role="alert"></p>';
 }
 // a payment that lands while the payment screen is open (a pay link used, a card charged) shows at once
 function flowRefresh(){
@@ -8278,6 +8471,8 @@ function payPoll(){
 function officeLinkHtml(j){
   var bal=balOf(j);if(!payOn()||bal<=0||!canEditJobs())return '';
   var l=pay.links[j.id],co=commsReady(),dep=Math.min(round2(j.quote.deposit||0),bal),who=esc(j.d.name||'the customer');
+  // the bill after the move: the tip is asked first, so its link comes from Collect payment
+  if(tipAskJ(j))return '<p class="hint" style="margin:10px 0 0">To send a link for the bill, tap Collect payment: it asks for the crew’s tip first, then makes the link'+(j.d.phone?' and texts it':'')+'.</p>';
   return '<h3 style="margin:16px 0 6px;font-size:16px">Send a payment link</h3><p class="hint" style="margin-top:0">'+who+' pays on their phone; the payment shows up here by itself.'+(pay.cfg.test?(sqOn()?' Square’s sandbox.':' Stripe test mode.'):'')+'</p>'+
     '<div class="row">'+(dep>0&&dep<bal-0.004?'<button class="btn sm" data-act="pl:make" data-v="'+dep+'" data-save="1" data-busy="1">Deposit '+money(dep)+'</button>':'')+'<button class="btn sm" data-act="pl:make" data-v="'+bal+'" data-busy="1">Balance '+money(bal)+'</button></div>'+
     (l?'<div class="linkbox" style="margin-top:8px"><code>'+esc(l.url)+'</code><small>'+money(l.amount)+(l.save?' · keeps the card on file':'')+'</small></div>'+
@@ -8839,11 +9034,12 @@ function payStepOffline(j){
     c.reason==='connect-pending'?'Stripe is still checking this company’s details, so cards can’t be taken yet.':
     c.reason==='connect-off'?'This company’s Stripe account was disconnected from MoveCrew, so cards can’t be taken. The owner connects it again in Setup › Payments.':
     'The payment service did not answer, so cards can’t be taken right now.';
+  var amt=flowAmtNow(j),tipQ=flowTipAsk(j);
   return '<h2>'+payTitle(j)+'</h2><div class="note">'+why+' Cash and checks can still be recorded. <button class="btn sm" data-act="pay:retry">Check again</button></div>'+
     payTiles(j)+
-    fld('Amount','<input id="flowAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+fmtCents(Math.round(flowAmtNow(j)*100))+'">')+payQuick(j)+
+    fld(tipQ?'Subtotal':'Amount','<input id="flowAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+fmtCents(Math.round(amt*100))+'">')+payQuick(j)+flowTipHtml(j,amt)+
     '<div class="grid2 stack">'+fld('Method','<select id="otherMethod"><option>Cash</option><option>Check</option><option>Zelle or app</option></select>')+fld('Check number or reference (optional)','<input id="otherRef">')+'</div>'+
-    '<button class="btn primary bigbtn" data-act="flow:pay">Record payment</button><p class="hint" id="flowErr" role="alert"></p>';
+    '<button class="btn primary bigbtn" data-act="flow:pay"'+(tipQ?' data-tipword="Record {t}"'+(flowTipPicked(j)?'':' disabled')+'>'+esc(flowPayLabel(j,'Record {t}',amt)):'>Record payment')+'</button><p class="hint" id="flowErr" role="alert"></p>';
 }
 /* the payment screen's heading and tiles: a finished job's bill is due now; before then it is a
    payment toward the quote (a deposit), with what is left to pay */
@@ -8857,7 +9053,7 @@ function payTiles(j){
 function payStep(j){
   if(payOn())return payStepStripe(j);
   if(window.tallyPay)return payStepOffline(j);
-  var bal=balOf(j),vault=vaultFor(j),m=flowMethod(j);
+  var bal=balOf(j),vault=vaultFor(j),m=flowMethod(j),amt=flowAmtNow(j),tipQ=flowTipAsk(j);
   var WAY={vault:'Card on file',card:'New card',ach:'Bank (ACH)',other:'Cash or check'},methods=demoWays(j).map(function(k){return [k,WAY[k]]});
   var chips=methods.map(function(x){return '<button class="chip'+(m===x[0]?' on':'')+'" data-act="flow:method" data-m="'+x[0]+'" aria-pressed="'+(m===x[0])+'">'+x[1]+'</button>'}).join('');
   var inp='style="min-height:44px"';
@@ -8868,11 +9064,11 @@ function payStep(j){
   else panel='<div class="grid2 stack">'+fld('Method','<select id="otherMethod"><option>Cash</option><option>Check</option><option>Zelle or app</option></select>')+fld('Check number or reference (optional)','<input id="otherRef">')+'</div>';
   return '<h2>'+payTitle(j)+'</h2><div class="note">Demo mode: nothing is charged. Card and bank numbers are checked and then thrown away, and only the last four digits are kept. A payment processor plugs in here to charge for real.</div>'+
     payTiles(j)+
-    fld('Amount to charge','<input id="flowAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+fmtCents(Math.round(flowAmtNow(j)*100))+'">')+'<p class="hint" style="margin-top:-4px">Type the digits and the cents fill in from the right. 1500 becomes 15.00.</p>'+payQuick(j)+'<div class="methods">'+chips+'</div>'+panel+
-    '<button class="btn primary bigbtn" data-act="flow:pay">Charge</button><p class="hint" id="flowErr" role="alert"></p>';
+    fld(tipQ?'Subtotal':'Amount to charge','<input id="flowAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+fmtCents(Math.round(amt*100))+'">')+'<p class="hint" style="margin-top:-4px">Type the digits and the cents fill in from the right. 1500 becomes 15.00.</p>'+payQuick(j)+flowTipHtml(j,amt)+'<div class="methods">'+chips+'</div>'+panel+
+    '<button class="btn primary bigbtn" data-act="flow:pay"'+(tipQ?' data-tipword="Charge {t}"'+(flowTipPicked(j)?'':' disabled')+'>'+esc(flowPayLabel(j,'Charge {t}',amt)):'>Charge')+'</button><p class="hint" id="flowErr" role="alert"></p>';
 }
 function doneStep(j){
-  var pays=j.payments.map(function(p){return '<tr><td>'+esc(p.method)+(p.pending?' <small>(pending)</small>':'')+'<br><small>'+esc(/^\d{4}-\d\d-\d\d$/.test(p.date||'')?fmtDate(p.date):p.date||'')+'</small></td><td>'+money(p.amt)+'</td></tr>'}).join('')||'<tr><td><small>No payments.</small></td><td></td></tr>';
+  var pays=j.payments.map(function(p){return '<tr><td>'+esc(p.method)+(p.pending?' <small>(pending)</small>':'')+'<br><small>'+esc(/^\d{4}-\d\d-\d\d$/.test(p.date||'')?fmtDate(p.date):p.date||'')+'</small></td><td>'+money(p.amt)+(num(p.tip)>0?'<br><small>+ '+money(p.tip)+' tip for the crew</small>':'')+'</td></tr>'}).join('')||'<tr><td><small>No payments.</small></td><td></td></tr>';
   var forms=(j.signed||[]).map(function(x){return '<div><small>'+esc(x.title)+' · '+(x.waived?'waived':'signed by '+esc(x.name))+'</small></div>'}).join('');
   return '<div class="card" style="text-align:center;margin-top:8px"><h2>'+(balOf(j)>0?'Forms signed':'Paid in full')+'</h2><p class="hint">Thank you, '+esc(j.d.name)+'.</p>'+(savedOf(j)?'<p class="hint money-paid saved">You saved '+money(savedOf(j))+' off your quote of '+money(j.quote.total)+'.</p>':'')+(balOf(j)>0&&!canCollect()?'<p class="hint">'+money(balOf(j))+' is still owed. The office collects the payment.</p>':'')+'</div><section class="card"><h3>Receipt</h3><table class="lines">'+pays+'<tr class="total"><td>Total bill</td><td>'+money(totalOf(j))+'</td></tr></table>'+forms+'</section><button class="btn primary bigbtn" data-act="flow:close">Close</button>';
 }
@@ -9263,10 +9459,16 @@ document.addEventListener('click',function(e){
       logEv(no1,'New quote not approved by '+now1+(nor.no.why?': '+nor.no.why:''));save();renderSheet();renderTab();toast((nor.by||'The crew lead')+' will see it wasn’t approved.');break}
     case 'rq:seen':{var se1=canEditJobs()?byId(ui.jobId):null,ser=se1&&se1.rq;if(!ser)break;ser.seen={by:myName()||'Office',ts:Date.now()};if(ser.state==='refused'&&se1.quote&&se1.quote.rqOk)se1.quote.rqOk=null;save();renderSheet();renderTab();break}
     case 'flow:method':ui.flow.method=t.dataset.m;renderFlow();break;
+    case 'flow:tip':{if(!ui.flow)break;var ftv=t.dataset.t,ftj=byId(ui.flow.jobId),ftb=$('#flowTipOtherBox');ui.flow.tip=ftv==='other'?'other':num(ftv);var faa=$('#flowAmt');if(faa)ui.flow.amt=moneyVal(faa);
+      // in place, so a card already typed into the card box (or the demo's card fields) stays as typed; the pay
+      // link's panel is drawn again, since its code carries the tip
+      if(ftj&&ftb&&!(payOn()&&flowMethodStripe(ftj)==='link')){$$('#flow [data-act="flow:tip"]').forEach(function(b){var on=b===t;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false')});ftb.hidden=ftv!=='other';flowTotUpd()}
+      else renderFlow();
+      if(ftv==='other'){var fto=$('#flowTipOther');if(fto)try{fto.focus()}catch(x){}}break}
     case 'flow:amt':{if(!ui.flow)break;var fav=round2(num(t.dataset.v)),fai=$('#flowAmt');ui.flow.amt=fav;if(fai)fai.value=fmtCents(Math.round(fav*100));var faj=byId(ui.flow.jobId);if(faj&&payOn()&&flowMethodStripe(faj)==='link')renderFlow();break}
     case 'pay:qr':case 'pay:text':{var lj=ui.flow&&byId(ui.flow.jobId);if(!lj||pay.busy)break;var la=flowAmt(),lk=!!(d0('#saveLink')||{}).checked,ltx=a==='pay:text'&&commsReady();
-      ui.flow.amt=la;
-      makeLink(lj,la,lk,ltx).then(function(r){if(!r.ok){flowFail(r.message);return}renderFlow();toast(ltx?r.message:a==='pay:text'?'Link ready. Tap Text it from my phone.':'Show the code to '+(lj.d.name||'the customer')+'.')});break}
+      ui.flow.amt=la;if(!flowTipPicked(lj)){flowFail('Pick a tip first (or No tip).');break}
+      makeLink(lj,la,lk,ltx,flowTipAmt(lj)).then(function(r){if(!r.ok){flowFail(r.message);return}renderFlow();toast(ltx?r.message:a==='pay:text'?'Link ready. Tap Text it from my phone.':'Show the code to '+(lj.d.name||'the customer')+'.')});break}
     case 'pay:copy':{var cu=t.dataset.url||'';var selU=function(){var c=$('#payUrl');if(c){try{var rg=document.createRange();rg.selectNodeContents(c);var sl=window.getSelection();sl.removeAllRanges();sl.addRange(rg)}catch(x){}}toast('Link selected. Copy it from here.')};
       try{navigator.clipboard.writeText(cu).then(function(){toast('Link copied.')},selU)}catch(x){selU()}break}
     case 'pay:check':{var cj=ui.flow&&byId(ui.flow.jobId);if(!cj||pay.busy)break;payBusy(true,'Checking…');
@@ -9310,6 +9512,8 @@ document.addEventListener('click',function(e){
       var pbal=balOf(pj),pamt=round2(moneyVal($('#flowAmt'))),pm=window.tallyPay?'other':flowMethod(pj);
       if(!(pamt>0)){flowFail('Enter an amount.');break}
       if(pamt>pbal+0.004){flowFail('That is more than the balance of '+money(pbal)+'.');break}
+      if(!flowTipPicked(pj)){flowFail('Pick a tip first (or No tip).');break}
+      var ptip=flowTipAmt(pj);if(ptip>Math.max(500,totalOf(pj))){flowFail('That tip looks too big. Check the amount.');break}
       var plabel='',pextra=null,vault=null;
       if(pm==='vault'){var pick=d0('input[name=vaultPick]:checked');var ve=pick?state.vault.find(function(x){return x.id===pick.value}):null;if(!ve){flowFail('Pick a saved payment method.');break}plabel=ve.type==='card'?ve.brand+' ••'+ve.last4:'ACH ••'+ve.last4;if(ve.type==='ach')pextra={pending:true}}
       else if(pm==='card'){var cn=$('#cardNum').value.replace(/\D/g,''),ex=expOk($('#cardExp').value),cv=$('#cardCvc').value.replace(/\D/g,'');
@@ -9327,8 +9531,9 @@ document.addEventListener('click',function(e){
         plabel='ACH ••'+ac.slice(-4);pextra={pending:true};
         if(($('#saveAch')||{}).checked)state.vault.push({id:uid(),cust:custKey(pj),type:'ach',brand:'Bank',last4:ac.slice(-4),exp:'',ts:Date.now()})}
       else{plabel=$('#otherMethod').value;var rf=$('#otherRef').value.trim();if(rf)plabel+=' '+rf}
-      if(!addPayment(pj,pamt,plabel,pextra)){flowFail('Sign the required forms first.');break}
-      save();toast('Payment recorded: '+money(pamt)+' · '+plabel);renderFlow();renderTab();
+      if(!addPayment(pj,pamt,plabel,ptip>0?Object.assign({},pextra||{},{tip:ptip}):pextra)){flowFail('Sign the required forms first.');break}
+      if(ptip>0){ui.flow.tipDone=true;ui.flow.tip=null;ui.flow.tipOther=''}
+      save();toast('Payment recorded: '+money(round2(pamt+ptip))+(ptip>0?' with a '+money(ptip)+' tip':'')+' · '+plabel);renderFlow();renderTab();
       break}
     case 'sh:waive':{j=byId(ui.jobId);if(!j||state.ui.role!=='owner')break;j.signed=j.signed||[];j.signed.push({id:uid(),formId:t.dataset.fid,title:(/^crew:/.test(t.dataset.fid)?(crewForm(j)||{}).title:((S.forms||[]).find(function(x){return x.id===t.dataset.fid})||{}).title)||'Form',waived:true,reason:'Waived by the owner.',ts:Date.now(),by:'Owner'});logEv(j,/^crew:/.test(t.dataset.fid)?'Waived: the customer’s signature for the bigger crew':'Form waived');save();renderSheet();break}
     case 'st:aheadform':{var af2=S.forms.find(function(x){return x.id===t.dataset.id});if(af2){af2.ahead=!af2.ahead;save();renderSettings();toast(af2.ahead?'Customers can sign '+af2.title+' ahead in their app.':af2.title+' is signed with the crew.')}break}
@@ -9390,7 +9595,8 @@ document.addEventListener('click',function(e){
 document.addEventListener('input',function(e){
   var t=e.target,S=state.settings;
   if(t.id==='cardNum'||t.id==='cardExp'){fmtField(t,e)}
-  else if(t.dataset.money!==undefined){fmtMoneyField(t);if(t.id==='flowAmt'&&ui.flow)ui.flow.amt=moneyVal(t);if(/^cost_a_/.test(t.id))formKeep(t)}
+  else if(t.dataset.money!==undefined){fmtMoneyField(t);if(t.id==='flowAmt'&&ui.flow){ui.flow.amt=moneyVal(t);flowTotUpd()}if(/^cost_a_/.test(t.id))formKeep(t)}
+  else if(t.id==='flowTipOther'&&ui.flow){ui.flow.tipOther=t.value;flowTotUpd()}
   else if(/^cost_[lc]_/.test(t.id||'')){formKeep(t)}
   else if(t.id==='mpQ'&&ui.mp){ui.mp.q=t.value;mpFilter()}
   else if((t.id==='mpOn'||t.id==='mpOq')&&ui.mp){ui.mp.other[t.id==='mpOn'?'n':'q']=t.value}
@@ -9421,7 +9627,7 @@ document.addEventListener('change',function(e){
   if(e.target&&e.target.id==='etaOn'&&ui.start){ui.start.text=e.target.checked;renderStart();return}
   if(e.target&&e.target.id==='rqPack'&&ui.rqo){ui.rqo.dr.pack=e.target.checked;var rpj=byId(ui.rqo.jobId);if(rpj)rqFootUpdate(rpj,ui.rqo);return}
   if(e.target&&ui.flow&&e.target.id==='saveLink'){ui.flow.saveLink=e.target.checked;renderFlow();return}
-  if(e.target&&ui.flow&&e.target.id==='flowAmt'&&payOn()){var fj0=byId(ui.flow.jobId);if(fj0&&flowMethodStripe(fj0)==='link')renderFlow();return}
+  if(e.target&&ui.flow&&(e.target.id==='flowAmt'||e.target.id==='flowTipOther')&&payOn()){var fj0=byId(ui.flow.jobId);if(fj0&&flowMethodStripe(fj0)==='link')renderFlow();return}
   if(e.target&&e.target.dataset&&(e.target.dataset.d==='from'||e.target.dataset.d==='to')){distLookup();shopLookup(false);return}
   var t=e.target,j=ui.jobId&&canEditJobs()?byId(ui.jobId):null;
   if(t.id&&/^cost_[lca]_/.test(t.id)){formKeep(t);return}
@@ -9518,7 +9724,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
 })();
 </script>
 </body>

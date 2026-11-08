@@ -20,7 +20,7 @@
 //
 // Routes:
 //   POST /app            the MoveCrew app: {action:'job'|'forms'|'short'|'call'|'line'|'pay_…', org, jobId}
-//                        and a customer's own: {action:'cust_list'|'cust_book'|'cust_sign'|'cust_pay'|'cust_check'|'cust_reviewed'|'cust_profile'}
+//                        and a customer's own: {action:'cust_list'|'cust_book'|'cust_sign'|'cust_pay'|'cust_check'|'cust_reviewed'|'cust_profile'|'cust_request'}
 //                        and {action:'sos', org, msgId, kind:'start'|'end'} for emergency alerts
 //   POST /stripe         Stripe events (payments finishing or failing, pay links used, refunds, disputes,
 //                        memberships)
@@ -1239,6 +1239,17 @@ function amountTrouble(c: number, owed: number, reserved = 0): string {
   if (c < MIN_CENTS) return "Card payments start at " + money(MIN_CENTS) + ".";
   return "";
 }
+// The crew's tip on a payment of the bill (Richie, Nov 7: "the tip should come before the final bill . give a sub
+// total then ask for a tip then give the final total", everywhere the bill is paid): the app sends it apart from the
+// amount toward the bill, in dollars. Only once the move is done (the bill is final), with a crew on the job and the
+// company's tips switched on; at most $500 or the bill.
+export function tipCents(S: J, job: J, raw: unknown): J {
+  const tipC = cents(raw);
+  if (!(tipC > 0)) return { tipC: 0 };
+  if (optOff(S, "custTips") || !(job.status === "done" || job.status === "paid") || !((job.assign && job.assign.crew) || []).length) return { err: "A tip goes on the bill after the move." };
+  if (tipC > Math.max(50000, jobTotalCents(job))) return { err: "That tip looks too big. Check the amount." };
+  return { tipC };
+}
 function payMeta(org: string, jobId: string, job: J, by: string, src: string, uid?: string): J {
   const md: J = { tally_org: org, tally_job: jobId, tally_cust: payKeyOf(job, jobId).slice(0, 400), tally_by: String(by || "").slice(0, 200), tally_src: src };
   if (uid) md.tally_uid = String(uid).slice(0, 64);
@@ -1470,7 +1481,8 @@ export async function recordIntent(pi0: J, acct = ""): Promise<J> {
   const amtC = status === "succeeded" ? (Number(pi.amount_received) || Number(pi.amount) || 0) : (Number(pi.amount) || 0);
   const refunded = paidNow && ch ? Math.min(amtC, Number(ch.amount_refunded) || 0) : 0;
   const dispute = paidNow && ch && ch.disputed ? await disputeOf(pi.id, acct) : { cents: 0, lost: false };
-  const tipC = md.tally_src === "cust" ? Math.round(Number(md.tally_tip) || 0) : 0;
+  // the crew's tip on the payment (the customer app's, or Collect payment's since Nov 7): only this server sets it
+  const tipC = Math.round(Number(md.tally_tip) || 0);
   const err = pi.last_payment_error ? String(pi.last_payment_error.message || pi.last_payment_error.code || "").slice(0, 300) : null;
   const cus = typeof pi.customer === "string" ? pi.customer : pi.customer && pi.customer.id;
   const out = await writeDown({ lid: pi.id, org, jobId, acct, via: "Stripe", status, live, label, amtC, refunded, dispute, tipC, err,
@@ -1490,9 +1502,9 @@ async function writeDown(x: J): Promise<J> {
   const refunded = paidNow ? Math.min(amtC, Number(x.refunded) || 0) : 0;
   const dispute = paidNow && x.dispute ? x.dispute : { cents: 0, lost: false };
   const disputed = Math.min(amtC - refunded, Number(dispute.cents) || 0);
-  // a customer's tip for the crew, on the same payment (the customer side): the bill's part is the rest, and a refund
-  // or a dispute comes off the bill's part first, then the tip's
-  const tipC = x.src === "cust" ? Math.max(0, Math.min(amtC, Math.round(Number(x.tipC) || 0))) : 0, billC = amtC - tipC;
+  // a customer's tip for the crew, on the same payment (the customer app, or the crew's or the office's Collect
+  // payment): the bill's part is the rest, and a refund or a dispute comes off the bill's part first, then the tip's
+  const tipC = Math.max(0, Math.min(amtC, Math.round(Number(x.tipC) || 0))), billC = amtC - tipC;
   const rfBill = Math.min(refunded, billC), dpBill = Math.min(disputed, billC - rfBill), tipBack = tipC ? Math.min(tipC, refunded + disputed - rfBill - dpBill) : 0;
   await rest("POST", "pay_log?on_conflict=pi", {
     pi: lid, org_id: org, job_id: jobId, amount_cents: amtC, refunded_cents: refunded, disputed_cents: disputed, status,
@@ -1599,15 +1611,18 @@ const capOf = (l: J) => Number(l.cap_cents == null ? l.amount_cents : l.cap_cent
 const pageUsable = (l: J) => isSq(l.account) ? !(l.meta && l.meta.closed) && sessionLive(l.session_id) === modeLive(l.account)
   : Date.parse(pageEnds(l)) > Date.now() && sessionLive(l.session_id) === liveNow();
 async function mintSession(o: J): Promise<J> {
-  const d = o.job.d || {};
-  const md = { ...payMeta(o.org, o.jobId, o.job, o.by, "link"), tally_link: o.token };
+  const d = o.job.d || {}, tipC = Math.max(0, Math.round(Number(o.tipC) || 0));
+  const md: J = { ...payMeta(o.org, o.jobId, o.job, o.by, "link"), tally_link: o.token };
+  if (tipC) md.tally_tip = String(tipC);
   const nowS = Math.floor(Date.now() / 1000);
   const exp = Math.max(nowS + 31 * 60, Math.min(nowS + PAGE_HOURS * 3600, Math.floor((o.until || Infinity) / 1000)));
   const acct = o.acct || "";
+  const lines: J[] = [{ quantity: 1, price_data: { currency: "usd", unit_amount: o.amt, product_data: { name: (company(o.S) + ": moving services").slice(0, 120), description: gsm(d.name || "Moving job").slice(0, 200) } } }];
+  if (tipC) lines.push({ quantity: 1, price_data: { currency: "usd", unit_amount: tipC, product_data: { name: "Tip for your crew", description: "Split evenly between the movers on your move" } } });
   const s = await stripe("POST", "checkout/sessions", {
     mode: "payment", customer: o.cus, client_reference_id: o.jobId,
-    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: o.amt, product_data: { name: (company(o.S) + ": moving services").slice(0, 120), description: gsm(d.name || "Moving job").slice(0, 200) } } }],
-    payment_intent_data: { metadata: md, description: payWhat(o.S, o.job), receipt_email: validEmail(d.email) || undefined },
+    line_items: lines,
+    payment_intent_data: { metadata: md, description: payWhat(o.S, o.job) + (tipC ? " + tip" : ""), receipt_email: validEmail(d.email) || undefined },
     payment_method_options: o.save ? { card: { setup_future_usage: "off_session" } } : undefined,
     metadata: md, success_url: base() + "/pay/done", expires_at: exp,
   }, undefined, acct);
@@ -1665,7 +1680,7 @@ async function renewPage(l: J, job: J, S: J, amt: number, acct = ""): Promise<J>
   if (isSq(acct)) {
     const row = await sqRowFor(l.org_id, acct);
     if (!row || row.status !== "ready") return { state: "gone" };
-    const pg = await sqMintLink({ row, org: l.org_id, jobId: l.job_id, job, S, token: l.token, amt, tipC: 0, kind: "", back: "" });
+    const pg = await sqMintLink({ row, org: l.org_id, jobId: l.job_id, job, S, token: l.token, amt, tipC: linkTip(l), kind: "", back: "" });
     const patch = { session_id: pg.id, url: pg.url, amount_cents: amt, session_expires: l.expires_at, account: acct, meta: { ...(l.meta || {}), order_id: pg.order_id, closed: false } };
     const kept = await rest("PATCH", "pay_links?token=eq." + q(l.token) + "&status=eq.open", patch, "return=representation");
     if (!kept || !kept.length) {   // replaced or paid meanwhile: the new Square page comes down
@@ -1675,7 +1690,7 @@ async function renewPage(l: J, job: J, S: J, amt: number, acct = ""): Promise<J>
     return { state: "ready", link: { ...l, ...patch } };
   }
   const cus = (await jobCustomer(l.org_id, l.job_id, job, acct)).customer;
-  const s = await mintSession({ org: l.org_id, jobId: l.job_id, job, S, by: l.created_by || "", token: l.token, amt, save: !!l.save_card, cus, until: Date.parse(l.expires_at), acct });
+  const s = await mintSession({ org: l.org_id, jobId: l.job_id, job, S, by: l.created_by || "", token: l.token, amt, tipC: linkTip(l), save: !!l.save_card, cus, until: Date.parse(l.expires_at), acct });
   const patch = { session_id: s.id, url: s.url, amount_cents: amt, session_expires: new Date(s.expires_at * 1000).toISOString(), account: acct };
   const kept = await rest("PATCH", "pay_links?token=eq." + q(l.token) + "&status=eq.open", patch, "return=representation");
   if (!kept || !kept.length) {   // the link was replaced or paid meanwhile: its new page must not stay open
@@ -1686,6 +1701,8 @@ async function renewPage(l: J, job: J, S: J, amt: number, acct = ""): Promise<J>
 }
 // a pay link's current page is on the account the company takes payments on now
 const pageOn = (l: J, acct: string) => (l.account || "") === acct;
+// the crew's tip a pay link carries on top of the bill's part (amount_cents), in cents
+const linkTip = (l: J) => Math.max(0, Math.round(Number(l && l.meta && l.meta.tip) || 0));
 
 /* bringing a job up to date with Stripe */
 const OPEN_PI = ["requires_payment_method", "requires_confirmation", "requires_action"];
@@ -1720,7 +1737,7 @@ async function settleJob(org: string, jobId: string, o: { me?: J; reserve?: bool
     const stale = Date.now() - (Number(pi.created) || 0) * 1000 > STALE_MS;
     const mine = !!o.me && (md.tally_uid ? md.tally_uid === o.me.uid : md.tally_by === who(o.me));
     if (stale || md.tally_src === "saved" || pi.last_payment_error || mine) await cancelIntent(pi, acct);
-    else if (o.me || o.reserve) { reserved += Number(pi.amount) || 0; inflight.push({ pi, acct }); }
+    else if (o.me || o.reserve) { reserved += Math.max(0, (Number(pi.amount) || 0) - (Math.round(Number(md.tally_tip) || 0))); inflight.push({ pi, acct }); }
   }
   const links = (await rest("GET", "pay_links?select=*&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&status=eq.open")) || [];
   for (const l of links) {
@@ -2194,6 +2211,7 @@ async function sqPay(row: J, o: J): Promise<J> {
   try {
     const r = await sq(row, "POST", "/v2/payments", {
       source_id: o.source, idempotency_key: o.key, amount_money: { amount: o.amt, currency: "USD" }, location_id: row.location_id,
+      tip_money: o.tipC > 0 ? { amount: o.tipC, currency: "USD" } : undefined,
       customer_id: o.customer || undefined, reference_id: o.jobId, note: payWhat(o.S, o.job).slice(0, 500), autocomplete: true,
       buyer_email_address: validEmail((o.job.d || {}).email) || undefined,
     });
@@ -2203,8 +2221,8 @@ async function sqPay(row: J, o: J): Promise<J> {
     throw e;
   }
 }
-function sqPaidMsg(p: J, amt: number): J {
-  if (p.status === "COMPLETED") return { ok: true, done: true, message: "Card charged " + money(amt) + "." };
+function sqPaidMsg(p: J, amt: number, tipC = 0): J {
+  if (p.status === "COMPLETED") return { ok: true, done: true, message: "Card charged " + money(amt) + (tipC > 0 ? ", with a " + money(tipC) + " tip for the crew" : "") + "." };
   if (p.status === "APPROVED" || p.status === "PENDING") return { ok: true, done: true, message: "Payment of " + money(amt) + " is processing." };
   return { ok: false, message: "The card was not charged." };
 }
@@ -2212,6 +2230,9 @@ function sqPaidMsg(p: J, amt: number): J {
 async function sqCharge(org: string, me: J, jobId: string, c: J, b: J): Promise<J> {
   const amt = cents(b.amount), keep = !!b.save, by = who(me), row = c.sq, token = String(b.token || "");
   if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
+  const tp = tipCents(c.S, c.job, b.tip);
+  if (tp.err) return { ok: false, message: tp.err };
+  const tipC: number = tp.tipC;
   if (!/^[A-Za-z0-9:_+/=.-]{8,800}$/.test(token)) return { ok: false, message: "The card didn't come through. Type it in again." };
   if (await tooManyPays(org, by)) return { ok: false, message: TOO_MANY };
   const res = await withJobLock(org, jobId, async (): Promise<J> => {
@@ -2219,12 +2240,12 @@ async function sqCharge(org: string, me: J, jobId: string, c: J, b: J): Promise<
     if (!ready.ok) return ready;
     const job = ready.job, cu = await jobCustomer(org, jobId, job, c.acct);
     // the same card-box token never charges twice (Square keeps the key a day)
-    const r = await sqPay(row, { source: token, amt, customer: cu.customer, jobId, job, S: c.S, key: "t" + (await sha(["card", org, jobId, token].join("|"))).slice(0, 40) });
-    const ctx = { org, jobId, src: "card", by, cust: cu.key, tipC: 0 };
+    const r = await sqPay(row, { source: token, amt, tipC, customer: cu.customer, jobId, job, S: c.S, key: "t" + (await sha(["card", org, jobId, token].join("|"))).slice(0, 40) });
+    const ctx = { org, jobId, src: "card", by, cust: cu.key, tipC };
     if (r.payment) await sqRecord(r.payment, row, ctx);
     if (r.err) return { ok: false, message: r.err, needLink: r.code === "CARD_DECLINED_VERIFICATION_REQUIRED" };
     if (keep && r.payment.status === "COMPLETED") await sqKeepCard(org, row, r.payment, cu.customer, jobId, cu.key).catch((e) => console.error("square keep card", e));
-    return sqPaidMsg(r.payment, amt);
+    return sqPaidMsg(r.payment, amt + tipC, tipC);
   });
   return res || { ok: false, message: BUSY };
 }
@@ -2767,6 +2788,9 @@ export async function payLink(org: string, me: J, jobId: string, b: J): Promise<
   if (c.err) return { ok: false, message: c.err, status: c.status };
   const amt = cents(b.amount), save = !!b.save && !c.sq, by = who(me), acct = c.acct;
   if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
+  const tp = tipCents(c.S, c.job, b.tip);
+  if (tp.err) return { ok: false, message: tp.err };
+  const tipC: number = tp.tipC;
   const wh = await hookFor(acct);
   if (!wh.ok) return wh;
   const res = await withJobLock(org, jobId, async (): Promise<J> => {
@@ -2777,7 +2801,7 @@ export async function payLink(org: string, me: J, jobId: string, b: J): Promise<
     if (bad) return { ok: false, message: bad };
     const open = (await rest("GET", "pay_links?select=*&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&status=eq.open")) || [];
     // the same request again (a second tap, the screen redrawn) gets the same link back
-    const again = open.find((l: J) => l.created_by !== CUST_BY && capOf(l) === amt && !!l.save_card === save && Date.parse(l.expires_at) > Date.now() + 3600e3);
+    const again = open.find((l: J) => l.created_by !== CUST_BY && capOf(l) === amt && linkTip(l) === tipC && !!l.save_card === save && Date.parse(l.expires_at) > Date.now() + 3600e3);
     if (again) {
       if (again.amount_cents === amt && pageUsable(again) && Date.parse(pageEnds(again)) > Date.now() + 15 * 60e3 && pageOn(again, acct)) return { ok: true, link: again };
       const r = await renewPage(again, job, c.S, amt, acct);
@@ -2802,18 +2826,19 @@ export async function payLink(org: string, me: J, jobId: string, b: J): Promise<
     const token = randToken(), until = Date.now() + LINK_DAYS * 86400e3;
     let link: J;
     if (c.sq) {
-      const pg = await sqMintLink({ row: c.sq, org, jobId, job, S: c.S, token, amt, tipC: 0, kind: "", back: "" });
+      const pg = await sqMintLink({ row: c.sq, org, jobId, job, S: c.S, token, amt, tipC, kind: "", back: "" });
       link = {
         token, org_id: org, job_id: jobId, session_id: pg.id, url: pg.url, amount_cents: amt, cap_cents: amt, save_card: false, created_by: by,
-        status: "open", expires_at: new Date(until).toISOString(), session_expires: new Date(until).toISOString(), account: acct, meta: { order_id: pg.order_id },
+        status: "open", expires_at: new Date(until).toISOString(), session_expires: new Date(until).toISOString(), account: acct, meta: tipC ? { order_id: pg.order_id, tip: tipC } : { order_id: pg.order_id },
       };
     } else {
       const cus = (await jobCustomer(org, jobId, job, acct)).customer;
-      const s = await mintSession({ org, jobId, job, S: c.S, by, token, amt, save, cus, until, acct });
+      const s = await mintSession({ org, jobId, job, S: c.S, by, token, amt, tipC, save, cus, until, acct });
       link = {
         token, org_id: org, job_id: jobId, session_id: s.id, url: s.url, amount_cents: amt, cap_cents: amt, save_card: save, created_by: by,
         status: "open", expires_at: new Date(until).toISOString(), session_expires: new Date(s.expires_at * 1000).toISOString(), account: acct,
       };
+      if (tipC) link.meta = { tip: tipC };
     }
     await rest("POST", "pay_links", link);
     return { ok: true, link };
@@ -2821,7 +2846,7 @@ export async function payLink(org: string, me: J, jobId: string, b: J): Promise<
   if (!res) return { ok: false, message: BUSY };
   if (!res.ok) return res;
   const url = base() + "/p/" + res.link.token, d = c.job.d || {};
-  const out: J = { ok: true, url, amount: amt / 100, expiresAt: res.link.expires_at, texted: false, message: "Payment link ready for " + money(amt) + "." };
+  const out: J = { ok: true, url, amount: amt / 100, tip: tipC / 100, expiresAt: res.link.expires_at, texted: false, message: "Payment link ready for " + money(amt + tipC) + (tipC ? " (with a " + money(tipC) + " tip for the crew)" : "") + "." };
   if (b.text) {
     const line = await lineFor(org);
     if (!line) out.message = "Text it from your phone, or show the QR code.";
@@ -2830,7 +2855,7 @@ export async function payLink(org: string, me: J, jobId: string, b: J): Promise<
     else if (await textedLately(org, jobId)) out.message = "The link was texted a moment ago. Give it a minute before sending it again.";
     else {
       const r = await sendText({ org, line, jobId, purpose: "paylink", staff: me.staff, party: d.name || "Customer", to: d.phone,
-        body: company(c.S) + ": Here is your secure payment link for " + money(amt) + ": " + url });
+        body: company(c.S) + ": Here is your secure payment link for " + money(amt + tipC) + (tipC ? " (your bill and the tip for your crew)" : "") + ": " + url });
       out.texted = r.status !== "failed" && r.status !== "no-number";
       out.message = out.texted ? "Texted the payment link to " + (d.name || "the customer") + "." : "The text did not go out. Show the QR code instead.";
     }
@@ -2846,6 +2871,9 @@ export async function payIntent(org: string, me: J, jobId: string, b: J): Promis
   if (c.sq) return await sqCharge(org, me, jobId, c, b);
   const amt = cents(b.amount), save = !!b.save, by = who(me), acct = c.acct;
   if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
+  const tp = tipCents(c.S, c.job, b.tip);
+  if (tp.err) return { ok: false, message: tp.err };
+  const tipC: number = tp.tipC;
   if (!publishableKey()) return { ok: false, message: "Typing a card in needs STRIPE_PUBLISHABLE_KEY in Supabase. Use a pay link for now." };
   if (await tooManyPays(org, by)) return { ok: false, message: TOO_MANY };
   const wh = await hookFor(acct);
@@ -2855,15 +2883,16 @@ export async function payIntent(org: string, me: J, jobId: string, b: J): Promis
     if (!ready.ok) return ready;
     const job = ready.job, cus = (await jobCustomer(org, jobId, job, acct)).customer;
     const md = payMeta(org, jobId, job, by, "card", me.uid);
+    if (tipC) md.tally_tip = String(tipC);
     const pi = await stripe("POST", "payment_intents", {
-      amount: amt, currency: "usd", customer: cus, allowed_payment_method_types: ["card"],
+      amount: amt + tipC, currency: "usd", customer: cus, allowed_payment_method_types: ["card"],
       payment_method_options: { card: { setup_future_usage: save ? "off_session" : "none" } },
-      metadata: md, description: payWhat(c.S, job), receipt_email: validEmail((job.d || {}).email) || undefined,
+      metadata: md, description: payWhat(c.S, job) + (tipC ? " + tip" : ""), receipt_email: validEmail((job.d || {}).email) || undefined,
     }, undefined, acct);
-    await rest("POST", "pay_log?on_conflict=pi", { pi: pi.id, org_id: org, job_id: jobId, amount_cents: amt, status: pi.status || "requires_payment_method",
-      source: "card", cust_key: md.tally_cust, by_staff: by, livemode: !!pi.livemode, updated_at: nowIso(), account: acct }, "resolution=merge-duplicates");
+    await rest("POST", "pay_log?on_conflict=pi", { pi: pi.id, org_id: org, job_id: jobId, amount_cents: amt + tipC, status: pi.status || "requires_payment_method",
+      source: "card" + (tipC ? ";tip=" + tipC : ""), cust_key: md.tally_cust, by_staff: by, livemode: !!pi.livemode, updated_at: nowIso(), account: acct }, "resolution=merge-duplicates");
     // the card box on the phone works on the same Stripe account the payment is on
-    return { ok: true, clientSecret: pi.client_secret, returnUrl: base() + "/pay/done", amount: amt / 100, account: acct };
+    return { ok: true, clientSecret: pi.client_secret, returnUrl: base() + "/pay/done", amount: (amt + tipC) / 100, tip: tipC / 100, account: acct };
   });
   return res || { ok: false, message: BUSY };
 }
@@ -2874,6 +2903,9 @@ export async function paySaved(org: string, me: J, jobId: string, b: J): Promise
   if (c.err) return { ok: false, message: c.err, status: c.status };
   const amt = cents(b.amount), by = who(me), acct = c.acct, live = modeLive(acct);
   if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
+  const tp = tipCents(c.S, c.job, b.tip);
+  if (tp.err) return { ok: false, message: tp.err };
+  const tipC: number = tp.tipC, tot = amt + tipC;
   const vid = String(b.vaultId || "");
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(vid)) return { ok: false, message: "Pick a saved card." };
   const card = ((await rest("GET", "pay_cards?select=*&org_id=eq." + q(org) + "&id=eq." + q(vid) + "&limit=1")) || [])[0];
@@ -2888,8 +2920,10 @@ export async function paySaved(org: string, me: J, jobId: string, b: J): Promise
   const res = await withJobLock(org, jobId, async (): Promise<J> => {
     // the same amount charged to a card on this job a moment ago: most likely a double tap
     const since = new Date(Date.now() - 120e3).toISOString();
-    const recent = await rest("GET", "pay_log?select=pi&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&source=eq.saved&amount_cents=eq." + amt + "&status=in.(succeeded,processing)&created_at=gte." + q(since) + "&limit=1");
-    if (recent && recent.length) return { ok: false, message: "This card was just charged " + money(amt) + ". Check the bill before charging it again." };
+    // (a card on file's payments are "saved", or "saved;tip=<cents>" with the crew's tip)
+    const isSaved = (r: J) => String((r && r.source) || "").split(";")[0] === "saved";
+    const recent = ((await rest("GET", "pay_log?select=pi,source&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&amount_cents=eq." + tot + "&status=in.(succeeded,processing)&created_at=gte." + q(since))) || []).filter(isSaved);
+    if (recent.length) return { ok: false, message: "This card was just charged " + money(tot) + ". Check the bill before charging it again." };
     const ready = await readyToCharge(org, jobId, me, amt, c.job);
     if (!ready.ok) return ready;
     const job = ready.job;
@@ -2906,28 +2940,30 @@ export async function paySaved(org: string, me: J, jobId: string, b: J): Promise
     // its the customers for not mentioning it when booking". (Until then a lead could charge one only up
     // to the estimated top price.)
     // one charge however many times this is sent: the key names the job, the card, the amount, the bill so far
-    const tries = (await rest("GET", "pay_log?select=pi&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&source=eq.saved")) || [];
-    const idem = "tally-saved-" + await sha([org, jobId, card.pm_id, amt, jobTotalCents(job) - ready.owed, tries.length, live, acct].join("|"));
+    const tries = ((await rest("GET", "pay_log?select=pi,source&org_id=eq." + q(org) + "&job_id=eq." + q(jobId))) || []).filter(isSaved);
+    const idem = "tally-saved-" + await sha([org, jobId, card.pm_id, amt, jobTotalCents(job) - ready.owed, tries.length, live, acct].concat(tipC ? ["tip", tipC] : []).join("|"));
+    const and = tipC ? ", with a " + money(tipC) + " tip for the crew" : "";
     if (c.sq) {
-      const r = await sqPay(c.sq, { source: card.pm_id, amt, customer: card.customer_id, jobId, job, S: c.S, key: "s" + (await sha(idem)).slice(0, 40) });
-      if (r.payment) await sqRecord(r.payment, c.sq, { org, jobId, src: "saved", by, cust: jc.key, tipC: 0 });
+      const r = await sqPay(c.sq, { source: card.pm_id, amt, tipC, customer: card.customer_id, jobId, job, S: c.S, key: "s" + (await sha(idem)).slice(0, 40) });
+      if (r.payment) await sqRecord(r.payment, c.sq, { org, jobId, src: "saved", by, cust: jc.key, tipC });
       if (r.err) return { ok: false, message: r.err, needLink: r.code === "CARD_DECLINED_VERIFICATION_REQUIRED" };
       const p = r.payment;
-      if (p.status === "COMPLETED") return { ok: true, message: "Charged " + money(amt) + " to " + sqLabel(p) + "." };
-      if (p.status === "APPROVED" || p.status === "PENDING") return { ok: true, message: "Payment of " + money(amt) + " is processing." };
+      if (p.status === "COMPLETED") return { ok: true, message: "Charged " + money(tot) + " to " + sqLabel(p) + and + "." };
+      if (p.status === "APPROVED" || p.status === "PENDING") return { ok: true, message: "Payment of " + money(tot) + " is processing." };
       return { ok: false, message: "The card was not charged." };
     }
     const md = payMeta(org, jobId, job, by, "saved", me.uid);
+    if (tipC) md.tally_tip = String(tipC);
     try {
       const pi = await stripe("POST", "payment_intents", {
-        amount: amt, currency: "usd", customer: card.customer_id, payment_method: card.pm_id, off_session: true, confirm: true,
-        metadata: md, description: payWhat(c.S, job), receipt_email: validEmail((job.d || {}).email) || undefined,
+        amount: tot, currency: "usd", customer: card.customer_id, payment_method: card.pm_id, off_session: true, confirm: true,
+        metadata: md, description: payWhat(c.S, job) + (tipC ? " + tip" : ""), receipt_email: validEmail((job.d || {}).email) || undefined,
         expand: ["payment_method", "latest_charge"],
       }, idem, acct);
       await recordIntent(pi, acct);
       const what = methodLabel(pi.payment_method && typeof pi.payment_method === "object" ? pi.payment_method : null);
-      if (pi.status === "succeeded") return { ok: true, message: "Charged " + money(amt) + " to " + what + "." };
-      if (pi.status === "processing") return { ok: true, message: "Payment of " + money(amt) + " is processing." };
+      if (pi.status === "succeeded") return { ok: true, message: "Charged " + money(tot) + " to " + what + and + "." };
+      if (pi.status === "processing") return { ok: true, message: "Payment of " + money(tot) + " is processing." };
       return { ok: false, message: "The card was not charged." };
     } catch (e) {
       if (e instanceof StripeError && e.err && e.err.type === "card_error") {
@@ -3582,12 +3618,13 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     day: { startedAt: Number(job.startedAt) || 0, eta: (job.eta && Number(job.eta.at)) || 0, phases: job.phases && typeof job.phases === "object" ? job.phases : {}, finishedAt: Number(job.finishedAt) || 0 },
     crew: { lead: String(leadOf(S, job)).split(" ")[0], n: crew.length },
     tips: !optOff(S, "custTips"), book: !optOff(S, "custBook"), review: custReviewUrl(S), reviewed: !!c.reviewAt, bookedBy: c.bookedAt ? "customer" : "",
+    req: job.req && typeof job.req === "object" ? { from: String(job.req.from || ""), to: String(job.req.to || ""), at: Number(job.req.at) || 0, note: String(job.req.note || ""), quoted: !!job.req.quotedAt } : null,
   };
 }
 const mapOf = (m: J): J => (m && typeof m === "object" && !Array.isArray(m) ? m : {});
 function addLog(job: J, ts: number, ev: string): void { job.log = mapOf(job.log); job.log[logKey(ts, ev)] = { ts, ev }; }
 async function custList(user: J): Promise<J> {
-  const found = await custJobs(user.key), byOrg: Record<string, J[]> = {}, moves: J[] = [];
+  const found = await custJobs(user.key), byOrg: Record<string, J[]> = {}, moves: J[] = [], companies: J[] = [];
   found.forEach((x) => { (byOrg[x.org] = byOrg[x.org] || []).push(x); });
   for (const org of Object.keys(byOrg)) {
     const [S0, orgRow, line] = await Promise.all([getDoc(org, "org/settings"), rest("GET", "orgs?select=name&id=eq." + q(org) + "&limit=1"), lineFor(org).catch(() => null)]);
@@ -3607,8 +3644,72 @@ async function custList(user: J): Promise<J> {
       const paidC = paidWithLedger(x.job, await ledgerFor(org, x.id));
       moves.push(custCopy(org, S, { ...x.job, id: x.job.id || x.id }, { company, phone, paidC, pages }));
     }
+    companies.push({ org, name: company, phone, catalog: priceSettings(S).catalog.map((i: J) => ({ id: String(i.id), name: String(i.name || ""), cat: String(i.cat || "Other") })) });
   }
-  return { ok: true, email: user.email, name: user.name, phone: user.phone, moves };
+  return { ok: true, email: user.email, name: user.name, phone: user.phone, moves, companies };
+}
+/* Book another move (Richie, Nov 7: "the customer should see who their moving service was done by and should have a way
+   to book another move . Then they can enter their items and summit to the company . The date can just be the range of
+   days they can move . Then the company can contact them back to confirm the booking"). From one of their moves with a
+   company, a customer asks that company for another: the addresses, the days they can move, what's moving (the
+   company's own items), a note, their name and phone. It goes in as a lead (req: {at, by, key, from, to, note}), priced
+   the way the app prices it (the office makes the real quote when they call back), and the office is texted. */
+const CUST_REQ_PER_DAY = 3;
+const isoDay = (s: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) && !isNaN(Date.parse(String(s) + "T00:00:00Z"));
+const dayGap = (a: string, b: string) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5);
+export async function custRequest(user: J, org: string, jobId: string, b: J): Promise<J> {
+  const c = await custJob(user, org, jobId);
+  if (c.err) return { ok: false, message: c.err, status: c.status };
+  const S0 = c.S, S = priceSettings(S0), co = company(S0);
+  const line1 = (v: unknown, n: number) => String(v || "").trim().replace(/\s+/g, " ").slice(0, n);
+  const from = line1(b.from, 200), to = line1(b.to, 200), name = line1(b.name, 120), phone = line1(b.phone, 40), note = String(b.note || "").trim().slice(0, 600);
+  const d1 = String(b.d1 || ""), d2 = String(b.d2 || "") || d1, t = today();
+  if (!from) return { ok: false, message: "Put in the pickup address." };
+  if (!to) return { ok: false, message: "Put in the drop-off address." };
+  if (!isoDay(d1) || !isoDay(d2)) return { ok: false, message: "Pick the days you can move." };
+  if (d1 < t) return { ok: false, message: "The first day can't be in the past." };
+  if (d2 < d1) return { ok: false, message: "The last day comes after the first." };
+  if (dayGap(d1, d2) > 90) return { ok: false, message: "Pick days within three months of each other." };
+  if (dayGap(t, d1) > 365) return { ok: false, message: "Pick days within the next year." };
+  // what's moving: the company's own items only, 1 to 99 of each
+  const ids = new Set(S.catalog.map((i: J) => String(i.id))), items: Record<string, number> = {};
+  const raw = b.items && typeof b.items === "object" && !Array.isArray(b.items) ? b.items : {};
+  for (const k of Object.keys(raw).slice(0, 200)) {
+    const n = Math.floor(Number(raw[k]) || 0);
+    if (ids.has(k) && n > 0) items[k] = Math.min(99, n);
+  }
+  if (!Object.keys(items).length) return { ok: false, message: "Tap + on at least one thing that's moving." };
+  if (!name) return { ok: false, message: "Put in your name." };
+  if (last10(phone).length < 10) return { ok: false, message: "Put in a phone number they can reach you at." };
+  // a few a day, so a stuck button doesn't flood the office
+  const since = String(Date.now() - 864e5);
+  const lately = (await rest("GET", "docs?select=doc_id&org_id=eq." + q(org) + "&collection=eq.jobs&data->req->>key=eq." + q(user.key) + "&data->req->>at=gte." + q(since) + "&limit=" + (CUST_REQ_PER_DAY + 1))) || [];
+  if (lately.length >= CUST_REQ_PER_DAY) return { ok: false, message: co + " has your requests from today. They'll call or text you." };
+  const ts = Date.now(), id = "r" + randToken() + randToken().slice(0, 4), d0 = c.job.d || {};
+  const d: J = { name, phone, email: String(d0.email || user.email || ""), source: "Customer app", moveDate: "", time: "", from, to, miles: "", milesOut: "", milesBack: "",
+    flights: "", pack: false, crew: "", truckId: "", hoursOverride: "", discount: "", notes: note ? "From the customer: " + note : "", custom: {}, items, moveKind: "" };
+  const quote = priceCalc(d, S);
+  const job: J = {
+    id, status: "lead", createdAt: ts, d: { ...d, items: Object.keys(items).map((k) => ({ id: k, q: items[k] })) }, quote,
+    items: S.catalog.filter((i: J) => items[i.id] > 0).map((i: J) => ({ id: i.id, name: i.name, cf: i.cf, qty: items[i.id] })),
+    assign: { truckId: "", crew: [] }, tally: {}, payments: {}, signed: {}, extras: {}, crewNotes: {}, photos: {}, materials: {}, costs: {},
+    req: { at: ts, by: "customer", key: user.key, from: d1, to: d2, note }, log: {},
+  };
+  const range = fmtDay(d1) + (d2 !== d1 ? " to " + fmtDay(d2) : "");
+  addLog(job, ts, "Move request from the customer app: can move " + range);
+  if (c.job.test) job.test = true;
+  await rest("POST", "docs", { org_id: org, path: "jobs/" + id, collection: "jobs", doc_id: id, data: job, updated_at: nowIso() });
+  // the office hears it, when the company line is set up
+  try {
+    const line = await lineFor(org);
+    if (line && !job.test && alertOn(S0, "custReq")) {
+      for (const n of ringNames(S0)) {
+        await sendText({ org, line, jobId: id, purpose: "custreq", staff: n, to: contacts(S0)[n],
+          body: co + ": " + gsm(name) + " asked for another move in the customer app, any day " + range + ". Call them at " + phone + " to set it up in MoveCrew." });
+      }
+    }
+  } catch (e) { console.error("custreq text", e); }
+  return { ok: true, jobId: id };
 }
 // the customer's own move: {job, S} or {err, status}
 async function custJob(user: J, org: string, jobId: string): Promise<J> {
@@ -3893,6 +3994,7 @@ async function handleCust(req: Request, b: J): Promise<Response> {
     if (b.action === "cust_profile") return json(await custProfile(user, b));
     const fns: Record<string, (u: J, o: string, j: string, x: J) => Promise<J>> = {
       cust_book: (u, o, j) => custBook(u, o, j), cust_sign: custSign, cust_pay: custPay, cust_reviewed: custReviewedOf, cust_check: (u, o, j) => custCheck(u, o, j),
+      cust_request: custRequest,
     };
     const f = fns[String(b.action)];
     if (!f) return json({ ok: false, message: "Unknown action" }, 400);
