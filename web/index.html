@@ -86,6 +86,20 @@ main{padding:10px 12px calc(70px + env(safe-area-inset-bottom));max-width:960px;
 .grow{flex:1;min-width:0}
 .hint{color:var(--muted);font-size:13px;margin:6px 0 0}
 .note{background:var(--accSoft);border:var(--bw) solid var(--tape-edge);border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:10px}
+/* getting MoveCrew onto a phone (the sign-in screen's ?get=app page, More › Get the app, the customer's Get the app) */
+.gsteps{margin:8px 0 6px;padding-left:22px;font-size:15px;line-height:1.45}
+.gsteps li{margin:0 0 8px;padding-left:2px}
+.gsteps b{font-weight:700}
+.gshare{width:18px;height:18px;vertical-align:-3px;display:inline-block}
+.gnote{margin:4px 0 0;font-size:13.5px;opacity:.78}
+.gbtn{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;margin:10px 0 6px;border-radius:10px;border:1px solid var(--tape-edge,#D9A000);background:var(--tape,#F5B700);color:var(--tape-ink,#241A00);font-weight:700;font-size:16px;text-decoration:none}
+.gother{margin:14px 0 0;border-top:1px solid color-mix(in srgb, currentColor 16%, transparent)}
+.gother>summary{cursor:pointer;padding:10px 0 4px;font-size:14px;opacity:.85;min-height:40px;display:flex;align-items:center;justify-content:space-between;list-style:none}
+.gother>summary::-webkit-details-marker{display:none}
+.gother>summary::after{content:"+";font-size:20px;line-height:1;opacity:.7;padding:0 2px}
+.gother[open]>summary::after{content:"\2212"}
+.gother h4{margin:12px 0 2px;font-size:14px}
+.getsheet h2{margin:2px 0 4px}
 /* grey small print is too faint on a note's tinted box in some dark looks: it takes the note's own colour */
 .note small{color:inherit}
 .trkrow{margin-top:6px}
@@ -1174,12 +1188,20 @@ var user={
 
 /* ---------- the sign-in screen ---------- */
 var el=null,state={step:'email',email:'',busy:false,msg:''};
+// MoveCrew installed on this device: the Android or Windows app, Chrome's installed app, or an iPhone's Home Screen app
+function installed(){try{return !!window.TALLY_STANDALONE||navigator.standalone===true||!!(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)}catch(e){return false}}
+// an iPhone's (or iPad's) Home Screen app: Google's sign-in leaves it for a browser sheet and may not come back signed
+// in, so it signs in with the emailed code, as the Android and Windows apps do
+function iosApp(){var ua=navigator.userAgent||'';return (/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&(navigator.maxTouchPoints||0)>1))&&installed()}
+// the link an invite texts (?get=app, Nov 8): how to get MoveCrew on the phone or computer it was opened on, first
+var getApp=(function(){try{return /[?&]get=app(?:&|$)/.test(location.search)}catch(e){return false}})();
+function getShown(){return getApp&&!state.getSkip&&!installed()&&typeof window.getAppHtml==='function'}
 function css(){
   if(document.getElementById('lgCss'))return;
   var s=document.createElement('style');s.id='lgCss';
   s.textContent='html.pre-auth body>*:not(#login):not(#updBar){display:none!important}'+
-  '#login{position:fixed;inset:0;z-index:120;background:#F5F6F8;color:#141B2D;display:flex;align-items:center;justify-content:center;padding:22px;font:400 16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'+
-  '#login .box{width:100%;max-width:380px;background:#fff;border:1px solid #E7EAF0;border-radius:14px;padding:22px}'+
+  '#login{position:fixed;inset:0;z-index:120;background:#F5F6F8;color:#141B2D;display:flex;align-items:center;justify-content:center;padding:22px;overflow-y:auto;font:400 16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'+
+  '#login .box{width:100%;max-width:380px;margin:auto;background:#fff;border:1px solid #E7EAF0;border-radius:14px;padding:22px}'+
   '#login h1{font:700 30px/1 "Barlow Condensed","Arial Narrow",Arial,sans-serif;margin:0 0 4px;letter-spacing:.5px}'+
   '#login p{margin:0 0 14px;font-size:14px;opacity:.75}#login p.ask{font-size:17px;font-weight:650;opacity:1;margin:6px 0 4px;text-wrap:balance}'+
   '#login label{display:block;font-size:12px;opacity:.7;margin-bottom:4px}'+
@@ -1201,8 +1223,13 @@ function render(){
   css();
   if(!el){el=document.createElement('div');el.id='login';document.body.appendChild(el)}
   var b=state.busy;
+  if(state.step==='email'&&getShown()){
+    el.innerHTML='<div class="box getbox"><h1>MoveCrew</h1>'+window.getAppHtml({ask:true})+'<button class="link" id="lgHere">Sign in here instead</button></div>';
+    el.querySelector('#lgHere').onclick=function(){state.getSkip=true;render()};
+    return;
+  }
   if(state.step==='email')oauthAsk();
-  var g=!!oauth&&oauth.google&&!window.TALLY_STANDALONE;   // Google won't sign in inside an installed app's own window (Android, Windows)
+  var g=!!oauth&&oauth.google&&!window.TALLY_STANDALONE&&!iosApp();   // Google won't sign in inside an installed app's own window (Android, Windows, an iPhone's Home Screen)
   el.innerHTML='<div class="box"><h1>MoveCrew</h1>'+(state.step==='email'
     ? '<p>Sign in to see your move, or to get to work.</p>'+
       (g?'<button id="lgGoogle" class="google"'+(b?' disabled':'')+'>'+GLOGO+'Continue with Google</button><div class="or">or with a code by email</div>':'')+
@@ -1246,7 +1273,7 @@ var oauth={google:false,asked:false};
 var GLOGO='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
 // asked once, the first time the sign-in screen shows (not at every start, and never in the Android or Windows app)
 function oauthAsk(){
-  if(!oauth||oauth.asked||window.TALLY_STANDALONE)return;oauth.asked=true;
+  if(!oauth||oauth.asked||window.TALLY_STANDALONE||iosApp())return;oauth.asked=true;
   try{fetch(CFG.url.replace(/\/+$/,'')+'/auth/v1/settings',{headers:{apikey:CFG.anonKey}}).then(function(r){return r.json()}).then(function(j){oauth.google=!!(j&&j.external&&j.external.google);if(oauth.google&&el&&state.step==='email'&&!state.busy&&document.getElementById('lgEmail'))render()}).catch(function(){})}catch(e){}
 }
 function googleIn(){
@@ -1583,12 +1610,13 @@ sb.auth.onAuthStateChange(function(ev,session){
 })();
 
 </script>
-<!-- installable app: Chrome "Install app", and the Android package built from this site -->
+<!-- installable app: Chrome "Install app", an iPhone's Add to Home Screen, and the Android package built from this site -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#141B2D">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MoveCrew">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <script>
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
 </script>
@@ -2717,12 +2745,11 @@ function renderMyPay(){
     (rows?'<section class="card"><h3>Receipts</h3><table class="lines">'+rows+'</table></section>':'')+custDetailsHtml(m);
 }
 function custAppHtml(){
-  var standalone=!!window.TALLY_STANDALONE||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
-  if(standalone)return '';
-  var ua=navigator.userAgent||'',ios=/iPhone|iPad|iPod/.test(ua),can=!!window.__tallyInstall;
+  if(appInstalled())return '';
+  var k=phoneKind(),can=!!window.__tallyInstall;
   return '<section class="card"><h3>Get the app</h3><p class="hint" style="margin:0 0 8px">Keep your move on your home screen, like any app. There’s nothing to download from a store.</p>'+
-    (can?'<button class="btn primary" data-act="cs:install">Add to home screen</button>':ios?'<p class="hint" style="margin:0">In Safari, tap the Share button, then <b>Add to Home Screen</b>.</p>':
-      '<p class="hint" style="margin:0">On Android, open Chrome’s menu (⋮) and tap <b>Add to Home screen</b> or <b>Install app</b>. On an iPhone, tap Share in Safari, then <b>Add to Home Screen</b>.</p>')+'</section>';
+    (can?'<button class="btn primary" data-act="cs:install">Add to home screen</button>':k==='iphone'||k==='ipad'?getSteps('iphone',{once:true}):
+      getSteps('android',{})+'<p class="hint" style="margin:6px 0 0">On an iPhone: in Safari, tap Share (on iOS 26, under ⋯ next to the address bar), then <b>Add to Home Screen</b>.</p>')+'</section>';
 }
 function renderMyProfile(){
   var v=$('#view'),me=custSelf(),L=custSorted(),live=custLive();
@@ -2774,6 +2801,50 @@ function csSignHtml(m){
     '<div class="f"><span>Sign here with your finger</span></div><canvas id="sigPad" class="sigpad" aria-label="Signature pad"></canvas>'+
     '<div class="row"><button class="btn" data-act="cs:clearsig">Clear</button><button class="btn primary grow" data-act="cs:signgo" data-k="'+esc(custKeyOf(m))+'" data-fid="'+esc(f.id)+'">Sign</button></div><p class="hint" id="csErr" role="alert"></p>';
 }
+/* ---------- getting MoveCrew onto a phone or a computer (Richie, Nov 8: "If we want to make this actually top tier
+   stuff we will need it avaliable for iphones as well", then "we will just do the webbase right now"). An iPhone adds
+   the website to its Home Screen: Safari's Share › Add to Home Screen (on iOS 26 Share sits under ⋯ next to the
+   address bar, and the site opens as a web app, full screen with its own icon). An Android phone gets the Android
+   app, a computer the Windows app or the browser. A person invited to work in the field is texted one link
+   (getAppLink, the website's ?get=app) that shows the steps for the phone it's opened on, before they sign in. */
+function phoneKind(){
+  var ua=navigator.userAgent||'';
+  if(/iPhone|iPod/.test(ua))return 'iphone';
+  if(/iPad/.test(ua)||(/Macintosh/.test(ua)&&(navigator.maxTouchPoints||0)>1))return 'ipad';   // an iPad says it's a Mac
+  return /Android/.test(ua)?'android':'computer';
+}
+// MoveCrew installed on this device already (the Android or Windows app, Chrome's installed app, a Home Screen app)
+function appInstalled(){try{return !!window.TALLY_STANDALONE||navigator.standalone===true||!!(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)}catch(e){return false}}
+function getAppLink(){return custSite()+'?get=app'}
+var SHARE_SVG='<svg class="gshare" viewBox="0 0 24 24" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4M6 11H5v10h14V11h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// the steps for one kind of device. o: {signin: sign in there afterwards, once: a customer signing in once more in
+// the Home Screen app, apk / win: the downloads (staff)}
+function getSteps(k,o){
+  o=o||{};
+  if(k==='iphone'||k==='ipad')return '<ol class="gsteps">'+
+    '<li>In <b>Safari</b>, tap <b>Share</b> '+SHARE_SVG+'. On iOS 26, tap <b>⋯</b> next to the address bar first.</li>'+
+    '<li>Tap <b>Add to Home Screen</b>. Keep <b>Open as Web App</b> on, then tap <b>Add</b>.</li>'+
+    '<li>Open <b>MoveCrew</b> from your Home Screen'+(o.signin?' and sign in there with your email':o.once?'. Sign in there once more with your email':'')+'.</li></ol>'+
+    '<p class="gnote">It’s the same MoveCrew, full screen with its own icon. Nothing to download from the App Store.</p>';
+  if(k==='android')return o.apk?'<a class="gbtn" href="'+esc(o.apk)+'">Download the Android app</a><ol class="gsteps">'+
+      '<li>Open the downloaded file and tap <b>Install</b>. If your phone asks, let your browser install apps.</li>'+
+      '<li>Open <b>MoveCrew</b> and sign in with your email.</li></ol>'
+    :'<ol class="gsteps"><li>In <b>Chrome</b>, open the menu ⋮ and tap <b>Add to Home screen</b> or <b>Install app</b>.</li><li>Open <b>MoveCrew</b> from your home screen.</li></ol>';
+  return (o.win?'<a class="gbtn" href="'+esc(o.win)+'">Download MoveCrew for Windows</a>':'')+
+    '<p class="gnote">'+(o.win?'For the office, dispatch and the call center: install it once and it keeps itself up to date. ':'')+'Or use MoveCrew right here in your browser.</p>';
+}
+// the whole page: this device's steps first, the others folded under them. o.ask: the sign-in screen's own heading
+function getAppHtml(o){
+  o=o||{};
+  // signed in here already (More › Get the app): a Home Screen app on an iPhone keeps its own sign-in, so once more there
+  var k=phoneKind(),me=k==='ipad'?'iphone':k,dl={apk:o.apk||DEFAULT_APP_LINK,win:o.win||DEFAULT_WIN_LINK,signin:!o.here,once:!!o.here};
+  var head=k==='computer'?'Get MoveCrew':'Get MoveCrew on your '+(k==='android'?'phone':k==='ipad'?'iPad':'iPhone');
+  var name={iphone:'On an iPhone or iPad',android:'On an Android phone',computer:'On a computer'};
+  var others=['iphone','android','computer'].filter(function(x){return x!==me}).map(function(x){return '<h4>'+name[x]+'</h4>'+getSteps(x,dl)}).join('');
+  return (o.ask?'<p class="ask">'+head+'</p>':'<h2>'+head+'</h2>')+getSteps(me,dl)+
+    '<details class="gother"><summary>Another phone or a computer?</summary>'+others+'</details>';
+}
+window.getAppHtml=getAppHtml;
 // the bill's tip is asked before the final total (Richie, Nov 7): subtotal, the tip, the final total
 function csTipAsk(m){return custTipOk(m)&&custDueNow(m).kind==='bill'}
 function csPayWord(m,c,total){return c.busy?'Opening…':csTipAsk(m)&&c.tip==null?'Pick a tip first':total>0?'Pay '+money(total):'Nothing to pay'}
@@ -3357,6 +3428,11 @@ function renderMore(){
     el.innerHTML='<div class="scrim" data-act="more:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="See it their way">'+previewSheet()+'</div>';
     el.hidden=!ui.more;syncLock();return;
   }
+  if(ui.moreMode==='getapp'){
+    el.innerHTML='<div class="scrim" data-act="more:close"></div><div class="panel getsheet" role="dialog" aria-modal="true" aria-label="Get the app"><div class="row between"><span></span><button class="btn sm" data-act="more:close">Done</button></div>'+
+      getAppHtml({here:true,win:/^https:\/\/\S+$/i.test(state.settings.winLink||'')?state.settings.winLink:''})+'</div>';
+    el.hidden=!ui.more;syncLock();return;
+  }
   if(ui.moreMode==='company'&&window.tallyCompanies){
     el.innerHTML='<div class="scrim" data-act="more:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="Switch company">'+companySheet()+'</div>';
     el.hidden=!ui.more;syncLock();return;
@@ -3379,6 +3455,7 @@ function renderMore(){
     window.tallySwitchCompany&&!(state.ui.role==='callcenter'&&!ccHouse())?row('more:company','',SICON.swap,'Switch company',
       window.tallyCompanies?'Now: '+((window.tallyOrg||{}).name||'')+' · '+window.tallyCompanies.list.length+' companies':(window.tallyOrg||{}).name||''):'',   // the call center switches from Companies
     window.tallyCust&&window.tallyCust.has&&!previewing()?row('cust:mine','',SICON.profile,'My moves','Your own moves, as a customer'):'',
+    window.TALLY_SUPABASE&&window.tallySignOut&&!appInstalled()?row('more:getapp','',SICON.get,'Get the app',{iphone:'Add MoveCrew to your Home Screen',ipad:'Add MoveCrew to your Home Screen',android:'The Android app'}[phoneKind()]||'MoveCrew for Windows, or your phone'):'',
     window.tallySignOut?row('more:signout','',SICON.signout,'Sign out',sync.meName||''):''];
   var sosRow=role!=='callcenter'&&(opt('truckDown')||sosActive().length)?'<div class="navlist" style="margin-top:16px">'+row('sos:open','',ICON.sos,'Truck down','Tell the office a truck broke down, and where','sosrow')+'</div>':'';
   el.innerHTML='<div class="scrim" data-act="more:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="More"><div class="row between"><h2>More</h2><button class="btn sm" data-act="more:close">Done</button></div>'+
@@ -5559,6 +5636,7 @@ function renderReports(){
 var SET_GROUPS=[['co','Your company'],['price','Pricing'],['people','People'],['jobs','Jobs and paperwork'],['cust','Customers'],['money','Payments and texts'],['data','Data']];
 var SICON=(function(){var p={
   options:'<rect x="2.5" y="7" width="19" height="10" rx="5"/><circle cx="16.5" cy="12" r="2.8"/>',
+  get:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M12 7.5v7M9 11.5l3 3 3-3"/><path d="M10.5 18.5h3"/>',
   company:'<path d="M4 20V7l8-3.5L20 7v13"/><path d="M9.5 20v-4.5h5V20"/><path d="M8 9.5h1.5M14.5 9.5H16M8 12.5h1.5M14.5 12.5H16"/>',
   member:'<path d="M12 3.2l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
   rates:'<path d="M3.5 12.2V4h8.2l8.8 8.8-8.2 8.2z"/><circle cx="8" cy="8.5" r="1.4"/>',
@@ -6900,7 +6978,7 @@ function employeesCard(){
   return '<section class="card"><h2>Employees</h2><p class="sub">'+(host?'Everyone who works for you. Add the email each person signs in with: when they sign in, MoveCrew connects them to their profile and role, with no code to share. Hiring details are visible only to you and that person.':'Everyone who works for you, with their hiring details. In this copy, profiles stay on this device. In the MoveCrew app they are private to you and each employee, and signing in connects people to their profile.')+'</p>'+
     (people.err?'<div class="note">'+esc(people.err)+'</div>':'')+(host&&people.loading&&!people.list.length?'<p class="hint">Loading profiles…</p>':'')+
     '<button class="btn primary" data-act="emp:new" style="margin:2px 0 12px">Add employee</button>'+(rows||'<p class="hint">No one yet.</p>')+
-    (host?'<div style="margin-top:10px">'+fld('Link to download the app (used in invite texts)','<input data-s="appLink" data-t="text" inputmode="url" autocomplete="off" placeholder="'+esc(DEFAULT_APP_LINK)+'" value="'+esc(S.appLink||'')+'">')+
+    (host?'<div style="margin-top:10px">'+fld('Link to get the app (in invite texts; left empty, MoveCrew’s page for any phone: Android phones get the app, iPhones the steps to add it to the Home Screen)','<input data-s="appLink" data-t="text" inputmode="url" autocomplete="off" placeholder="'+esc(getAppLink())+'" value="'+esc(S.appLink||'')+'">')+
       fld('Link to the Windows app (in invite texts for people who work only in the office)','<input data-s="winLink" data-t="text" inputmode="url" autocomplete="off" placeholder="'+esc(DEFAULT_WIN_LINK)+'" value="'+esc(S.winLink||'')+'">')+
       '<p class="hint" style="margin:8px 0 0">For office computers: <a href="'+esc(/^https:\/\/\S+$/i.test(S.winLink||'')?S.winLink:DEFAULT_WIN_LINK)+'" target="_blank" rel="noopener">MoveCrew for Windows</a>, for the office, dispatch and the call center. Install it once; it keeps itself up to date.</p></div>':'')+'</section>';
 }
@@ -6948,7 +7026,9 @@ function inviteHtml(rec){
   if(!peopleHosted()||!rec||rec.user_id||!rec.email||rec.active===false)return '';
   var first=rec.name.split(' ')[0],ph=(rec.info&&rec.info.phone)||'',co=String((window.tallyOrg&&window.tallyOrg.name)||state.settings.company||'work').trim().replace(/[.!]+$/,'');
   // someone who works only in the office gets the Windows app; anyone in the field, the phone app
-  var office=sidesOf(rec.name,rec).field==='off',link=office?(state.settings.winLink||DEFAULT_WIN_LINK):(state.settings.appLink||DEFAULT_APP_LINK);
+  // (Nov 8: the field's link is the website's ?get=app page, which shows an iPhone how to add MoveCrew to its Home
+  // Screen and gives an Android phone the app; it used to be the Android download, which does nothing on an iPhone)
+  var office=sidesOf(rec.name,rec).field==='off',link=office?(state.settings.winLink||DEFAULT_WIN_LINK):(state.settings.appLink||getAppLink());
   // someone who already works for another company in MoveCrew picks this one when the app asks (Nov 1)
   var msg=office?'Hi '+first+', it\'s '+co+'. Get MoveCrew for your Windows computer here: '+link+' and sign in with '+rec.email+'. Already use MoveCrew? Just open it and pick '+co+'.'
     :'Hi '+first+', it\'s '+co+'. Get the MoveCrew app here: '+link+' and sign in with '+rec.email+'. You\'ll go straight to your jobs. Already use MoveCrew? Just open it and pick '+co+'.';
@@ -9352,6 +9432,7 @@ document.addEventListener('click',function(e){
     case 'sos:note':sosNote(t.dataset.id);break;
     case 'sos:texts':{var stx=sos.texts[t.dataset.id];if(stx&&stx.st==='failed'){stx.st='wait';stx.msg='';sosTextsNow(t.dataset.id)}break}
     case 'more:preview':ui.moreMode='preview';renderMore();break;
+    case 'more:getapp':ui.moreMode='getapp';renderMore();break;
     case 'pv:set':ui.more=false;ui.moreMode='list';renderMore();startPreview(t.dataset.role,t.dataset.staff||'');break;
     case 'pv:end':endPreview();break;
     case 'more:go':ui.more=false;renderMore();if(t.dataset.tab==='history'&&ui.tab!=='history')histReset();if(t.dataset.tab==='settings'){ui.setSec=t.dataset.sec||'';ui.setQ=''}ui.tab=t.dataset.tab;ui.armed='';render();window.scrollTo(0,0);break;

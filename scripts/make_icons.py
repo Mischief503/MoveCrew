@@ -9,6 +9,9 @@ Writes:
   Windows app, whose icon scripts/prepare_windows.py takes from icon-512.png).
 - web/icons/icon-512-maskable.png: the picture smaller on its own dark colour, so a phone that cuts the icon to a
   circle keeps the name whole (the safe zone is the middle circle, 80% across).
+- web/icons/apple-touch-icon.png (180 x 180): the icon an iPhone puts on its Home Screen (Nov 8). The iPhone rounds the
+  corners itself, more than the picture's own frame is rounded, so the picture fills 90% of it on its dark colour and
+  the glowing frame shows whole. No transparency: an iPhone fills that with black.
 - android/app/src/main/res/mipmap-*/ic_launcher_foreground.png: the phone app's adaptive icon (108 dp, of which the
   launcher shows the middle 72 cut to its shape: a squircle on Samsung, a circle on a Pixel). The picture fills 64% of
   it, so on a squircle its glowing frame shows whole, and on a circle MOVECREW does. The background layer is the
@@ -25,6 +28,7 @@ SRC = os.path.join(ROOT, 'design', 'movecrew-icon.png')
 BG = (8, 13, 19, 255)          # the picture's corner colour, #080D13 (tally_icon_bg)
 ADAPTIVE = 0.64                # share of the 108 dp canvas the picture fills
 MASKABLE = 0.76                # share of the maskable icon the picture fills
+APPLE = 0.90                   # share of the iPhone's Home Screen icon the picture fills
 
 src = Image.open(SRC).convert('RGBA')
 
@@ -46,6 +50,7 @@ def save(img, *parts):
 for n in (192, 512):
     save(src.resize((n, n), Image.LANCZOS).convert('RGB'), 'web', 'icons', 'icon-%d.png' % n)
 save(fit(512, MASKABLE).convert('RGB'), 'web', 'icons', 'icon-512-maskable.png')
+save(fit(180, APPLE).convert('RGB'), 'web', 'icons', 'apple-touch-icon.png')
 
 # the phone app
 RES = os.path.join('android', 'app', 'src', 'main', 'res')

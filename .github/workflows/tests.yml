@@ -8,7 +8,7 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
 
@@ -24,10 +24,14 @@ jobs:
         working-directory: tests/ui
         run: |
           npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
 
       - name: Run every MoveCrew check
         run: bash tests/run-all.sh
+
+      # Safari's own engine, as on an iPhone (Nov 8: iPhones get MoveCrew from the website, on their Home Screen)
+      - name: The app in Safari's engine (WebKit), as on an iPhone
+        run: PW_ENGINE=webkit node tests/ui/iphone.js
 
       - name: Check the free map services answer (for information)
         continue-on-error: true

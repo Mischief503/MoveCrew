@@ -84,7 +84,8 @@ const empText = (A) => (A.$('#emp') ? A.$('#emp').textContent.replace(/\s+/g, ' 
   ok(T.state().settings.crew.includes('Mike') && T.state().settings.contacts.Mike === '503-555-0100', 'Mike joins the crew list with his phone, for scheduling and Call buttons');
   ok(/Waiting for their first sign-in with mike@x\.com/.test(empText(A)), 'the profile says it is waiting for Mike to sign in');
   const sms = $('#emp a[href^="sms:"]');
-  ok(sms && /5035550100/.test(sms.getAttribute('href')) && /mike%40x\.com/.test(sms.getAttribute('href')) && /MoveCrew\.apk/.test(sms.getAttribute('href')), 'Text Mike the app: an sms link with the download link and his sign-in email');
+  // (since Nov 8 the link is the website's ?get=app page: the Android app on an Android phone, the Home Screen steps on an iPhone)
+  ok(sms && /5035550100/.test(sms.getAttribute('href')) && /mike%40x\.com/.test(sms.getAttribute('href')) && /tally\.example\.com%2F%3Fget%3Dapp/.test(sms.getAttribute('href')), 'Text Mike the app: an sms link with the link to get the app on any phone and his sign-in email');
   ok($('[data-ek="name"]').readOnly, 'after saving, the name is fixed');
 
   // documents

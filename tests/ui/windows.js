@@ -112,7 +112,7 @@ const set = (A, sel, v) => { const el = A.$(sel); el.value = v; el.dispatchEvent
   ok(rec.open.length === 2 && /^https:\/\/signed\.example\//.test(rec.open[1]) && rec.winOpen.length === 0, 'View opens the private document link in the computer’s browser');
   A.click('[data-act="emp:close"]'); await sleep(10);
 
-  // texting the app to someone new: the office gets the Windows app, the field the phone app
+  // texting the app to someone new: the office gets the Windows app, the field the link that gets it on any phone
   A.click('[data-act="emp:new"]'); await sleep(20);
   set(A, '[data-ek="name"]', 'Dana');
   set(A, '[data-ek="email"]', 'dana@x.com');
@@ -131,7 +131,8 @@ const set = (A, sel, v) => { const el = A.$(sel); el.value = v; el.dispatchEvent
   A.click('[data-act="emp:save"]'); await sleep(40);
   sms = A.$('#emp a[href^="sms:"]');
   body = sms ? decodeURIComponent(sms.getAttribute('href').replace(/^[^?]*\?&body=/, '')) : '';
-  ok(/Get the MoveCrew app here: https:\/\/github\.com\/Mischief503\/MoveCrew\/releases\/latest\/download\/MoveCrew\.apk and sign in with rico@x\.com\. You'll go straight to your jobs\. Already use MoveCrew\? Just open it and pick Ace Moving\.$/.test(body), 'someone on the crew still gets the phone app');
+  // (since Nov 8 the website's ?get=app page, which gives an Android phone the app and an iPhone the steps to add it)
+  ok(/Get the MoveCrew app here: https:\/\/tally\.example\.com\/\?get=app and sign in with rico@x\.com\. You'll go straight to your jobs\. Already use MoveCrew\? Just open it and pick Ace Moving\.$/.test(body), 'someone on the crew gets the link to the app for any phone');
   A.click('[data-act="emp:close"]'); await sleep(10);
   ok(A.errors.length === 0, 'no errors (' + A.errors.slice(0, 3).join(' | ') + ')');
 
