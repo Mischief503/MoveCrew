@@ -37,6 +37,9 @@ const listen = (st) => (w) => {
   ok(sp && sp.querySelector('svg[aria-hidden="true"] .sp-wheel circle') && sp.querySelectorAll('.sp-wheel path').length >= 1 && sp.querySelector('.sp-road'), 'the drawing: a wheel that turns (spokes), the road going by');
   ok(sp && sp.querySelectorAll('svg rect[fill="url(#spBox)"]').length === 3, 'three boxes on the hand truck');
   ok(sp && sp.querySelector('.sp-name .sp-sr').textContent === 'MoveCrew' && /MOVE/.test(sp.querySelector('.sp-name').textContent), 'MOVE CREW in the new icon’s colours, read as “MoveCrew”');
+  // Richie, Nov 7: "The 3 words on the picture and the loading screen i think we could choose better", then "Book move relax"
+  ok(sp && [...sp.querySelectorAll('.sp-tag span')].map((s) => s.textContent).join(' ◆ ') === 'Book ◆ Move ◆ Relax' && sp.querySelectorAll('.sp-tag i').length === 2,
+    'under the name, the icon’s words: Book ◆ Move ◆ Relax');
   const css = D.getElementById('splashCss').textContent;
   ok(/#splash\{position:fixed;inset:0;z-index:110/.test(css) && /@media \(prefers-reduced-motion:reduce\)\{#splash \*\{animation:none!important\}/.test(css), 'over the app (z 110; sign-in is 120, the access card 80), and still for people who turn motion off');
   ok(/@keyframes sp-spin\{to\{transform:rotate\(360deg\)\}\}/.test(css) && /\.sp-wheel\{transform-origin:122px 150px;animation:sp-spin/.test(css), 'the wheel turns about its own middle');

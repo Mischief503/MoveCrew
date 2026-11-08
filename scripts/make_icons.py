@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""MoveCrew's icons, made from one picture: design/movecrew-icon.png (Richie's icon, Nov 6, 1254 x 1254).
+"""MoveCrew's icons, made from one picture: design/movecrew-icon.png (Richie's icon, Nov 6, 1254 x 1254; since Nov 7
+with Book ◆ Move ◆ Relax under the name, put there by scripts/icon_tagline.py from design/movecrew-icon-original.png).
 
     python3 scripts/make_icons.py
 
