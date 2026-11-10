@@ -224,10 +224,27 @@ function addDay(day: string): string {
   if (!m) return day;
   return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + 1)).toISOString().slice(0, 10);
 }
-function leadOf(S: J, job: J): string {
+// who on a job's crew can run it: its leads, and the owner or dispatch on it
+export function runnersOf(S: J, job: J): string[] {
+  const crew: string[] = (job.assign && Array.isArray(job.assign.crew) && job.assign.crew) || [];
+  const leads: string[] = (S && S.leads) || [], office = officeNames(S);
+  return crew.filter((n) => leads.indexOf(n) >= 0 || office.indexOf(n) >= 0);
+}
+// the lead picked for the day (job.assign.lead, Nov 9: picked at Start job, or by the office, when more than one on
+// the job can lead), while they're still on the crew and can lead
+export function leadPicked(S: J, job: J): string {
+  const p = job.assign && typeof job.assign.lead === "string" ? job.assign.lead : "";
+  return p && runnersOf(S, job).indexOf(p) >= 0 ? p : "";
+}
+// who runs a job: the lead picked for the day, else the first lead on its crew, else the owner or dispatch on it
+export function leadOf(S: J, job: J): string {
   const crew: string[] = (job.assign && job.assign.crew) || [];
   const leads: string[] = (S && S.leads) || [];
-  return crew.find((n) => leads.indexOf(n) >= 0) || crew.find((n) => officeNames(S).indexOf(n) >= 0) || "";
+  return leadPicked(S, job) || crew.find((n) => leads.indexOf(n) >= 0) || crew.find((n) => officeNames(S).indexOf(n) >= 0) || "";
+}
+// "Marcus", "Marcus and Tanya", "Marcus, Kim and Tanya"
+function andWords(a: string[]): string {
+  return a.length < 2 ? (a[0] || "") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
 }
 
 /* ---------- Twilio ---------- */
@@ -397,7 +414,10 @@ export async function checkJob(org: string, jobId: string, origin?: string | nul
       const mine = drives(n);
       if (mine) bits.push("You drive " + gsm(mine.name) + ".");
       else if (trucks.length) bits.push((trucks.length > 1 ? "Trucks " : "Truck ") + trucks.map((t: J) => gsm(t.name)).join(", ") + ".");
-      if (lead && lead !== n) bits.push("Lead " + gsm(lead) + ".");
+      // more than one on the job who can lead, none picked yet: who can (whoever starts the job picks)
+      const rs = runnersOf(S, job), open = rs.length > 1 && !leadPicked(S, job);
+      if (open) bits.push(gsm(andWords(rs.indexOf(n) >= 0 ? ["You"].concat(rs.filter((x) => x !== n)) : rs)) + " can lead it.");
+      else if (lead && lead !== n) bits.push("Lead " + gsm(lead) + ".");
       if (confirmOn(S)) bits.push(link ? "Confirm in MoveCrew: " + link : "Confirm in MoveCrew under Job messages.");
       out.push(await sendText({ org, line, jobId, purpose: "assigned", staff: n, to: C[n], body: bits.join(" ") }));
     }

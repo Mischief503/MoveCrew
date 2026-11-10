@@ -890,6 +890,27 @@ putDoc(ORG, "org/settings", settings);
   putDoc(ORG, "jobs/sc1", runJob("sc1", { crewAdj: { a: { id: "a", ts: tNow - 60e3, d: -1, who: "Dee" } } }));
   n0 = sent.length; r = await app("tok-marcus", { action: "short", org: ORG, jobId: "sc1" });
   ok(r.body.sent === 2 && /is short: 1 mover on it, quoted for 3\./.test(sent.slice(n0)[0]?.Body || ""), "Dee leaves too: down to 1, so the office hears again: " + (sent.slice(n0)[0] && sent.slice(n0)[0].Body));
+  // the lead for the day (Richie, Nov 9: his boss asked who the lead was, with more than one lead on the job)
+  const S2 = { ...settings, leads: ["Marcus", "Kim"] };
+  ok(fn.leadOf(S2, { assign: { crew: ["Marcus", "Kim", "Dee"] } }) === "Marcus" && fn.leadOf(S2, { assign: { crew: ["Marcus", "Kim", "Dee"], lead: "Kim" } }) === "Kim",
+    "two leads on a job: the one picked for the day (Kim), else the first on the crew");
+  ok(fn.leadOf(S2, { assign: { crew: ["Marcus", "Dee"], lead: "Kim" } }) === "Marcus" && fn.leadOf(S2, { assign: { crew: ["Marcus", "Kim", "Dee"], lead: "Dee" } }) === "Marcus" && fn.leadOf(S2, { assign: { crew: ["Dee", "Owner"] } }) === "Owner",
+    "a pick no longer on the crew, or someone who can't lead, doesn't count; the owner on the crew runs it when no lead is");
+  putDoc(ORG, "org/settings", S2);
+  putDoc(ORG, "jobs/sc5", runJob("sc5", { assign: { truckId: "t26", crew: ["Marcus", "Kim"], lead: "Kim" } }));
+  n0 = sent.length; r = await app("tok-marcus", { action: "short", org: ORG, jobId: "sc5" });
+  ok(r.body.sent === 2 && /is short: 2 movers on it, quoted for 3\. Kim is running it\./.test(sent.slice(n0)[0]?.Body || ""), "the office's text names the lead for the day: " + (sent.slice(n0)[0] && sent.slice(n0)[0].Body));
+  // the crew's text when they're put on a job: with two who can lead and none picked, it says who can
+  putDoc(ORG, "jobs/ld1", job("ld1", { assign: { truckId: "t26", crew: ["Marcus", "Kim", "Dee"] } }));
+  n0 = sent.length; r = await app("tok-dispatch", { action: "job", org: ORG, jobId: "ld1" });
+  const toN = (num: string) => sent.slice(n0).filter((x) => x.kind === "sms" && x.To === num).map((x) => x.Body).join(" | ");
+  ok(r.body.sent === 3 && /Marcus and Kim can lead it\./.test(toN("+15125550102")) && /You and Kim can lead it\./.test(toN("+15125550101")) && /You and Marcus can lead it\./.test(toN("+15125550106")) && !/Lead Marcus/.test(toN("+15125550102")),
+    "two leads on it, none picked: Dee reads “Marcus and Kim can lead it.”, each of them “You and …”: " + toN("+15125550102"));
+  putDoc(ORG, "jobs/ld2", job("ld2", { assign: { truckId: "t26", crew: ["Marcus", "Kim", "Dee"], lead: "Kim" } }));
+  n0 = sent.length; r = await app("tok-dispatch", { action: "job", org: ORG, jobId: "ld2" });
+  ok(r.body.sent === 3 && /Lead Kim\./.test(toN("+15125550102")) && /Lead Kim\./.test(toN("+15125550101")) && !/Lead |can lead/.test(toN("+15125550106")),
+    "the office picked Kim: “Lead Kim.” to the others, nothing about it to Kim: " + toN("+15125550101"));
+  putDoc(ORG, "org/settings", settings);
   putDoc(ORG, "jobs/sc2", runJob("sc2", { assign: { truckId: "t26", crew: ["Marcus", "Dee", "Kim"] } }));
   n0 = sent.length; r = await app("tok-marcus", { action: "short", org: ORG, jobId: "sc2" });
   ok(sent.length === n0 && r.body.skipped === "not-short", "the crew quoted: no text (the server counts the crew, not the phone)");

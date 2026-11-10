@@ -165,7 +165,7 @@ number.
 
 | When | Who gets a text |
 |---|---|
-| Dispatch puts someone on a booked job (20 seconds after the last tap) | That person: job, day, time, pickup, truck, lead, and a link to confirm in the app |
+| Dispatch puts someone on a booked job (20 seconds after the last tap) | That person: job, day, time, pickup, truck, lead (with two or more on it who can lead and none picked yet, "Marcus and Tanya can lead it."), and a link to confirm in the app |
 | Someone is taken off a job | That person: "You're off…" |
 | A job's day or time changes | Everyone still on it: new time, old time, and a link to confirm again |
 | The evening before (Cron, 4b) | Each person on tomorrow's jobs: their jobs, plus a confirm link if they haven't. Office: who hasn't confirmed |
