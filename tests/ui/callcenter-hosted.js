@@ -113,7 +113,7 @@ const net = async (url) => {
   const n0 = ccWrites().length;
   click('#qSave'); await sleep(700);
   const w1 = ccWrites().slice(n0);
-  ok(w1.length === 1 && w1[0].path === 'jobs/q1' && w1[0].patch && w1[0].patch.quote && w1[0].patch.quote.crew === 3 && w1[0].patch.d.discount === '50' && w1[0].patch.quote.lines.some((l) => l.label === 'Discount' && l.amt === -50), 'Save: one change through cc_save, the new crew in it and the office’s discount as it was');
+  ok(w1.length === 1 && w1[0].path === 'jobs/q1' && w1[0].patch && w1[0].patch.quote && w1[0].patch.quote.crew === 3 && !(w1[0].patch.d && 'discount' in w1[0].patch.d) && w1[0].patch.quote.lines.some((l) => l.label === 'Discount' && l.amt === -50), 'Save: one change through cc_save, the new crew in it, and the office’s discount left out of it (only what changed goes)');
   ok(row('jobs/q1').quote.crew === 3 && row('jobs/q1').d.discount === '50' && T.ui.tab === 'quotes' && /Saved\. It’s in Quotes\./.test(toast()), 'saved in the database, with the office’s discount; back to Quotes');
   ok(!A.calls.writes.some((x) => (x.op === 'patch' || (x.table === 'docs' && !x.op)) && /^jobs\//.test((x.row && x.row.path) || '')), 'nothing went to the jobs any other way');
   click('#view [data-act="cc:open"][data-id="q1"]'); await sleep(15);
