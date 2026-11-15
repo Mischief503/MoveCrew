@@ -30,8 +30,8 @@ const L = (m) => label + ': ' + m;
   const ccChip = $$('#more [data-act="pv:set"]').find((b) => b.dataset.role === 'callcenter');
   ok(pvRoles.join('|') === 'Owner|Dispatch|Call center|Crew lead|Crew|Customer' && !!ccChip && ccChip.dataset.staff === '' && ccChip.textContent === 'Anyone', L('See it their way: the call center (anyone on MoveCrew’s team)'));
   click(ccChip); await sleep(20);
-  const tabs = $$('#tabs button').map((b) => b.textContent).filter(Boolean);
-  ok(st().ui.role === 'callcenter' && T.ui.tab === 'desk' && tabs.join('|') === 'Companies|Schedule|Quotes|More' && !$('#fab').hidden, L('the call center: Companies first, then Schedule and Quotes, and the round button for a new quote'));
+  const tabs = $$('#tabs button').map((b) => b.textContent.replace(/\d+$/, '')).filter(Boolean);   // (Sales has a badge: leads to call now)
+  ok(st().ui.role === 'callcenter' && T.ui.tab === 'desk' && tabs.join('|') === 'Companies|Schedule|Sales|More' && !$('#fab').hidden, L('the call center: Companies first, then Schedule and Sales, and the round button for a new quote'));
   ok($('#pvBar .grow').textContent === 'Previewing Call center', L('the preview bar: “Previewing Call center”'));
   for (const tb of ['today', 'jobs', 'dispatch', 'crew', 'history', 'chat', 'reports', 'settings']) { T.ui.tab = tb; T.render(); await sleep(2); if (T.ui.tab !== 'desk') { ok(false, L('it can’t reach ' + tb)); break; } }
   ok(T.ui.tab === 'desk', L('Today, Jobs, the Board, the field, history, chat, money and Setup aren’t the call center’s'));
@@ -122,8 +122,8 @@ const L = (m) => label + ': ' + m;
   await tap('[data-act="tab"][data-tab="quotes"]', 15);
   const openQ = st().jobs.filter((j) => j.status === 'lead' || j.status === 'quoted');
   ok($$('#ccList .qcard').length === openQ.length && openQ.length >= 2, L('Quotes: every open quote and lead (' + openQ.length + ')'));
-  const ord = $$('#ccList .qcard').map((c) => c.dataset.job), want = openQ.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map((j) => j.id);
-  ok(ord.join(',') === want.join(','), L('newest first'));
+  const ord = $$('#ccList .qcard').map((c) => c.dataset.job), want = T.ccQuotes().map((j) => j.id);
+  ok(ord.join(',') === want.join(',') && ord[0] === st().jobs.find((j) => j.d.name === 'Sam Kowalski').id, L('the most urgent first: the new lead nobody has called (Sam Kowalski)'));
   const Q = st().jobs.find((j) => j.status === 'quoted' && j.d.phone);
   type('#ccQ', Q.d.name.split(' ')[0].toLowerCase()); await sleep(10);
   ok($$('#ccList .qcard').length >= 1 && $$('#ccList .qcard').every((c) => c.textContent.toLowerCase().indexOf(Q.d.name.split(' ')[0].toLowerCase()) >= 0), L('search by name'));
@@ -135,10 +135,10 @@ const L = (m) => label + ': ' + m;
   const qc = $('#ccList .qcard[data-job="' + Q.id + '"]');
   ok(qc.textContent.indexOf('$') >= 0 && /Made (today|yesterday|\d+ days ago)/.test(qc.textContent), L('a quote shows its price and when it was made'));
   const LQ = st().jobs.find((j) => j.status === 'lead');
-  await tap('#ccList [data-act="cc:lost"][data-id="' + LQ.id + '"]');
-  ok(LQ.status === 'lead' && /Tap again: not moving with us/.test($('#ccList [data-act="cc:lost"][data-id="' + LQ.id + '"]').textContent), L('Mark lost asks for a second tap'));
-  await tap('#ccList [data-act="cc:lost"][data-id="' + LQ.id + '"]');
-  ok(LQ.status === 'lost' && LQ.log.slice(-1)[0].ev === 'Marked lost by the call center' && !$('#ccList .qcard[data-job="' + LQ.id + '"]'), L('marked lost: off the list, and the activity says the call center did it'));
+  await tap('#ccList [data-act="sl:p"][data-m="lost"][data-id="' + LQ.id + '"]');
+  ok(LQ.status === 'lead' && /^Why was it lost\?/.test($('#ccList .qcard[data-job="' + LQ.id + '"] .spanel').textContent), L('Lost asks why'));
+  await tap('#ccList [data-act="sl:lost"][data-k="mover"][data-id="' + LQ.id + '"]');
+  ok(LQ.status === 'lost' && LQ.log.slice(-1)[0].ev === 'Marked lost by the call center: went with another mover' && LQ.sales.lost.k === 'mover' && !$('#ccList .qcard[data-job="' + LQ.id + '"]'), L('marked lost: off the list, and the activity says the call center did it, and why'));
 
   /* ---------------- changing a quote: no discount of its own ---------------- */
   Q.d.discount = '50'; Q.quote = T.calc(Q.d, st().settings);
@@ -150,7 +150,7 @@ const L = (m) => label + ': ' + m;
   const cs = $('[data-d="crew"]'); cs.value = String((Q.quote.crew || 2) + 1); cs.dispatchEvent(new w.Event('input', { bubbles: true })); await sleep(5);
   st().draft.discount = '0';   // even if a discount got into the draft, it doesn't stick
   await tap('#qSave', 15);
-  ok(Q.d.discount === '50' && Q.quote.lines.some((l) => l.label === 'Discount' && l.amt === -50) && Q.quote.total !== was && T.ui.tab === 'quotes' && /Saved\. It’s in Quotes\./.test(toast()), L('saved with the new crew, and the office’s $50 discount as it was'));
+  ok(Q.d.discount === '50' && Q.quote.lines.some((l) => l.label === 'Discount' && l.amt === -50) && Q.quote.total !== was && T.ui.tab === 'quotes' && /Saved\. It’s in Sales\./.test(toast()), L('saved with the new crew, and the office’s $50 discount as it was'));
   await tap('#ccList [data-act="cc:open"][data-id="' + Q.id + '"]', 15);
   type('[data-d="moveDate"]', ''); await sleep(5);
   await tap('[data-act="q:step"][data-s="3"]'); await tap('[data-act="q:book"]');

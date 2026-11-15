@@ -227,6 +227,23 @@ details.acc.card .acc-body{padding-bottom:14px}
 .cal-key span{display:inline-flex;align-items:center;gap:6px}
 .cal-key i{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--line)}
 /* the call center's Companies screen: the customer, the map, each company's rate card */
+/* Sales (Nov 14): the board's cards */
+.scard .snext{margin:4px 0 2px;font-size:13px;color:var(--muted)}
+.scard .snext .pill,.snote .snext .pill{font-size:12.5px;white-space:normal}
+.snote .snext{margin-top:4px;font-size:13px}
+.sown{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:8px}
+.sown b{color:var(--text)}
+.sown select{min-height:36px;border:1px solid var(--line);border-radius:8px;background:var(--field);color:var(--text);padding:4px 8px;font-size:14px;max-width:100%}
+.sbtns{margin-top:8px;gap:6px;flex-wrap:wrap}
+.sbtns .btn.on{border-color:var(--text)}
+.spanel{border-top:1px solid var(--line2);margin-top:10px;padding-top:8px}
+.spanel>b{display:block;font-size:13.5px;margin-bottom:6px}
+.spanel .chips{margin-bottom:8px}
+.chip.due{border-color:var(--due);color:var(--due)}
+.pill.sstage[data-st=new]{background:var(--dueSoft);color:var(--due)}
+.pill.sstage[data-st=follow]{background:var(--warnSoft)}
+.pill.sstage[data-st=quoted]{background:var(--infoSoft)}
+.pill.sstage[data-st=booked]{background:var(--okSoft)}
 .dkcust h2{margin:0 0 6px;font-size:17px}
 .dkcust #dkNote{margin:8px 0 0}
 .dkmapcard{padding:0;overflow:hidden;position:relative}
@@ -2422,7 +2439,7 @@ function demoJobs(S){
   var E={piano:1,sofa3:1,bedq:1,dresser:1,boxm:10};
   function mk(o){
     var d=Object.assign(blankDraft(),{name:o.name,phone:o.phone||'',email:o.email||'',source:o.src||'Google',moveDate:o.off==null?'':addDays(t,o.off),time:o.time||'08:00',from:o.from||'',to:o.to||'',miles:o.miles||'',flights:o.fl||'',items:o.items||{},pack:!!o.pack,notes:o.notes||''});
-    var j=newJob(d,S,o.status);j.createdAt=Date.now()-(o.age||4)*864e5;
+    var j=newJob(d,S,o.status);j.createdAt=o.ageMin!=null?Date.now()-o.ageMin*6e4:Date.now()-(o.age||4)*864e5;
     j.assign={truckId:o.truck||'',crew:o.crew||[],drivers:{}};
     if(o.truck&&o.drive!==false){var dv=o.drive||(o.crew||[]).filter(function(n){return !(S.drivers||[]).length||S.drivers.indexOf(n)>=0})[0];if(dv)j.assign.drivers[o.truck]=dv}
     (o.mat||[]).forEach(function(m){var c=(S.materials||[]).find(function(x){return x.id===m[0]});if(c)j.materials.push({id:uid(),itemId:c.id,name:c.name,unit:c.unit,qty:m[1],price:c.price,cost:c.cost,by:(o.crew||['Crew'])[o.crew&&o.crew.length>1?1:0],ts:Date.now()+(o.off||0)*864e5})});
@@ -2431,16 +2448,17 @@ function demoJobs(S){
     (o.pay||[]).forEach(function(p){cum+=p[0];var target=round2(tot*cum),a=round2(target-paidSoFar);paidSoFar+=a;j.payments.push({id:uid(),amt:a,method:p[2]||'Card',date:addDays(t,p[1]),ts:Date.now()+p[1]*864e5})});
     if(o.mult){j.actualHours=Math.round(j.quote.hours*o.mult*10)/10;j.startedAt=Date.now()+o.off*864e5;j.finishedAt=j.startedAt+j.actualHours*36e5;j.phases=demoPhases(j)}
     if(o.cn)j.crewNotes=o.cn.map(function(c){return {id:uid(),who:c[0],ts:Date.now()-c[1]*36e5,text:c[2]}});
+    if(o.sales)j.sales=o.sales(j);
     j.log.push({ts:j.createdAt,ev:'Sample job'});out.push(j);
   }
   mk({name:'Priya Nair',email:'priya.nair@example.com',mat:[['m_boxm',12],['m_tape',4]],phone:'512-555-0142',status:'booked',off:0,time:'08:00',items:B,from:'418 Oak St, Austin',to:'77 Ridge Rd, Round Rock',miles:22,truck:'t26',crew:['Marcus','Dee','Luis'],pay:[[0.25,-4]],src:'Referral',cn:[['Marcus',20,'Elevator at pickup is reserved for 8 AM. Front desk confirmed.']]});
   mk({name:'Hollis & Reed Law',email:'office@hollisreed.example.com',phone:'512-555-0177',status:'booked',off:1,time:'10:00',items:C,from:'900 Congress Ave, Austin',to:'2200 S Lamar, Austin',miles:8,truck:'t20',crew:['Tanya','Andre'],pay:[[0.25,-2]],src:'Google'});
   mk({name:'Nadia Farouk',email:'nadia.farouk@example.com',phone:'512-555-0110',status:'booked',off:1,time:'11:00',items:D,from:'1502 E 6th, Austin',to:'34 Barton Hills Dr, Austin',miles:5,truck:'t20',crew:['Marcus','Kim'],drive:false,fl:2,src:'Yelp',notes:'Studio, third floor walk-up.'});
-  mk({name:'Ortega family',email:'ortega.family@example.com',phone:'512-555-0189',status:'quoted',off:5,time:'09:00',items:A,from:'88 Elm Ct, Pflugerville',to:'12 Lakeview Dr, Cedar Park',miles:19,pack:true,src:'Facebook'});
+  mk({name:'Ortega family',email:'ortega.family@example.com',phone:'512-555-0189',status:'quoted',off:5,time:'09:00',items:A,from:'88 Elm Ct, Pflugerville',to:'12 Lakeview Dr, Cedar Park',miles:19,pack:true,src:'Facebook',sales:function(j){var t2=new Date();t2.setDate(t2.getDate()+1);t2.setHours(10,0,0,0);return {owner:'Owner',ownerAt:j.createdAt,n:2,first:j.createdAt+20*6e4,last:{k:'talked',at:Date.now()-2*864e5,by:'Owner'},next:{at:t2.getTime(),by:'Owner',set:Date.now()-2*864e5}}}});
   mk({name:'Marcus Tull',email:'marcus.tull@example.com',mat:[['m_boxm',10],['m_stretch',2]],cost:[['Dump run at the county site','Dump fee',65]],phone:'512-555-0163',status:'done',off:-2,time:'09:00',items:E,from:'9 Pecan Row, Austin',to:'610 Hill Country Ln, Dripping Springs',miles:27,truck:'t26',crew:['Marcus','Luis'],mult:1.2,pay:[[0.25,-9]],src:'Repeat customer',notes:'Piano on ground floor, ramp needed.'});
   mk({name:'Lena Wu',email:'lena.wu@example.com',mat:[['m_boxs',8],['m_boxm',14],['m_tape',3]],status:'paid',off:-9,items:A,from:'71 Maple Way, Austin',to:'5 Cedar St, Austin',miles:6,truck:'t20',crew:['Marcus','Kim','Tanya'],mult:1.1,pay:[[0.25,-14],[0.75,-9]],src:'Google'});
   mk({name:'Devon Reyes',mat:[['m_boxl',14],['m_boxw',4],['m_paper',20]],cost:[['Fuel for the 26 footer','Fuel',58.4]],status:'paid',off:-21,items:B,from:'320 Bluff Rd, Austin',to:'18 Oakmont, Georgetown',miles:31,truck:'t26',crew:['Marcus','Dee','Luis','Andre'],mult:0.95,pay:[[0.25,-27],[0.75,-21]],src:'Referral'});
-  mk({name:'Sam Kowalski',email:'sam.kowalski@example.com',status:'lead',off:null,src:'Google',phone:'512-555-0120',from:'Austin',to:'San Antonio',notes:'Asked for a call back about a 2BR.'});
+  mk({name:'Sam Kowalski',email:'sam.kowalski@example.com',status:'lead',off:null,ageMin:12,src:'Google',phone:'512-555-0120',from:'Austin',to:'San Antonio',notes:'Asked for a call back about a 2BR.'});
   mk({name:'Grace Pham',status:'lost',off:null,items:A,from:'Austin',to:'Dallas',miles:195,src:'Yelp',age:20});
   mk({name:'Ibrahim Sayed',mat:[['m_boxm',20],['m_boxl',10]],cost:[['Parking permit downtown','Parking',30]],status:'paid',off:-38,items:C,from:'400 W 2nd, Austin',to:'1800 Guadalupe, Austin',miles:4,truck:'t20',crew:['Tanya','Andre','Kim'],mult:1.25,pay:[[1,-38]],src:'Google'});
   mk({name:'Chloe Martin',status:'paid',off:-50,items:D,from:'22 Rio Grande, Austin',to:'9 Hyde Park Ave, Austin',miles:3,truck:'t16',crew:['Tanya','Luis'],mult:1.3,pay:[[1,-50]],src:'Facebook'});
@@ -2500,12 +2518,12 @@ var ICON={
   admin:'<svg viewBox="0 0 24 24"><path d="M12 3l8 3v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
   history:'<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.7h3.7"/><path d="M12 8v4.3l2.8 1.7"/></svg>'
 };
-var TABS=[{id:'desk',label:'Companies'},{id:'sched',label:'Schedule'},{id:'today',label:'Today'},{id:'quote',label:'Quote'},{id:'quotes',label:'Quotes'},{id:'jobs',label:'Jobs'},{id:'dispatch',label:'Board'},{id:'crew',label:'Field'},{id:'history',label:'Job history'},{id:'chat',label:'Chat'},{id:'reports',label:'Reports'},{id:'settings',label:'Setup'},{id:'admin',label:'MoveCrew admin'},{id:'mymove',label:'My move'},{id:'mypay',label:'Pay'},{id:'myprofile',label:'Profile'}];
-var NAV={owner:['today','jobs','dispatch','chat'],dispatch:['today','jobs','dispatch','chat'],lead:['crew','chat'],crew:['crew','chat'],callcenter:['desk','sched','quotes'],customer:['mymove','mypay','myprofile']};
+var TABS=[{id:'desk',label:'Companies'},{id:'sched',label:'Schedule'},{id:'today',label:'Today'},{id:'quote',label:'Quote'},{id:'quotes',label:'Sales'},{id:'jobs',label:'Jobs'},{id:'dispatch',label:'Board'},{id:'crew',label:'Field'},{id:'history',label:'Job history'},{id:'chat',label:'Chat'},{id:'reports',label:'Reports'},{id:'settings',label:'Setup'},{id:'admin',label:'MoveCrew admin'},{id:'mymove',label:'My move'},{id:'mypay',label:'Pay'},{id:'myprofile',label:'Profile'}];
+var NAV={owner:['today','jobs','quotes','dispatch','chat'],dispatch:['today','jobs','quotes','dispatch','chat'],lead:['crew','chat'],crew:['crew','chat'],callcenter:['desk','sched','quotes'],customer:['mymove','mypay','myprofile']};
 function navTabs(){var r=state.ui.role,ids=ccToo()?['crew','sched','quotes','chat']:r==='callcenter'&&ccHouse()?['sched','quotes','chat']:(NAV[r]||NAV.owner);return ids.map(function(id){return TABS.filter(function(t){return t.id===id})[0]})}
 function allowedTabs(role){
-  var ids=role==='customer'?['mymove','mypay','myprofile']:role==='crew'||role==='lead'?['crew','chat'].concat(ccToo()?['sched','quote','quotes']:[]):role==='callcenter'?(ccHouse()?['sched','quote','quotes','chat']:['desk','sched','quote','quotes']):role==='dispatch'?['today','quote','jobs','dispatch','crew','history','chat'].concat(opt('dispatchMoney')?['reports']:[]):
-    ['today','quote','jobs','dispatch','crew','history','chat','reports','settings'];
+  var ids=role==='customer'?['mymove','mypay','myprofile']:role==='crew'||role==='lead'?['crew','chat'].concat(ccToo()?['sched','quote','quotes']:[]):role==='callcenter'?(ccHouse()?['sched','quote','quotes','chat']:['desk','sched','quote','quotes']):role==='dispatch'?['today','quote','quotes','jobs','dispatch','crew','history','chat'].concat(opt('dispatchMoney')?['reports']:[]):
+    ['today','quote','quotes','jobs','dispatch','crew','history','chat','reports','settings'];
   if(role!=='customer'&&typeof isTallyAdmin==='function'&&isTallyAdmin())ids=ids.concat(['admin']);   // MoveCrew's own admins, in any company
   var out=TABS.filter(function(t){return ids.indexOf(t.id)>=0});
   if(ccToo())out.sort(function(a,b){return (b.id==='crew')-(a.id==='crew')});   // their jobs first, then the call center's
@@ -3396,7 +3414,7 @@ function renderToday(){
       var cf=conflictsFor(j).length;
       var nd=trucksNoDriver(j).length;
       return '<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><span class="t">'+esc(j.d.name)+'</span><span class="r">'+money(totalOf(j))+'</span></div><div class="route">'+jobLine(j)+'</div><div>'+pill(j.status)+' <span class="pill">'+esc(j.assign.crew.length?j.assign.crew.join(', '):'no crew')+'</span>'+(nd&&j.status==='booked'?' <span class="pill bad">No driver</span>':'')+(crewShort(j,t)?' <span class="pill bad">Short crew</span>':'')+(cf?' <span class="pill bad">Double-booked</span>':'')+'</div></button>'}).join('')
-      :'<div class="card empty"><h3>Nothing booked today</h3><p>Quiet day. Quotes and leads are waiting in Jobs.</p></div>');
+      :'<div class="card empty"><h3>Nothing booked today</h3><p>Quiet day. Leads and quotes are waiting in Sales.</p></div>');
   var A=[];
   // a truck that is down comes first
   sosActive().forEach(function(a){A.push(alertRow('bad','Truck down: '+esc(sosTruck(a)),esc(a.from)+(a.job?' · '+esc(a.job):'')+' · sent '+fmtClock(a.ts),'sos:open',''))});
@@ -3442,6 +3460,12 @@ function renderToday(){
   if(mine)A.push('<button class="alert" data-act="jm:open"><span class="ic warn">'+mine+'</span><span class="tx"><b>Confirm your jobs</b><small>You are on '+mine+' job'+(mine===1?'':'s')+' that need'+(mine===1?'s':'')+' your OK</small></span><span class="go">›</span></button>');
   var unread=chatUnread(myName());
   if(unread)A.push('<button class="alert" data-act="tab" data-tab="chat"><span class="ic ok">'+unread+'</span><span class="tx"><b>Unread messages</b><small>From your crew and office</small></span><span class="go">›</span></button>');
+  // Sales: call-backs that are due, and new leads nobody has called (a move request has its own row; the Sales tab's badge counts them too)
+  var sRow=function(kind,title,sub,f){return '<button class="alert" data-act="sl:go" data-f="'+f+'"><span class="ic '+kind+'">!</span><span class="tx"><b>'+title+'</b><small>'+sub+'</small></span><span class="go">›</span></button>'};
+  var sDue=state.jobs.filter(function(j){return salesDue(j)}).sort(function(a,b){return salesAt(a)-salesAt(b)});
+  if(sDue.length)A.push(sRow(sDue.some(function(j){return Date.now()-salesNext(j).at>=36e5})?'bad':'warn',sDue.length+' call-back'+(sDue.length===1?' is':'s are')+' due',esc(namesLine(sDue))+' · Sales','due'));
+  var sNew=state.jobs.filter(function(j){return salesNew(j)&&!reqOpen(j)}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});
+  if(sNew.length){var sw=(Date.now()-(sNew[0].createdAt||Date.now()))/6e4;A.push(sRow(sw>=15?'bad':'warn',sNew.length+' new lead'+(sNew.length===1?'':'s')+' not called yet',esc(namesLine(sNew))+' · waiting '+minsWords(sw),'new'))}
   var cap=ui.allAlerts||A.length<=6?A.length:5;
   var moreBtn=A.length>6?'<button class="btn" style="width:100%;margin:0 0 4px" data-act="today:alerts" aria-expanded="'+!!ui.allAlerts+'">'+(ui.allAlerts?'Show fewer':'Show '+(A.length-5)+' more')+'</button>':'';
   var alerts=A.length?'<div class="secline"><h2>Needs you</h2><small>'+A.length+'</small></div>'+A.slice(0,cap).join('')+moreBtn:'<div class="secline"><h2>Needs you</h2></div><div class="card empty"><h3>All clear</h3><p>Nothing is waiting on you right now.</p></div>';
@@ -3612,13 +3636,13 @@ function saveQuote(kind){
     if(j.clockAt)rebill(j,'quote changed');
   }else{
     var s=kind==='book'?'booked':(q.cf?'quoted':'lead');
-    j=newJob(d,S,s);if(who)j.createdBy=who;if(cc)j.createdCC=true;logEv(j,'Created as '+LABEL[s]+(cc?' by '+ccWho():who?' by '+who:''));if(s==='booked')daySlot(j,fit);state.jobs.push(j);
+    j=newJob(d,S,s);if(who){j.createdBy=who;var nw=Date.now();j.sales={owner:who,ownerAt:nw,n:1,first:nw,last:{k:'quote',at:nw,by:who}}}if(cc)j.createdCC=true;logEv(j,'Created as '+LABEL[s]+(cc?' by '+ccWho():who?' by '+who:''));if(s==='booked')daySlot(j,fit);state.jobs.push(j);
     if(String(j.d.notes||'').trim()){j.d.notesBy=myName()||'Office';j.d.notesAt=Date.now()}
   }
   if(cc){
     state.draft=blankDraft();ui.qstep=1;save();
     if(j.status==='booked'){ui.schedDay=j.d.moveDate;ui.schedMon=j.d.moveDate.slice(0,7);ui.tab='sched';render();window.scrollTo(0,0);toast('Booked for '+fmtDate(j.d.moveDate)+' at '+fmtTime(j.d.time)+(fit?' in '+slotWords(S,fit.trucks):'')+'. Dispatch adds the '+(num(q.nTrucks)>1?'trucks':'truck')+' and crew.')}
-    else{ui.tab='quotes';render();window.scrollTo(0,0);toast('Saved. It’s in Quotes.')}
+    else{ui.tab='quotes';render();window.scrollTo(0,0);toast('Saved. It’s in Sales.')}
     return;
   }
   state.draft=blankDraft();ui.qstep=1;save();ui.tab='jobs';ui.filter='all';render();openJob(j.id);
@@ -3865,7 +3889,7 @@ function renderSheet(){
   el.innerHTML='<div class="scrim" data-act="sheet:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="Job details">'+
    '<div class="sheet-head"><div><h2>'+esc(j.d.name||'Unnamed')+'</h2><div style="margin-top:4px">'+pill(j.status)+(j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'')+' <small>'+fmtInt(q.cf)+' cu ft · '+q.crew+' movers · '+q.hours+' h'+(q.kind==='mileage'?' · mileage move':q.kind==='local'?' · local move':'')+(['active','done','paid'].indexOf(j.status)>=0&&leadOf(j)?' · Lead: '+esc(leadOf(j)):'')+'</small></div></div><button class="btn sm" data-act="sheet:close" id="sheetClose">Close</button></div>'+
    '<div class="sheet-body">'+lateNote+rail+
-   sheetMoney(j)+rqSheetTop(j)+reqSheetTop(j)+
+   sheetMoney(j)+rqSheetTop(j)+reqSheetTop(j)+salesSheetTop(j)+
    '<div class="row sec">'+(na?'<button class="btn primary grow" data-act="'+na.act+'"'+(na.attrs||'')+'>'+na.label+'</button>':'')+(na&&na.act==='sh:requote'?'':'<button class="btn grow" data-act="sh:requote">Edit quote</button>')+'</div>'+
    '<div class="sec" data-meta="'+esc(fmtDate(j.d.moveDate)+(j.d.moveDate&&j.d.time?' · '+fmtTime(j.d.time):''))+'"><h3>Schedule</h3>'+clash+'<div class="grid2 stack">'+
      fld('Date','<input type="date" data-j="moveDate" data-re="1" value="'+esc(j.d.moveDate)+'">')+
@@ -5009,38 +5033,174 @@ function schedCard(r){
       '</div></details>';
 }
 
-/* the Quotes screen: every open quote and lead, newest first */
-function ccQuotes(){
-  return state.jobs.filter(isOpenQuote).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
+/* ---------- Sales (Richie, Nov 14: "We need to build the call center/sales side . We have maybe thought about this
+   with a 20% we need to maximize this to at least 80%"; he picked five batches, built in order). Batch 1, never lose a
+   lead: the Quotes screen is the Sales board, for the office, the call center and a company's own call center people.
+   Every lead and open quote with who's working it, how long a new one has waited, each call logged in a tap, a
+   call-back with its time, and why one was lost. j.sales: {owner, ownerAt, n (calls, texts and quotes logged), first
+   (the first of them), last:{k, at, by}, next:{at, by, set} (the call-back; null when there's none), lost:{k, at, by}}.
+   A quote made in the quote builder is its first contact, and whoever made it works it. ---------- */
+var TOUCH={quote:'Made the quote',noanswer:'No answer',vm:'Left a voicemail',talked:'Talked',texted:'Texted'};
+var TOUCH_LOG={quote:'Quote made by {w}',noanswer:'Called by {w}: no answer',vm:'Called by {w}: left a voicemail',talked:'Called by {w}: talked',texted:'Texted by {w}'};
+var LOST_WHY=[['mover','Went with another mover'],['price','Price'],['date','The date didn’t work'],['self','Moving themselves'],['notmoving','Not moving'],['noreply','Never answered'],['other','Other']];
+var STAGES=[['new','New'],['contacted','Contacted'],['quoted','Quoted'],['follow','Follow up']];
+var STAGE_W={new:'New',contacted:'Contacted',quoted:'Quoted',follow:'Follow up',booked:'Booked',lost:'Lost'};
+function salesOf(j){return (j&&j.sales)||{}}
+// who's working it: whoever took it or was given it; on a job from before Nov 14, whoever made the quote
+function salesOwner(j){var s=salesOf(j);return typeof s.owner==='string'?s.owner:String(j.createdBy||'')}
+function salesN(j){var s=salesOf(j);return num(s.n)||(!j.sales&&j.createdBy?1:0)}
+function salesNew(j){return isOpenQuote(j)&&!salesN(j)}
+function salesNext(j){var x=salesOf(j).next;return x&&x.at>0?x:null}
+function salesDue(j,now){var x=salesNext(j);return isOpenQuote(j)&&!!x&&x.at<=(now||Date.now())}
+function salesDueN(){if(!allowedTabs(state.ui.role).some(function(t){return t.id==='quotes'}))return 0;var n=Date.now();return state.jobs.filter(function(j){return salesNew(j)||salesDue(j,n)}).length}
+function salesStage(j){
+  if(j.status==='lost')return 'lost';
+  if(!isOpenQuote(j))return 'booked';
+  if(salesNext(j))return 'follow';
+  if(!salesN(j))return 'new';
+  return j.status==='quoted'?'quoted':'contacted';
 }
+// when to act on it: the call-back's time; a new one's arrival (the sooner the better); else two days after the last contact
+function salesAt(j){var x=salesNext(j),s=salesOf(j);if(x)return x.at;if(!salesN(j))return j.createdAt||0;return ((s.last&&s.last.at)||j.createdAt||0)+2*864e5}
+function salesMe(){return (isCC()?ccName():myName())||''}
+function salesWho(){return isCC()?ccWho():(myName()||'the office')}
+function bookedAt(j){var e=(j.log||[]).filter(function(l){return /^(Status: Booked|Created as Booked|Booked)/.test(String(l.ev))})[0];return e?e.ts:0}
+function lostAt(j){var l=salesOf(j).lost;if(l&&l.at)return l.at;var e=(j.log||[]).filter(function(x){return /^(Status: Lost|Marked lost)/.test(String(x.ev))}).pop();return e?e.ts:(j.createdAt||0)}
+function minsWords(m){m=Math.max(0,Math.round(m));return m<60?m+' min':m<600?Math.floor(m/60)+' h'+(m%60?' '+(m%60)+' min':''):m<2880?Math.floor(m/60)+' h':Math.floor(m/1440)+' days'}
+function whenWords(ts){
+  var d=iso(new Date(ts)),t=todayISO(),tm=fmtClock(ts);
+  return d===t?'today '+tm:d===addDays(t,1)?'tomorrow '+tm:d===addDays(t,-1)?'yesterday '+tm:new Date(ts).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' '+tm;
+}
+// the line that says what to do next, and how urgent it is ('', 'warn' or 'bad')
+function salesLine(j){
+  var now=Date.now(),x=salesNext(j),s=salesOf(j);
+  if(j.status==='lost'){var l=s.lost||{},w=LOST_WHY.filter(function(r){return r[0]===l.k})[0];return {cls:'',t:'Lost'+(w?': '+w[1].toLowerCase():'')+' · '+whenWords(lostAt(j))+(l.by?' ('+l.by+')':'')}}
+  if(!isOpenQuote(j))return {cls:'',t:'Booked'+(bookedAt(j)?' '+whenWords(bookedAt(j)):'')};
+  if(x){var late=now-x.at;return late<0?{cls:'',t:'Call back '+whenWords(x.at)}:late>=36e5?{cls:'bad',t:'Overdue: the call-back was '+whenWords(x.at)}:{cls:'warn',t:'Call back now'}}
+  if(!salesN(j)){var m=(now-(j.createdAt||now))/6e4;return {cls:m>=15?'bad':m>=5?'warn':'',t:'New · waiting '+minsWords(m)+' · not called yet'}}
+  var lt=s.last;return {cls:'',t:(lt&&TOUCH[lt.k]?'Last: '+TOUCH[lt.k].toLowerCase()+', '+whenWords(lt.at)+(lt.by?' ('+lt.by+')':'')+' · ':'')+'No call-back set'};
+}
+// what a person's Sales board holds: every open lead and quote; the office also sees the last 2 weeks' bookings and the last 30 days' losses
+function salesJobs(){
+  var office=canEditJobs(),cutB=Date.now()-14*864e5,cutL=Date.now()-30*864e5;
+  return state.jobs.filter(function(j){
+    if(isOpenQuote(j))return true;
+    if(!office)return false;
+    if(j.status==='lost')return lostAt(j)>=cutL;
+    return ['booked','active','done','paid'].indexOf(j.status)>=0&&bookedAt(j)>=cutB;
+  });
+}
+function salesFilter(j,f,me){
+  if(f==='booked')return salesStage(j)==='booked';
+  if(f==='lost')return j.status==='lost';
+  if(!isOpenQuote(j))return false;
+  if(f==='open')return true;
+  if(f==='due')return salesDue(j)||salesNew(j);
+  if(f==='mine')return !!me&&salesOwner(j)===me;
+  return salesStage(j)===f;
+}
+function ccQuotes(){return state.jobs.filter(isOpenQuote).sort(function(a,b){return salesAt(a)-salesAt(b)})}
 function ccMatch(j,q){
   if(!q)return true;
   var s=[j.d.name,j.d.phone,j.d.email,j.d.from,j.d.to].join(' ').toLowerCase(),dg=q.replace(/\D/g,'');
   return q.split(/\s+/).every(function(w){return s.indexOf(w)>=0})||(dg.length>=3&&String(j.d.phone||'').replace(/\D/g,'').indexOf(dg)>=0);
 }
 function renderQuotes(){
-  var v=$('#view'),all=ccQuotes();
-  v.innerHTML='<div class="hero-day" style="padding-bottom:4px"><h1>Quotes</h1><p class="sub" style="margin:2px 0 0">Every open quote and lead. Open one to change it or book it.</p></div>'+
-    (all.length?'<input id="ccQ" class="setsearch" type="search" placeholder="Name, phone or address" aria-label="Find a quote" autocomplete="off" value="'+esc(ui.ccq||'')+'">':'')+
+  var v=$('#view'),all=salesJobs(),me=salesMe(),office=canEditJobs();
+  if(!ui.slf)ui.slf='open';
+  var fs=[['open','Open'],['due','Due now']].concat(STAGES).concat(me?[['mine','Mine']]:[]).concat(office?[['booked','Booked'],['lost','Lost']]:[]);
+  var chips=fs.map(function(f){
+    var n=all.filter(function(j){return salesFilter(j,f[0],me)}).length,on=ui.slf===f[0];
+    return '<button class="chip'+(on?' on':'')+(f[0]==='due'&&n&&!on?' due':'')+'" data-act="sl:f" data-f="'+f[0]+'" aria-pressed="'+on+'">'+f[1]+' <small>'+n+'</small></button>';
+  }).join('');
+  v.innerHTML='<div class="hero-day" style="padding-bottom:4px"><h1>Sales</h1><p class="sub" style="margin:2px 0 0">Every lead and open quote, the most urgent first. Log each call, and set when to call back.</p></div>'+
+    '<div class="scrollx sfil" style="margin:6px 0 8px">'+chips+'</div>'+
+    (all.length?'<input id="ccQ" class="setsearch" type="search" placeholder="Name, phone or address" aria-label="Find a lead or quote" autocomplete="off" value="'+esc(ui.ccq||'')+'">':'')+
     '<div id="ccList" style="margin-top:8px"></div>';
   ccFill();
 }
 function ccFill(){
   var el=$('#ccList');if(!el)return;
-  var all=ccQuotes(),q=String(ui.ccq||'').trim().toLowerCase(),list=all.filter(function(j){return ccMatch(j,q)});
-  if(!all.length){el.innerHTML='<div class="card empty"><h3>No open quotes</h3><p>Tap + to make one.</p></div>';return}
-  el.innerHTML='<div class="secline"><h2>'+(q?'Found':'Open quotes and leads')+'</h2><small>'+list.length+'</small></div>'+
-    (list.length?list.map(ccCard).join(''):'<div class="card empty"><h3>Nothing matches “'+esc(ui.ccq)+'”</h3><p>Try part of the name, the phone number or a street.</p></div>');
+  var all=salesJobs(),me=salesMe(),f=ui.slf||'open',q=String(ui.ccq||'').trim().toLowerCase();
+  // the card being worked on stays in its list until its panel closes (logging a call takes a new lead out of New)
+  var list=all.filter(function(j){return (q||(ui.sp&&ui.sp.id===j.id)?true:salesFilter(j,f,me))&&ccMatch(j,q)});
+  list.sort(f==='booked'?function(a,b){return bookedAt(b)-bookedAt(a)}:f==='lost'?function(a,b){return lostAt(b)-lostAt(a)}:function(a,b){return salesAt(a)-salesAt(b)});
+  if(!all.length){el.innerHTML='<div class="card empty"><h3>No open leads or quotes</h3><p>Tap + to make a quote.</p></div>';return}
+  var head={open:'Open leads and quotes',due:'Due now: new leads and call-backs',new:'New, not called yet',contacted:'Contacted, no quote yet',quoted:'Quoted',follow:'Follow up',mine:'Yours',booked:'Booked in the last 2 weeks',lost:'Lost in the last 30 days'}[f];
+  el.innerHTML='<div class="secline"><h2>'+(q?'Found':head)+'</h2><small>'+list.length+'</small></div>'+
+    (list.length?list.map(salesCard).join(''):q?'<div class="card empty"><h3>Nothing matches “'+esc(ui.ccq)+'”</h3><p>Try part of the name, the phone number or a street.</p></div>'
+      :'<div class="card empty"><h3>'+(f==='due'?'Nothing to call right now':'None here')+'</h3><p>'+(f==='due'?'New leads and call-backs that are due show here.':'Pick another list above.')+'</p></div>');
 }
-function ccCard(j){
-  var q=j.quote||{},a='cc:lost:'+j.id,by=j.createdBy?' by '+esc(j.createdBy):'';
-  return '<section class="card qcard" data-job="'+esc(j.id)+'"><div class="row between" style="align-items:flex-start;gap:8px"><h3 style="margin:0">'+esc(j.d.name||'Customer')+'</h3>'+pill(j.status)+'</div>'+
+// the office picks who works a lead: its own people and its call center people, or anyone already on it
+function ownerOpts(cur){
+  var S=state.settings,names=(S.office||[]).map(function(o){return o.name}).concat(S.ccStaff||[]);
+  if(cur&&names.indexOf(cur)<0)names.push(cur);
+  names=names.filter(function(n,i){return n&&names.indexOf(n)===i});
+  return '<option value=""'+(cur?'':' selected')+'>No one yet</option>'+names.map(function(n){return '<option value="'+esc(n)+'"'+(n===cur?' selected':'')+'>'+esc(n)+'</option>'}).join('');
+}
+function backAt(k){
+  var d=new Date();
+  if(k==='1h')return Date.now()+36e5;
+  if(k==='pm'){d.setHours(17,0,0,0);return d.getTime()}
+  if(k==='am'){d.setDate(d.getDate()+1);d.setHours(10,0,0,0);return d.getTime()}
+  if(k==='2d'){d.setDate(d.getDate()+2);d.setHours(10,0,0,0);return d.getTime()}
+  return 0;
+}
+function localInput(ts){var d=new Date(ts);return iso(d)+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+function salesCard(j){
+  var q=j.quote||{},id=esc(j.id),open=isOpenQuote(j),office=canEditJobs(),me=salesMe(),own=salesOwner(j),ln=salesLine(j),st=salesStage(j);
+  var pm=ui.sp&&ui.sp.id===j.id?ui.sp.m:'',by=j.createdBy?' by '+esc(j.createdBy):'',x=salesNext(j);
+  var ownRow=!open?(own?'<div class="sown"><span>Worked by</span> <b>'+esc(own)+'</b></div>':'')
+    :office?'<label class="sown"><span>Working it</span><select data-sown="'+id+'" aria-label="Who’s working '+esc(j.d.name||'this lead')+'">'+ownerOpts(own)+'</select></label>'
+    :own?'<div class="sown"><span>Working it:</span> <b>'+esc(own===me?'You':own)+'</b></div>'
+    :'<div class="sown"><span>No one is working it yet.</span>'+(me?'<button class="btn sm" data-act="sl:take" data-id="'+id+'">Take it</button>':'')+'</div>';
+  var nextLn='<div class="snext">'+(ln.cls?'<span class="pill '+ln.cls+'">'+esc(ln.t)+'</span>':esc(ln.t))+'</div>';
+  var btns=open?'<div class="row sbtns">'+(j.d.phone?'<button class="btn sm" data-act="sl:call" data-id="'+id+'">Call</button>':'')+
+      '<button class="btn sm'+(pm==='log'?' on':'')+'" data-act="sl:p" data-m="log" data-id="'+id+'" aria-expanded="'+(pm==='log')+'">Log a call</button>'+
+      '<button class="btn sm'+(pm==='back'?' on':'')+'" data-act="sl:p" data-m="back" data-id="'+id+'" aria-expanded="'+(pm==='back')+'">Call back</button>'+
+      '<button class="btn primary sm" data-act="cc:open" data-id="'+id+'">Open quote</button>'+
+      '<button class="btn sm ghost" data-act="sl:p" data-m="lost" data-id="'+id+'" aria-expanded="'+(pm==='lost')+'">Lost</button></div>'
+    :'<div class="row sbtns">'+(office?'<button class="btn sm" data-act="job:open" data-id="'+id+'">Open job</button>':'')+(office&&j.status==='lost'?'<button class="btn sm" data-act="sl:reopen" data-id="'+id+'">Reopen</button>':'')+'</div>';
+  var panel='';
+  if(open&&pm==='log')panel='<div class="spanel"><b>'+(ui.sp.after?'How did the call go?':'What happened?')+'</b><div class="chips">'+['noanswer','vm','talked','texted'].map(function(k){return '<button class="chip" data-act="sl:log" data-k="'+k+'" data-id="'+id+'">'+TOUCH[k]+'</button>'}).join('')+'</div></div>';
+  if(open&&pm==='back'){
+    var ks=[['1h','In an hour']].concat(new Date().getHours()<16?[['pm','Today 5:00 PM']]:[]).concat([['am','Tomorrow 10:00 AM'],['2d','In 2 days, 10:00 AM']]);
+    panel='<div class="spanel"><b>When should '+(own&&own!==me?esc(own):'you')+' call back?</b><div class="chips">'+ks.map(function(k){return '<button class="chip" data-act="sl:back" data-k="'+k[0]+'" data-id="'+id+'">'+k[1]+'</button>'}).join('')+'</div>'+
+      '<div class="row" style="gap:8px;flex-wrap:nowrap"><input type="datetime-local" id="slAt_'+id+'" class="inline-sel" aria-label="Call back on" value="'+esc(localInput(x?x.at:backAt('am')))+'"><button class="btn sm" data-act="sl:backat" data-id="'+id+'">Set</button></div>'+
+      (x?'<button class="btn sm ghost" style="margin-top:6px" data-act="sl:noback" data-id="'+id+'">No call-back</button>':'')+'</div>';
+  }
+  if(open&&pm==='lost')panel='<div class="spanel"><b>Why was it lost?</b><div class="chips">'+LOST_WHY.map(function(r){return '<button class="chip" data-act="sl:lost" data-k="'+r[0]+'" data-id="'+id+'">'+r[1]+'</button>'}).join('')+'</div></div>';
+  return '<section class="card qcard scard" data-job="'+id+'"><div class="row between" style="align-items:flex-start;gap:8px"><h3 style="margin:0">'+esc(j.d.name||'Customer')+'</h3><span class="pill sstage" data-st="'+st+'">'+STAGE_W[st]+'</span></div>'+
+    nextLn+
     '<div class="cc-sub">'+(j.d.moveDate?esc(fmtDate(j.d.moveDate)+' · '+fmtTime(j.d.time)):reqOpen(j)?'Asked in the customer app: can move '+esc(reqRange(j.req)):'No move date yet')+'</div>'+
     ((j.d.from||j.d.to)?'<div class="route">'+esc((j.d.from||'?')+' → '+(j.d.to||'?'))+'</div>':'')+
-    '<div class="row between" style="margin-top:4px"><b>'+(num(q.total)>0?money(q.total):'No price yet')+'</b><small>'+esc(j.createdAt?madeWhen(j.createdAt):'')+by+'</small></div>'+
-    '<div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button class="btn primary sm" data-act="cc:open" data-id="'+esc(j.id)+'">Open quote</button>'+
-      (j.d.phone?'<button class="btn sm" data-act="cc:call" data-id="'+esc(j.id)+'">Call</button>':'')+
-      '<button class="btn sm ghost" data-act="cc:lost" data-id="'+esc(j.id)+'">'+(ui.armed===a?'Tap again: not moving with us':'Mark lost')+'</button></div></section>';
+    '<div class="row between" style="margin-top:4px"><b>'+(num(q.total)>0?money(open?q.total:totalOf(j)):'No price yet')+'</b><small>'+esc((j.createdAt?madeWhen(j.createdAt):'')+(j.d.source?' · '+j.d.source:''))+by+'</small></div>'+
+    ownRow+btns+panel+'</section>';
+}
+// a call, a text or a quote made: counted, and whoever logs a lead nobody's working takes it
+function salesTouch(j,k){
+  var now=Date.now(),me=salesMe(),s=j.sales=Object.assign({},salesOf(j));
+  s.n=salesN(j)+1;if(!s.first)s.first=now;s.last={k:k,at:now,by:me};
+  if(!salesOwner(j)&&me){s.owner=me;s.ownerAt=now}
+  s.next=null;   // a call-back that was due is done now
+  logEv(j,TOUCH_LOG[k].replace('{w}',salesWho()));
+}
+function salesSetBack(j,at){
+  var me=salesMe(),s=j.sales=Object.assign({},salesOf(j));
+  s.next={at:at,by:me,set:Date.now()};if(!salesOwner(j)&&me){s.owner=me;s.ownerAt=Date.now()}
+  logEv(j,'Call back '+whenWords(at)+', set by '+salesWho());
+}
+function salesLost(j,k){
+  var w=LOST_WHY.filter(function(r){return r[0]===k})[0];if(!w||!isOpenQuote(j))return;
+  var s=j.sales=Object.assign({},salesOf(j));s.lost={k:k,at:Date.now(),by:salesMe()};s.next=null;
+  setStatus(j,'lost');logEv(j,'Marked lost by '+salesWho()+': '+w[1].toLowerCase());
+}
+// the job sheet: who's working an open lead or quote, and what's next, with a way to the Sales board
+function salesSheetTop(j){
+  if(!isOpenQuote(j))return '';
+  var ln=salesLine(j),own=salesOwner(j);
+  return '<div class="note snote"><div class="row between" style="gap:8px;flex-wrap:nowrap"><span><b>Sales</b> · '+(own?esc(own)+' is working it':'No one is working it yet')+'</span><button class="btn sm" data-act="sl:show" data-id="'+j.id+'">Open in Sales</button></div>'+
+    '<div class="snext">'+(ln.cls?'<span class="pill '+ln.cls+'">'+esc(ln.t)+'</span>':esc(ln.t))+'</div></div>';
 }
 // when a quote was made, in calendar days: "Made today", "Made yesterday", "Made 4 days ago", "Made Oct 2"
 function madeWhen(ts){
@@ -5051,10 +5211,6 @@ function madeWhen(ts){
 function ccOpen(id){
   var j=byId(id);if(!isOpenQuote(j)){toast('That quote was booked or closed meanwhile.');render();return}
   state.draft=Object.assign(blankDraft(),clone(j.d),{editId:j.id});ui.qstep=1;save();ui.tab='quote';render();window.scrollTo(0,0);
-}
-function ccLost(id){
-  var j=byId(id);if(!isOpenQuote(j))return;
-  setStatus(j,'lost');logEv(j,'Marked lost by '+ccWho());save();toast('Marked lost. It’s off the open quotes.');render();
 }
 function ccCall(id){
   var j=byId(id)||schedRecs().filter(function(r){return r.id===id})[0];if(!j)return;
@@ -5850,11 +6006,11 @@ function render(){
   renderTab();renderSheet();renderFlow();if(!ui.rqo||ui.rqo.step!=='sign')renderRq();renderMore();renderCall();renderStart();renderMover();renderPvBar();renderSos();renderSosBar();renderCs();
 }
 function renderTabs(){
-  var un=unreadTotal(),nav=navTabs(),wide=window.innerWidth>=900,office=canEditJobs();
+  var un=unreadTotal(),nav=navTabs(),wide=window.innerWidth>=900,office=canEditJobs(),sd=salesDueN();
   var list=wide?allowedTabs(state.ui.role):nav;
   // the round button: a new quote, for the office. (The crew clock in and out on the clock card on Today and the crew's Jobs screen.)
   var hasFab=office||state.ui.role==='callcenter'||ccToo();
-  var btn=function(t){return '<button data-act="tab" data-tab="'+t.id+'"'+(t.id===ui.tab?' aria-current="page"':'')+'>'+(t.id==='crew'&&!office?ICON.jobs:ICON[t.id])+'<span>'+tabLabel(t)+'</span>'+(t.id==='chat'&&un?'<i class="badge" aria-label="'+un+' unread">'+(un>9?'9+':un)+'</i>':'')+'</button>'};
+  var btn=function(t){return '<button data-act="tab" data-tab="'+t.id+'"'+(t.id===ui.tab?' aria-current="page"':'')+'>'+(t.id==='crew'&&!office?ICON.jobs:ICON[t.id])+'<span>'+tabLabel(t)+'</span>'+(t.id==='chat'&&un?'<i class="badge" aria-label="'+un+' unread">'+(un>9?'9+':un)+'</i>':'')+(t.id==='quotes'&&sd?'<i class="badge" aria-label="'+sd+' to call now">'+(sd>9?'9+':sd)+'</i>':'')+'</button>'};
   var moreBtn=state.ui.role==='customer'?'':'<button data-act="more:open"'+((!wide&&!list.some(function(t){return t.id===ui.tab})&&!(hasFab&&ui.tab==='quote'))?' aria-current="page"':'')+'>'+ICON.more+'<span>More</span></button>';
   var html=wide||!hasFab?(list.map(btn).join('')+moreBtn)
     :(list.slice(0,2).map(btn).join('')+'<button class="spacer" tabindex="-1" aria-hidden="true"></button>'+list.slice(2).map(btn).join('')+moreBtn);
@@ -6592,7 +6748,7 @@ function jobDoc(j){
   var dd=Object.assign({},j.d);
   dd.items=Object.keys(j.d.items||{}).map(function(k){return {id:k,q:j.d.items[k]}});
   var o={id:j.id,status:j.status,createdAt:j.createdAt,d:dd,quote:j.quote,items:j.items||[],assign:j.assign||{truckId:'',crew:[]},tally:j.tally||{}};
-  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','crewAsk','eta','cust'].forEach(function(k){if(j[k]!=null)o[k]=j[k]});
+  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','crewAsk','eta','cust','sales'].forEach(function(k){if(j[k]!=null)o[k]=j[k]});
   o.payments=toMap(j.payments,function(x){return x.id});
   o.signed=toMap(j.signed,function(x){return x.id});
   o.extras=toMap(j.extras,function(x){return x.id});
@@ -6618,7 +6774,7 @@ function docToJob(v){
     materials:mapArr(v.materials,'ts'),costs:mapArr(v.costs,'ts'),confirm:(v.confirm&&typeof v.confirm==='object')?v.confirm:{},
     crewOn:(v.crewOn&&typeof v.crewOn==='object')?v.crewOn:undefined,crewAdj:mapArr(v.crewAdj,'ts'),
     log:mapArr(v.log,'ts').slice(-60)};
-  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','crewAsk','eta','cust'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
+  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','crewAsk','eta','cust','sales'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
   return j;
 }
 /* A change to a document as a merge patch, the way the database's doc_patch applies it (RFC 7386): only what changed,
@@ -9519,7 +9675,24 @@ document.addEventListener('click',function(e){
     case 'cal:today':ui.schedDay=todayISO();ui.schedMon=ui.schedDay.slice(0,7);renderSched();break;
     case 'cc:open':ccOpen(t.dataset.id);break;
     case 'cc:call':ccCall(t.dataset.id);break;
-    case 'cc:lost':if(armed('cc:lost:'+t.dataset.id))ccLost(t.dataset.id);else ccFill();break;
+    case 'cc:lost':ui.sp={id:t.dataset.id,m:'lost'};ccFill();break;
+    case 'sl:f':ui.slf=t.dataset.f||'open';ui.sp=null;renderQuotes();break;
+    case 'sl:go':ui.slf=t.dataset.f||'open';ui.ccq='';ui.sp=null;ui.tab='quotes';render();window.scrollTo(0,0);break;
+    case 'sl:show':{var shj=byId(t.dataset.id);if(!shj)break;leaveSheet(function(){closeSheet();ui.slf='open';ui.ccq=shj.d.name||'';ui.sp={id:shj.id,m:'log'};ui.tab='quotes';render();window.scrollTo(0,0)});break}
+    case 'sl:p':{var spid=t.dataset.id,spm=t.dataset.m;ui.sp=ui.sp&&ui.sp.id===spid&&ui.sp.m===spm?null:{id:spid,m:spm};ccFill();break}
+    case 'sl:call':{var scj=byId(t.dataset.id);if(!scj)break;ui.sp={id:scj.id,m:'log',after:true};ccFill();ccCall(scj.id);break}
+    case 'sl:take':{var stj=byId(t.dataset.id),stme=salesMe();if(!isOpenQuote(stj)||!stme)break;if(salesOwner(stj)){toast(salesOwner(stj)+' is working it already.');ccFill();break}
+      stj.sales=Object.assign({},salesOf(stj),{owner:stme,ownerAt:Date.now()});logEv(stj,salesWho()+' took this lead');save();ccFill();renderTabs();toast('It’s yours. Call them soon: the sooner, the likelier they book.');break}
+    case 'sl:log':{var slj=byId(t.dataset.id),slk=t.dataset.k;if(!isOpenQuote(slj)||!TOUCH[slk])break;salesTouch(slj,slk);save();ui.sp={id:slj.id,m:'back'};ccFill();renderTabs();
+      toast('Logged: '+TOUCH[slk].toLowerCase()+'. '+(slk==='talked'?'Open the quote to price it, or set when to call back.':'When should someone call back?'));break}
+    case 'sl:back':{var sbj=byId(t.dataset.id),sbat=backAt(t.dataset.k);if(!isOpenQuote(sbj)||!sbat)break;salesSetBack(sbj,sbat);save();ui.sp=null;ccFill();renderTabs();toast('Call back '+whenWords(sbat)+'.');break}
+    case 'sl:backat':{var sbj2=byId(t.dataset.id),sbi=$('#slAt_'+t.dataset.id),sbv=sbi&&sbi.value?new Date(sbi.value).getTime():0;if(!isOpenQuote(sbj2))break;
+      if(!(sbv>0)){toast('Pick a day and time first.');break}
+      if(sbv<Date.now()-6e4){toast('That time has passed. Pick a time ahead.');break}
+      salesSetBack(sbj2,sbv);save();ui.sp=null;ccFill();renderTabs();toast('Call back '+whenWords(sbv)+'.');break}
+    case 'sl:noback':{var snj=byId(t.dataset.id);if(!isOpenQuote(snj)||!salesNext(snj))break;snj.sales=Object.assign({},salesOf(snj),{next:null});logEv(snj,'Call-back taken off by '+salesWho());save();ui.sp=null;ccFill();renderTabs();toast('No call-back set.');break}
+    case 'sl:lost':{var sxj=byId(t.dataset.id);if(!isOpenQuote(sxj))break;salesLost(sxj,t.dataset.k);save();ui.sp=null;renderQuotes();renderTabs();toast('Marked lost. It’s off the open leads and quotes.');break}
+    case 'sl:reopen':{var srj=byId(t.dataset.id);if(!srj||srj.status!=='lost'||!canEditJobs())break;setStatus(srj,num((srj.quote||{}).cf)>0?'quoted':'lead');srj.sales=Object.assign({},salesOf(srj),{lost:null});logEv(srj,'Reopened by '+(myName()||'the office'));save();ui.slf='open';renderQuotes();renderTabs();toast('Reopened. It’s back with the open ones.');break}
     case 'fab:quote':ui.tab='quote';ui.qstep=1;ui.armed='';render();window.scrollTo(0,0);break;
     case 'theme:open':ui.pick=true;renderPick();break;
     case 'theme:close':ui.pick=false;renderPick();break;
@@ -9766,6 +9939,7 @@ document.addEventListener('change',function(e){
   if(t.id&&/^cost_[lca]_/.test(t.id)){formKeep(t);return}
   if(t.dataset&&t.dataset.jcf!==undefined&&j){jedSet(j,'cf:'+t.dataset.jcf,t.value);return}
   if(t.dataset&&(t.dataset.trk||t.dataset.drv)){trkChange(t);return}
+  if(t.dataset&&t.dataset.sown){var soj=byId(t.dataset.sown);if(soj&&canEditJobs()&&isOpenQuote(soj)){var sov=t.value;soj.sales=Object.assign({},salesOf(soj),{owner:sov,ownerAt:Date.now()});logEv(soj,sov?sov+' is working this lead (picked by '+(myName()||'the office')+')':'No one is working this lead now ('+(myName()||'the office')+')');save();ccFill();toast(sov?sov+' is working '+(soj.d.name||'it')+'.':'No one is working '+(soj.d.name||'it')+' now.')}return}
   if(t.dataset&&t.dataset.lead){var lj=byId(t.dataset.lead);if(lj&&canEditJobs()&&t.value&&jobRunners(lj).indexOf(t.value)>=0){setLead(lj,t.value,myName()||'the office');save();renderSheet();toast(t.value+' leads '+(lj.d.name||'this job')+' today.')}return}
   if(t.dataset&&t.dataset.dq!==undefined){var dj=canEditJobs()?byId(t.dataset.id):null;if(dj){if(t.dataset.dq==='truckId')dj.assign.truckId=t.value;else{dj.d[t.dataset.dq]=t.value;if(t.dataset.dq==='moveDate'&&t.value){ui.weekStart=mondayOf(t.value);ui.day=t.value}}save();renderDispatch()}return}
   if(t.id&&t.id.indexOf('accStaff_')===0){var rs=$('#accRole_'+t.id.slice(9)),er=peopleHosted()?empByName(t.value):null,dv=directory().find(function(x){return x.name===t.value});if(rs&&(er||dv))rs.value=er?er.role:dv.kind;return}
@@ -9858,7 +10032,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
 })();
 </script>
 </body>

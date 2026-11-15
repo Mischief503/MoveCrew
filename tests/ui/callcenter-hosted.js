@@ -67,7 +67,7 @@ const net = async (url) => {
   const ccWrites = () => A.calls.writes.filter((x) => x.op === 'cc_save');
   const change = (sel, v) => { const e = $(sel); e.value = v; e.dispatchEvent(new w.Event('input', { bubbles: true })); e.dispatchEvent(new w.Event('change', { bubbles: true })); };
   ok(A.calls.rpc.some((c) => c.name === 'claim_cc_team') && T.sync.identity.role === 'callcenter' && T.sync.identity.staff === 'Jess', 'Jess signs in: linked to MoveCrew’s call center team, the call center in Ace Moving, under her name');
-  ok(T.state().ui.role === 'callcenter' && T.ui.tab === 'desk' && $$('#tabs button').map((b) => b.textContent).filter(Boolean).join('|') === 'Companies|Schedule|Quotes|More' && !$('#fab').hidden, 'her app: Companies first, then Schedule and Quotes, and the round button for a new quote');
+  ok(T.state().ui.role === 'callcenter' && T.ui.tab === 'desk' && $$('#tabs button').map((b) => b.textContent.replace(/\d+$/, '')).filter(Boolean).join('|') === 'Companies|Schedule|Sales|More' && !$('#fab').hidden, 'her app: Companies first, then Schedule and Sales, and the round button for a new quote');
   const S = T.state().settings;
   ok(S.company === 'Ace Moving' && S.rates.r2 === 140 && S.crew.length === 0 && !Object.keys(S.contacts).length && S.crewCost === 0 && (S.office || []).length === 0, 'her settings are the rate card: the prices, and none of the company’s crew, phones, costs or office (not even the sample ones)');
   ok(asks.some((a) => a === 'docs:org_id=org-1&path=ratecard/main') && !asks.some((a) => /path=org\/settings/.test(a)), 'she reads the rate card copy, never the settings');
@@ -114,7 +114,7 @@ const net = async (url) => {
   click('#qSave'); await sleep(700);
   const w1 = ccWrites().slice(n0);
   ok(w1.length === 1 && w1[0].path === 'jobs/q1' && w1[0].patch && w1[0].patch.quote && w1[0].patch.quote.crew === 3 && !(w1[0].patch.d && 'discount' in w1[0].patch.d) && w1[0].patch.quote.lines.some((l) => l.label === 'Discount' && l.amt === -50), 'Save: one change through cc_save, the new crew in it, and the office’s discount left out of it (only what changed goes)');
-  ok(row('jobs/q1').quote.crew === 3 && row('jobs/q1').d.discount === '50' && T.ui.tab === 'quotes' && /Saved\. It’s in Quotes\./.test(toast()), 'saved in the database, with the office’s discount; back to Quotes');
+  ok(row('jobs/q1').quote.crew === 3 && row('jobs/q1').d.discount === '50' && T.ui.tab === 'quotes' && /Saved\. It’s in Sales\./.test(toast()), 'saved in the database, with the office’s discount; back to Quotes');
   ok(!A.calls.writes.some((x) => (x.op === 'patch' || (x.table === 'docs' && !x.op)) && /^jobs\//.test((x.row && x.row.path) || '')), 'nothing went to the jobs any other way');
   click('#view [data-act="cc:open"][data-id="q1"]'); await sleep(15);
   click('[data-act="q:step"][data-s="3"]'); await sleep(10);

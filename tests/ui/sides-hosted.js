@@ -42,7 +42,7 @@ const rules = (staff) => (r) => ['org', 'meta', 'chat', 'locs', 'photos', 'formp
   const ccWrites = () => A.calls.writes.filter((x) => x.op === 'cc_save');
   const type = (sel, v) => { const e = $(sel); e.value = v; e.dispatchEvent(new w.Event('input', { bubbles: true })); };
   ok(T.sync.identity.role === 'crew' && T.sync.identity.staff === 'Riley' && T.state().ui.role === 'callcenter', 'Riley signs in: crew to the database, and her app opens as the call center (her one side)');
-  ok(tabs().join('|') === 'Schedule|Quotes|Chat|More' && !$('#fab').hidden && T.ui.tab === 'sched', 'her tabs: Schedule, Quotes, Chat, and the round button for a new quote');
+  ok(tabs().join('|') === 'Schedule|Sales|Chat|More' && !$('#fab').hidden && T.ui.tab === 'sched', 'her tabs: Schedule, Sales, Chat, and the round button for a new quote');
   ok((T.state().sched || []).map((r) => r.id).sort().join() === 'b1,b2' && T.state().jobs.map((j) => j.id).join() === 'q1', 'she reads the schedule’s copies and the open quote, not the booked jobs');
   T.ui.schedDay = later; T.ui.schedMon = later.slice(0, 7); T.render(); await sleep(15);
   ok(/Priya Nair/.test(view()) && /Nadia Farouk/.test(view()) && !/\$/.test(view()) && !!$('#view .dp-card .tl'), 'the Schedule: the day’s jobs and slots, no money');
@@ -64,7 +64,7 @@ const rules = (staff) => (r) => ['org', 'meta', 'chat', 'locs', 'photos', 'formp
   const B = await load(FILE, { db, org: ORG, me: { uid: 'u-marcus', email: 'marcus@x' } });
   await sleep(400);
   const btabs = () => B.$$('#tabs button').map((b) => b.textContent.replace(/\d+$/, '').trim()).filter(Boolean);
-  ok(B.T.state().ui.role === 'lead' && btabs().join('|') === 'Jobs|Schedule|Quotes|Chat|More' && !B.$('#fab').hidden, 'Marcus signs in: his Jobs first, then the Schedule, Quotes and Chat, with the round button');
+  ok(B.T.state().ui.role === 'lead' && btabs().join('|') === 'Jobs|Schedule|Sales|Chat|More' && !B.$('#fab').hidden, 'Marcus signs in: his Jobs first, then the Schedule, Sales and Chat, with the round button');
   ok(B.T.state().jobs.map((j) => j.id).sort().join() === 'b1,q1' && (B.T.state().sched || []).length === 2, 'he reads his own job, the open quote and the schedule’s copies');
   const bw = () => B.calls.writes.filter((x) => x.table === 'docs');
   const n1 = bw().length;
