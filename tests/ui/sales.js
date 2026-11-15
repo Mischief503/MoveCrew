@@ -70,7 +70,8 @@ const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
   S.sales.next.at = Date.now() - 10 * 6e4; T.render(); await sleep(10);
   ok(line(S) === 'Call back now' && !!card(S).querySelector('.snext .pill.warn') && badge() === '1' && chips()[1] === 'Due now 1', L('its time came: “Call back now”, the badge and Due now say 1'));
   S.sales.next.at = Date.now() - 2 * 36e5; T.render(); await sleep(10);
-  ok(/^Overdue: the call-back was today \d{1,2}:\d\d\s[AP]M$/.test(line(S)) && !!card(S).querySelector('.snext .pill.bad'), L('an hour late: “' + line(S) + '” in red'));
+  // two hours ago is yesterday in the first two hours after midnight (GitHub's runners are on UTC)
+  ok(/^Overdue: the call-back was (today|yesterday) \d{1,2}:\d\d\s[AP]M$/.test(line(S)) && !!card(S).querySelector('.snext .pill.bad'), L('an hour late: “' + line(S) + '” in red'));
   await tap('[data-act="tab"][data-tab="today"]'); await allRows();
   const td = $$('#view .alert').map(txt).find((a) => /call-back/.test(a)) || '';
   ok(td === '!1 call-back is dueSam Kowalski · Sales›' && !!$$('#view .alert').find((a) => /call-back/.test(a.textContent)).querySelector('.ic.bad'), L('Today: “1 call-back is due”, red when one is late'));
