@@ -39,6 +39,8 @@ US carriers block business texts from unregistered numbers. Calls aren't affecte
 - **Sample messages** (copy from what MoveCrew sends):
   - `Ace Moving: You're on Priya Nair, Sat Oct 4 at 8:00 AM. Pickup 418 Oak St, Austin. Truck Box 1 (26 ft). Lead Marcus. Reply STOP to opt out.`
   - `Ace Moving: Priya Nair moved to Mon Oct 6 at 9:30 AM (was Sat Oct 4 at 8:00 AM).`
+  - `Ace Moving: Hi Sam, your moving quote is $1,065 for Thu Nov 19 at 9:00 AM (3 movers, about 5 hours). Reply here with any questions.`
+  - `Ace Moving: Hi Sam, checking you got your moving quote: $1,065 for Thu Nov 19 at 9:00 AM. Want us to hold the day for you? Reply here or call (512) 555-0000.`
   - `Ace Moving: Tomorrow you're on Priya Nair at 8:00 AM (418 Oak St). Please confirm: https://your-tally-site#messages`
   - `Ace Moving: Hi Priya, your crew is on the way and should arrive in about 30 minutes, around 8:35 AM. Reply STOP to opt out.`
   - `Ace Moving TRUCK DOWN: Box 1 (26 ft) is down. Sent by Marcus at 2:14 PM, on the Priya Nair job. "Flat tire" Location: https://maps.google.com/?q=30.26715,-97.74306 (within 12 m). Call Marcus: +15125550101.`
@@ -87,9 +89,10 @@ The function's address is
 
 ## 4b. The evening-before texts (optional, recommended)
 
-This is the one text that runs on a clock instead of on a tap: every evening, each person on
+These are the texts that run on a clock instead of on a tap: every evening, each person on
 tomorrow's jobs gets "Tomorrow you're on…", with a link to confirm if they haven't, and the
-office gets who hasn't confirmed yet.
+office gets who hasn't confirmed yet. With Options › Follow-up texts for quotes on, the same run
+sends each texted quote's follow-ups (about 1, 3 and 7 days after it went out).
 
 1. **Edge Functions › Secrets**, add `TALLY_CRON_SECRET` = any long random phrase you make up
    (e.g. three random words and a number). It stops strangers from triggering the run.
@@ -173,7 +176,10 @@ number.
 | A lead taps Start job with the arrival text ticked | The customer: "on the way, about N minutes" |
 | A lead exits signing with a form unsigned (after Done unloading) | Owner and dispatch (at most once every 6 hours per job) |
 | Nobody answers the company line | Whoever rings for it: "Missed call from…" |
-| A customer texts the company line | Whoever rings for it, with the text |
+| A customer texts the company line | Whoever rings for it, with the text; on an open lead or quote it also shows on the lead in Sales ("Texted back…") and stops its follow-ups |
+| The office or the call center taps **Text the quote** in Sales | The customer: the price, the day, the crew, and the link to see it and book online when the quote has their email (wording in Setup › Sales texts) |
+| Follow-up texts for quotes (Options, off to start; the evening run, 4b) | The customer: up to three check-ins, about 1, 3 and 7 days after the quote text, until they book, text back, someone logs a call, or Stop on the lead |
+| The office or the call center answers from the lead in Sales | The customer: the text, from the company line |
 | A mover replies to an alert | Nobody — it lands in the app chat with Dispatch, free |
 | A crew taps **Truck down** | Owner and dispatch: which truck, who sent it, the job, their note, a map link to where they are, and their number (at most 6 alerts an hour per company) |
 | The crew taps **Running again**, or the office closes the alert | The same people: all clear |

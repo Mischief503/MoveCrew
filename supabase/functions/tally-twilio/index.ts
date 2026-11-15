@@ -21,6 +21,7 @@
 // Routes:
 //   POST /app            the MoveCrew app: {action:'job'|'forms'|'short'|'call'|'line'|'pay_…', org, jobId}
 //                        and a customer's own: {action:'cust_list'|'cust_book'|'cust_sign'|'cust_pay'|'cust_check'|'cust_reviewed'|'cust_profile'|'cust_request'}
+//                        and Sales: {action:'quote_text'|'sales_text', org, jobId, url | body} (any cust_… goes to the customer side)
 //                        and {action:'sos', org, msgId, kind:'start'|'end'} for emergency alerts
 //   POST /stripe         Stripe events (payments finishing or failing, pay links used, refunds, disputes,
 //                        memberships)
@@ -37,7 +38,7 @@
 //   /twilio/after        the office did not pick up: tell the caller, text the office
 //   /twilio/sms          someone texted the company number
 //   /twilio/status       Twilio delivery and call-status reports
-//   /cron/tomorrow       the evening-before texts; called by Supabase Cron with the
+//   /cron/tomorrow       the evening-before texts, and the quotes' follow-up texts; called by Supabase Cron with the
 //                        header x-tally-cron: <TALLY_CRON_SECRET>
 // (the /twilio/... and /cron/... routes are POST too)
 
@@ -3240,7 +3241,7 @@ function optOn(S: J, k: string): boolean {
   const o = (S && S.opt) || {};
   if (o[k] === true || o[k] === false) return o[k];
   if (k === "tax") return numP(S.taxPct) > 0;
-  return ["photosReq", "rqOffice"].indexOf(k) < 0;
+  return ["photosReq", "rqOffice", "salesFollow"].indexOf(k) < 0;
 }
 // the settings a price is worked out from: what the company saved, over the app's defaults
 export function priceSettings(saved: J): J {
@@ -3530,6 +3531,12 @@ async function handleApp(req: Request): Promise<Response> {
     if (b.action === "job") {
       if (!office) return json({ ok: false, message: "Only the owner and dispatch schedule crews." }, 403);
       return json(await checkJob(org, jobId, req.headers.get("origin")));
+    }
+    if (b.action === "quote_text" || b.action === "sales_text") {
+      const out = await (b.action === "quote_text" ? quoteText : salesText)(org, me, jobId, b);
+      const st = out.status;
+      delete out.status;
+      return json(out, typeof st === "number" ? st : 200);
     }
     if (b.action === "invite_app") {
       if (!office) return json({ ok: false, message: "Only the owner and dispatch text customers the app." }, 403);
@@ -4006,6 +4013,191 @@ export async function custInvite(org: string, me: J, jobId: string, url: unknown
   if (r.status === "failed" || r.status === "no-number") return { ok: false, message: "The text did not go out. Check Calls and texts on the job." };
   return { ok: true, message: "Texted " + (d.name || "the customer") + " the app." };
 }
+/* ---------- Sales texts (Nov 14, batch 2: "text the quote, follow up by itself") ----------
+   From the company line, like every customer text. The office or the call center texts a priced open quote (quote_text):
+   the price, the day and the crew, and when the customer can sign in to the customer app, the link to see it and book.
+   It counts on the job's sales record (j.sales: n, last {k:'qsent'}, qs {at, by, n}) and, with Options › Follow-up
+   texts on, starts three follow-ups (fu {step, at, from}): about a day, three days and a week later, sent with the
+   evening cron, each only while the quote is open, the customer hasn't texted back and nobody has logged a call since.
+   A text back to the company line from an open lead or quote lands on its record (in {at, t}) and stops the
+   follow-ups; the office answers it from the lead (sales_text; not cust_..., which is the customer side's own route). The wording is the company's own (Setup › Sales texts,
+   S.salesTpl), with {first} {company} {total} {when} {movers} {hours} {phone} {book}. */
+export const SALES_TPL: Record<string, string> = {
+  quote: "{company}: Hi {first}, your moving quote is {total} for {when} ({movers} movers, about {hours} hours).{book} Reply here with any questions.",
+  f1: "{company}: Hi {first}, checking you got your moving quote: {total} for {when}. Want us to hold the day for you? Reply here or call {phone}.",
+  f2: "{company}: Hi {first}, your move on {when} is still open with us. Reply YES and we'll call to set it up, or ask us anything.",
+  f3: "{company}: Hi {first}, last check-in on your {total} moving quote. If plans changed, no problem. Reply anytime to book.",
+};
+const FU_DAYS = [1, 3, 7];   // follow-ups this many days after the quote went out
+const SALES_TEXTS_PER_HOUR = 40;
+export function salesVars(S: J, job: J, site: string, phone: string): Record<string, string> {
+  const d = job.d || {}, qt = job.quote || {}, first = String(d.name || "").trim().split(/\s+/)[0] || "there";
+  const email = String(d.email || "").trim();
+  return {
+    first: /&|\b(and|family|inc|llc|law|co|company|corp|group)\b/i.test(String(d.name || "")) ? "there" : first,
+    company: company(S),
+    total: usd(Number(qt.total || 0)),
+    when: d.moveDate ? fmtDay(d.moveDate) + (d.time ? " at " + fmtTime(d.time) : "") : "the day you pick",
+    movers: String(Number(qt.crew) || 2),
+    hours: String(Number(qt.hours) || 2),
+    phone: phone,
+    book: site && emailKey(email) && !optOff(S, "custBook") ? " See it and book online: " + site + " (sign in with " + email + ")." : "",
+  };
+}
+export function salesBody(S: J, job: J, k: string, site: string, phone: string): string {
+  const t0 = (S && S.salesTpl && typeof S.salesTpl[k] === "string" && S.salesTpl[k].trim()) || SALES_TPL[k] || "";
+  const v = salesVars(S, job, site, phone);
+  return gsm(t0.replace(/\{(\w+)\}/g, (m: string, key: string) => (key in v ? v[key] : m))).replace(/\s+/g, " ").trim().slice(0, 600);
+}
+function siteOf(url: unknown): string {
+  try { const u = new URL(String(url || "")); if (u.protocol === "https:" && !/androidplatform\.net$/i.test(u.hostname)) return u.origin + u.pathname; } catch { /* not a web address */ }
+  return "";
+}
+function fmtLine(p: string): string { const d = last10(p); return d.length === 10 ? "(" + d.slice(0, 3) + ") " + d.slice(3, 6) + "-" + d.slice(6) : p; }
+// who may text a customer about a sale: the office, MoveCrew's call center, a company's own call center people
+async function salesMay(org: string, me: J, S: J): Promise<boolean> {
+  return me.role === "owner" || me.role === "dispatch" || me.role === "callcenter" || await ccHouse(org, me, S);
+}
+async function salesBy(org: string, me: J, S: J): Promise<string> {
+  const n = String(me.staff || "");
+  if (me.role === "callcenter" || await ccHouse(org, me, S)) return n ? n + " (call center)" : "the call center";
+  return n || "the office";
+}
+// a staff member's change to a job, kept from colliding with another phone's save at the same moment
+async function jobWrite(org: string, jobId: string, fn: (job: J) => J | string): Promise<J> {
+  const path = "jobs/" + jobId;
+  for (let i = 0; i < 4; i++) {
+    const row = ((await rest("GET", "docs?select=data,updated_at&org_id=eq." + q(org) + "&path=eq." + q(path) + "&limit=1")) || [])[0];
+    if (!row || !row.data) return { ok: false, message: "That job isn't here any more." };
+    const before = JSON.stringify(row.data), next = fn(JSON.parse(before));
+    if (typeof next === "string") return { ok: false, message: next };
+    if (JSON.stringify(next) === before) return { ok: true, job: next, same: true };
+    const done = await rest("PATCH", "docs?org_id=eq." + q(org) + "&path=eq." + q(path) + "&updated_at=eq." + q(row.updated_at), { data: next, updated_at: nowIso() }, "return=representation");
+    if (done && done.length) return { ok: true, job: next };
+  }
+  return { ok: false, message: "Someone was saving this job at the same moment. Try again." };
+}
+async function salesSentLately(org: string, staff: string): Promise<boolean> {
+  const since = new Date(Date.now() - 3600e3).toISOString();
+  const rows = await rest("GET", "comm_log?select=id&org_id=eq." + q(org) + "&purpose=in.(quote,sales-text)&staff=eq." + q(staff) + "&created_at=gte." + q(since) + "&limit=" + (SALES_TEXTS_PER_HOUR + 1));
+  return !!rows && rows.length >= SALES_TEXTS_PER_HOUR;
+}
+export async function quoteText(org: string, me: J, jobId: string, b: J): Promise<J> {
+  const line = await lineFor(org);
+  if (!line) return { ok: false, message: "The company line is not set up yet." };
+  const [S, job] = await Promise.all([getDoc(org, "org/settings"), getDoc(org, "jobs/" + jobId)]);
+  if (!(await salesMay(org, me, S))) return { ok: false, message: "Only the office and the call center text quotes.", status: 403 };
+  if (!job) return { ok: false, message: "That job is not available." };
+  if (job.status !== "lead" && job.status !== "quoted") return { ok: false, message: "That quote was booked or closed." };
+  if (job.test) return { ok: false, message: "Test job: nothing is texted." };
+  const d = job.d || {};
+  if (!e164(d.phone)) return { ok: false, message: "This job has no customer phone number." };
+  if (!(Number((job.quote || {}).total) > 0)) return { ok: false, message: "Price it first: open the quote and add what's moving." };
+  const since = new Date(Date.now() - 10 * 60e3).toISOString();
+  const recent = await rest("GET", "comm_log?select=id&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&purpose=eq.quote&created_at=gte." + q(since) + "&status=neq.failed&limit=1");
+  if (recent && recent.length) return { ok: false, message: (d.name || "The customer") + " was texted the quote a moment ago." };
+  if (await salesSentLately(org, String(me.staff || ""))) return { ok: false, message: "That's a lot of texts this hour. Try again in a little while." };
+  const body = salesBody(S, job, "quote", siteOf(b.url), fmtLine(line.phone_number));
+  const r = await sendText({ org, line, jobId, purpose: "quote", staff: me.staff, party: d.name || "Customer", to: d.phone, body });
+  if (r.status === "failed" || r.status === "no-number") return { ok: false, message: "The text did not go out. Check Calls and texts on the job." };
+  const by = await salesBy(org, me, S), name = String(me.staff || ""), now = Date.now(), follow = optOn(S, "salesFollow");
+  await jobWrite(org, jobId, (j) => {
+    const s = { ...mapOf(j.sales) };
+    s.n = (Number(s.n) || 0) + 1;
+    if (!s.first) s.first = now;
+    s.last = { k: "qsent", at: now, by: name };
+    if (typeof s.owner !== "string" || !s.owner) { if (name) { s.owner = name; s.ownerAt = now; } }
+    s.next = null;
+    s.qs = { at: now, by: name, n: ((s.qs && Number(s.qs.n)) || 0) + 1 };
+    s.fu = follow ? { step: 0, at: now + FU_DAYS[0] * 864e5, from: now } : null;
+    j.sales = s;
+    addLog(j, now, "Quote texted by " + by + (follow ? "; follow-up texts are on" : ""));
+    return j;
+  });
+  return { ok: true, message: "Texted " + (d.name || "the customer") + " the quote." + (follow ? " Follow-ups go out in 1, 3 and 7 days unless they text back." : "") };
+}
+export async function salesText(org: string, me: J, jobId: string, b: J): Promise<J> {
+  const line = await lineFor(org);
+  if (!line) return { ok: false, message: "The company line is not set up yet." };
+  const [S, job] = await Promise.all([getDoc(org, "org/settings"), getDoc(org, "jobs/" + jobId)]);
+  if (!(await salesMay(org, me, S))) return { ok: false, message: "Only the office and the call center text customers here.", status: 403 };
+  if (!job) return { ok: false, message: "That job is not available." };
+  if (["lead", "quoted", "booked"].indexOf(job.status) < 0) return { ok: false, message: "Text this customer from the job instead." };
+  if (job.test) return { ok: false, message: "Test job: nothing is texted." };
+  const d = job.d || {}, said = String(b.body || "").replace(/\s+/g, " ").trim();
+  if (!e164(d.phone)) return { ok: false, message: "This job has no customer phone number." };
+  if (!said) return { ok: false, message: "Write the text first." };
+  if (said.length > 480) return { ok: false, message: "That's a long text. Keep it under 480 letters." };
+  if (await salesSentLately(org, String(me.staff || ""))) return { ok: false, message: "That's a lot of texts this hour. Try again in a little while." };
+  const body = gsm(company(S) + ": " + said).slice(0, 600);
+  const r = await sendText({ org, line, jobId, purpose: "sales-text", staff: me.staff, party: d.name || "Customer", to: d.phone, body });
+  if (r.status === "failed" || r.status === "no-number") return { ok: false, message: "The text did not go out. Check Calls and texts on the job." };
+  const by = await salesBy(org, me, S), name = String(me.staff || ""), now = Date.now();
+  await jobWrite(org, jobId, (j) => {
+    const s = { ...mapOf(j.sales) };
+    s.n = (Number(s.n) || 0) + 1;
+    if (!s.first) s.first = now;
+    s.last = { k: "texted", at: now, by: name };
+    if ((typeof s.owner !== "string" || !s.owner) && name) { s.owner = name; s.ownerAt = now; }
+    j.sales = s;
+    addLog(j, now, "Texted by " + by + ": “" + said.slice(0, 80) + (said.length > 80 ? "…" : "") + "”");
+    return j;
+  });
+  return { ok: true, message: "Texted " + (d.name || "the customer") + "." };
+}
+// a customer texting the company line back about an open lead or quote: on its record, and the follow-ups stop
+async function salesTextIn(org: string, jobId: string, text: string): Promise<void> {
+  const now = Date.now(), stop = /^\s*(stop|stopall|unsubscribe|cancel|end|quit)\s*$/i.test(text);
+  await jobWrite(org, jobId, (j) => {
+    if (j.status !== "lead" && j.status !== "quoted") return j;
+    const s = { ...mapOf(j.sales) };
+    if (stop) { if (!s.fu) return j; s.fu = null; j.sales = s; addLog(j, now, "Texted STOP: no more texts from the company line"); return j; }
+    s.in = { at: now, t: text.slice(0, 160) };
+    s.fu = null;
+    j.sales = s;
+    addLog(j, now, "Texted back: “" + text.slice(0, 80) + (text.length > 80 ? "…" : "") + "”");
+    return j;
+  });
+}
+// the evening cron: each quote's next follow-up text that's due
+export async function runFollowUps(now = Date.now()): Promise<J> {
+  const lines = await rest("GET", "comm_lines?select=*&enabled=is.true");
+  const report: J[] = [];
+  for (const line of lines || []) {
+    const org = line.org_id;
+    const S = await getDoc(org, "org/settings");
+    if (!optOn(S, "salesFollow")) { report.push({ org, follow: "off" }); continue; }
+    const rows = await rest("GET", "docs?select=doc_id,data&org_id=eq." + q(org) + "&collection=eq.jobs&data->>status=in.(lead,quoted)&" + q("data->sales->fu->>at") + "=lte." + q(String(now))) || [];
+    let sent = 0;
+    for (const r of rows) {
+      const job = r.data || {}, s = job.sales || {}, fu = s.fu;
+      if (!fu || job.test || !(Number(fu.at) <= now)) continue;
+      const step = Number(fu.step) || 0;
+      // stopped: a text back, someone logged a call or text since the quote went out, or all three went
+      const quiet = !(s.in && Number(s.in.at) > Number(fu.from)) && !(s.last && Number(s.last.at) > Number(fu.from) && s.last.k !== "qsent");
+      const d = job.d || {};
+      let body = "";
+      if (quiet && step < FU_DAYS.length && e164(d.phone)) {
+        body = salesBody(S, job, "f" + (step + 1), "", fmtLine(line.phone_number));
+        const t = await sendText({ org, line, jobId: r.doc_id, purpose: "follow-up", party: d.name || "Customer", to: d.phone, body });
+        if (t.status !== "failed" && t.status !== "no-number") sent++;
+      }
+      const w = await jobWrite(org, r.doc_id, (j) => {
+        const s2 = { ...mapOf(j.sales) };
+        if (!s2.fu || Number(s2.fu.step) !== step) return j;   // someone changed it meanwhile
+        const n = step + 1;
+        s2.fu = body && n < FU_DAYS.length ? { ...s2.fu, step: n, at: Number(s2.fu.from) + FU_DAYS[n] * 864e5 } : null;
+        if (body) s2.fus = (Number(s2.fus) || 0) + 1;
+        j.sales = s2;
+        addLog(j, now, body ? "Follow-up text " + n + " of " + FU_DAYS.length + " sent" : "Follow-up texts stopped");
+        return j;
+      });
+      if (!w.ok) console.error("follow-up", org, r.doc_id, w.message);
+    }
+    report.push({ org, due: rows.length, sent });
+  }
+  return { ok: true, report };
+}
 async function handleCust(req: Request, b: J): Promise<Response> {
   const user = await custUser(req);
   if (!user) return json({ ok: false, message: "Sign in again." }, 401);
@@ -4147,6 +4339,9 @@ async function handleTwilio(sub: string, url: URL, p: Record<string, string>): P
       org_id: org, job_id: hit ? hit.id : null, channel: "sms", direction: "in", purpose: staff ? "reply" : "customer-text",
       staff: staff || null, party, to_number: line.phone_number, from_number: from, body: text, status: "received", sid: p.MessageSid || null,
     });
+    if (hit && !staff && (hit.job.status === "lead" || hit.job.status === "quoted")) {
+      try { await salesTextIn(org, hit.id, text); } catch (e) { console.error("sales text in", e); }
+    }
     if (/^\s*(stop|stopall|unsubscribe|cancel|end|quit|start|unstop|help|info)\s*$/i.test(text)) return xml("");
     if (staff) {
       // A mover answering an alert: drop it into the app chat, as a message to dispatch.
@@ -4200,7 +4395,12 @@ export async function handle(req: Request): Promise<Response> {
   if (/^\/cron\/tomorrow\/?$/.test(sub)) {
     const secret = env("TALLY_CRON_SECRET");
     if (!secret || !same(secret, req.headers.get("x-tally-cron") || "")) return json({ ok: false, message: "Forbidden" }, 403);
-    try { return json(await runTomorrow()); } catch (e) { console.error(e); return json({ ok: false, message: "Something went wrong on the server." }, 500); }
+    try {
+      const t = await runTomorrow();
+      let f: J = null;
+      try { f = await runFollowUps(); } catch (e) { console.error("follow-ups", e); f = { ok: false }; }
+      return json({ ...t, follow: f });
+    } catch (e) { console.error(e); return json({ ok: false, message: "Something went wrong on the server." }, 500); }
   }
   const m = /^\/twilio\/([a-z]+)\/?$/.exec(sub);
   if (!m) return json({ ok: false, message: "Not found" }, 404);
