@@ -75,7 +75,7 @@ const file = process.argv[2], label = process.argv[3] || file;
   // setup card on-device
   await A.go('settings', 'comms');
   ok(/Texts and calls/.test(text()) && /run on the hosted edition/.test(text()), label + ': Setup › Texts and calls explains texting runs on the hosted edition');
-  ok($$('input[data-s^="comms.alerts."]').length === 6 && !!$('input[data-s="comms.alerts.custReq"]'), label + ': alert switches still editable (6, with Move requests from customers since Nov 7)');
+  ok($$('input[data-s^="comms.alerts."]').length === 7 && !!$('input[data-s="comms.alerts.custReq"]') && !!$('input[data-s="comms.alerts.webLead"]'), label + ': alert switches still editable (7: Move requests from customers since Nov 7, New leads from your website since Nov 14)');
 
   // money colours fixed across every theme, and every theme applies cleanly
   const themes = (w.document.querySelector('#themeBtn') && (click('#themeBtn'), await sleep(10), $$('[data-act="theme:set"]'))) || [];

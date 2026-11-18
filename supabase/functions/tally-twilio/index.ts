@@ -23,6 +23,8 @@
 //                        and a customer's own: {action:'cust_list'|'cust_book'|'cust_sign'|'cust_pay'|'cust_check'|'cust_reviewed'|'cust_profile'|'cust_request'}
 //                        and Sales: {action:'quote_text'|'sales_text', org, jobId, url | body} (any cust_… goes to the customer side)
 //                        and {action:'sos', org, msgId, kind:'start'|'end'} for emergency alerts
+//   POST /lead           a website's Get a quote form (no sign-in: the company's link is the MoveCrew website with
+//                        ?quote=<company>): {org, probe} for its name, then the request, which lands in Sales
 //   POST /stripe         Stripe events (payments finishing or failing, pay links used, refunds, disputes,
 //                        memberships)
 //   POST /stripe/connect Stripe events on the companies' own (connected) accounts
@@ -33,9 +35,10 @@
 //   /twilio/bridge       masked call: your phone answered, ask for "press 1"
 //   /twilio/connect      masked call: you pressed 1, dial the customer from the company number
 //   /twilio/dialed       masked call: how the customer leg ended
-//   /twilio/voice        someone called the company number: ring the office
+//   /twilio/voice        someone called the company number: ring the office (and, for a company with MoveCrew's
+//                        call center service, the call center's phones too)
 //   /twilio/whisper      what the office hears before the caller is put through
-//   /twilio/after        the office did not pick up: tell the caller, text the office
+//   /twilio/after        the office did not pick up: tell the caller, text the office, and put the call in Sales
 //   /twilio/sms          someone texted the company number
 //   /twilio/status       Twilio delivery and call-status reports
 //   /cron/tomorrow       the evening-before texts, and the quotes' follow-up texts; called by Supabase Cron with the
@@ -4221,6 +4224,106 @@ async function handleCust(req: Request, b: J): Promise<Response> {
 }
 
 /* ---------- Twilio webhooks ---------- */
+/* ---------- Sales, batch 3 (Nov 14): leads that come in by themselves ----------
+   A website's Get a quote form (POST /lead, no sign-in; the company's link is the MoveCrew website with
+   ?quote=<company>) puts a new lead in Sales and texts the office (Options › New leads from your website). A call to
+   the company line that nobody answers lands in Sales too: on the caller's open lead or quote (sales.missed), else as
+   a new lead to call back. A company with MoveCrew's call center service has the team's phones ring with its own, and
+   they hear the company's name first. */
+const WEB_SIZES: Record<string, string> = { s1: "a studio or 1 bedroom", b2: "2 bedrooms", b3: "3 bedrooms", b4: "4 or more bedrooms", office: "an office", few: "a few items" };
+const WEB_PER_HOUR = 30;   // website requests a company takes in an hour; more is someone flooding the form
+// a new lead's job, as the app makes one (no price until the office builds the quote)
+function leadJob(id: string, now: number, S: J, d0: J, sales: J): J {
+  const d: J = { name: "", phone: "", email: "", source: "", moveDate: "", time: "", from: "", to: "", miles: "", milesOut: "", milesBack: "",
+    flights: "", pack: false, crew: "", truckId: "", hoursOverride: "", discount: "", notes: "", custom: {}, items: {}, moveKind: "", ...d0 };
+  return {
+    id, status: "lead", createdAt: now, d: { ...d, items: [] }, quote: priceCalc(d, priceSettings(S)), items: [],
+    assign: { truckId: "", crew: [] }, tally: {}, payments: {}, signed: {}, extras: {}, crewNotes: {}, photos: {}, materials: {}, costs: {},
+    sales, log: {},
+  };
+}
+export async function webLead(b: J): Promise<J> {
+  const org = String(b.org || "");
+  const gone = { ok: false, message: "This link isn't complete. Ask the moving company for it again." };
+  if (!/^[0-9A-Fa-f-]{36}$/.test(org)) return gone;
+  const S = await getDoc(org, "org/settings");
+  if (!S) return gone;
+  const co = company(S);
+  if (b.probe) return { ok: true, company: co };
+  // a bot: the hidden box filled in, or sent quicker than a person can type. It's told all went well, and nothing is made.
+  if (String(b.hp || "").trim() || !(Number(b.ms) >= 2500)) return { ok: true, company: co };
+  const line1 = (v: unknown, n: number) => String(v || "").trim().replace(/\s+/g, " ").slice(0, n);
+  const name = line1(b.name, 80), phone = line1(b.phone, 40), email = validEmail(b.email), from = line1(b.from, 200), to = line1(b.to, 200);
+  const note = String(b.note || "").trim().slice(0, 600), size = WEB_SIZES[String(b.size || "")] ? String(b.size) : "";
+  const date = String(b.date || ""), t = today(), now = Date.now();
+  if (!name) return { ok: false, message: "Put in your name." };
+  if (last10(phone).length < 10) return { ok: false, message: "Put in a phone number we can call you at." };
+  if (String(b.email || "").trim() && !email) return { ok: false, message: "That email doesn't look right. Fix it, or leave it empty." };
+  if (!from) return { ok: false, message: "Put in where you're moving from." };
+  if (date && (!isoDay(date) || date < t || dayGap(t, date) > 365)) return { ok: false, message: "Pick a move day between today and a year from now, or leave it empty." };
+  // asked before and still open: it goes on that lead, not a second one
+  const hit = await findJobByPhone(org, phone);
+  if (hit && (hit.job.status === "lead" || hit.job.status === "quoted")) {
+    await jobWrite(org, hit.id, (j) => {
+      const s = { ...mapOf(j.sales) };
+      s.web = { at: now };
+      j.sales = s;
+      addLog(j, now, "Asked again on the website" + (note ? ": “" + note.slice(0, 80) + (note.length > 80 ? "…" : "") + "”" : ""));
+      return j;
+    });
+    return { ok: true, company: co };
+  }
+  const lately = (await rest("GET", "docs?select=doc_id&org_id=eq." + q(org) + "&collection=eq.jobs&" + q("data->d->>source") + "=eq.Website&" + q("data->>createdAt") + "=gte." + q(String(now - 3600e3)) + "&limit=" + (WEB_PER_HOUR + 1))) || [];
+  if (lately.length >= WEB_PER_HOUR) return { ok: false, message: "We're getting a lot of requests right now. Please call us instead." };
+  const id = "w" + randToken() + randToken().slice(0, 4);
+  const notes = [size ? "Home: " + WEB_SIZES[size] : "", note ? "From the website: " + note : ""].filter(Boolean).join("\n");
+  const job = leadJob(id, now, S, { name, phone, email, source: "Website", moveDate: date, from, to, notes }, { web: { at: now } });
+  addLog(job, now, "Asked for a quote on the website");
+  await rest("POST", "docs", { org_id: org, path: "jobs/" + id, collection: "jobs", doc_id: id, data: job, updated_at: nowIso() });
+  // the office hears it, when the company line is set up
+  try {
+    const line = await lineFor(org);
+    if (line && alertOn(S, "webLead")) {
+      const body = co + ": New lead from your website: " + gsm(name) + ", " + fmtLine(phone) + ", " + gsm(from) + (to ? " to " + gsm(to) : "") +
+        (date ? ", " + fmtDay(date) : "") + ". It's in Sales. Call them soon.";
+      for (const n of ringNames(S)) await sendText({ org, line, jobId: id, purpose: "web-lead", staff: n, to: contacts(S)[n], body });
+    }
+  } catch (e) { console.error("web lead text", e); }
+  return { ok: true, company: co };
+}
+// a missed call to the company line: on the caller's open lead or quote, or a new lead to call back. Says where it went.
+export async function missedToSales(org: string, S: J, row: J, now = Date.now()): Promise<string> {
+  if (!row || row.staff || last10(String(row.from_number || "")).length < 10) return "";
+  if (row.job_id) {
+    const job = await getDoc(org, "jobs/" + row.job_id);
+    if (!job || (job.status !== "lead" && job.status !== "quoted")) return "";
+    const w = await jobWrite(org, String(row.job_id), (j) => {
+      if (j.status !== "lead" && j.status !== "quoted") return j;
+      const s = { ...mapOf(j.sales) };
+      s.missed = { at: now };
+      j.sales = s;
+      addLog(j, now, "Missed their call on the company line");
+      return j;
+    });
+    return w.ok ? "It's on their lead in Sales." : "";
+  }
+  const id = "m" + randToken() + randToken().slice(0, 4);
+  const job = leadJob(id, now, S, { phone: fmtLine(String(row.from_number)), source: "Missed call" }, { missed: { at: now } });
+  addLog(job, now, "Missed call on the company line: a new lead to call back");
+  await rest("POST", "docs", { org_id: org, path: "jobs/" + id, collection: "jobs", doc_id: id, data: job, updated_at: nowIso() });
+  try { await patchLog(row.id, { job_id: id }); } catch (e) { console.error("missed call log", e); }
+  return "It's in Sales as a new lead.";
+}
+// MoveCrew's call center team's phones, for a company with the service on (none without it, or before its tables)
+async function ccRingNumbers(org: string): Promise<string[]> {
+  try {
+    const on = await rest("GET", "cc_orgs?select=org_id&org_id=eq." + q(org) + "&limit=1");
+    if (!on || !on[0]) return [];
+    return (await ccTeam()).map((t: J) => e164(t.phone)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 async function findJobByPhone(org: string, phone: string): Promise<J> {
   const d = last10(phone);
   if (d.length < 7) return null;
@@ -4288,6 +4391,12 @@ async function handleTwilio(sub: string, url: URL, p: Record<string, string>): P
   const line = await lineByNumber(e164(p.To || p.Called || ""));
   if (sub === "whisper") {
     const row = logId ? await getLog(logId) : null;
+    if (url.searchParams.get("cc") === "1" && row) {
+      // MoveCrew's call center answers for many companies: which one this is, first
+      const l = await lineByNumber(String(row.to_number || ""));
+      const S0 = l ? await getDoc(l.org_id, "org/settings") : null;
+      return xml("<Say>Call for " + x(company(S0)) + ", from " + x(row.party || "a customer") + ".</Say>");
+    }
     return xml("<Say>Move Crew call from " + x((row && row.party) || "a customer") + ".</Say>");
   }
   if (!line) return xml(sub === "sms" ? "" : "<Say>This number is not in service.</Say><Hangup/>");
@@ -4304,13 +4413,17 @@ async function handleTwilio(sub: string, url: URL, p: Record<string, string>): P
       org_id: org, job_id: hit ? hit.id : null, channel: "call", direction: "in", purpose: "callback",
       staff: staff || null, party, to_number: line.phone_number, from_number: from, status: "ringing", sid: p.CallSid || null,
     });
-    const ring = ringNames(S);
-    if (!ring.length) {
+    const ring = ringNames(S), own = ring.map((n) => e164(C[n]));
+    // a caller who works here isn't a sale, and doesn't ring the call center
+    const cc = staff ? [] : (await ccRingNumbers(org)).filter((n) => own.indexOf(n) < 0).slice(0, Math.max(0, 10 - own.length));
+    if (!ring.length && !cc.length) {
       await patchLog(row.id, { status: "missed", error: "No one is set to answer the company line" });
+      try { await missedToSales(org, S, row); } catch (e) { console.error("missed call lead", e); }
       return xml("<Say>Thanks for calling " + x(company(S)) + ". No one can take your call right now. We will call you back.</Say><Hangup/>");
     }
     return xml('<Dial callerId="' + x(line.phone_number) + '" timeout="22" action="' + x(B + "/twilio/after?log=" + row.id) + '">' +
       ring.map((n) => '<Number url="' + x(B + "/twilio/whisper?log=" + row.id) + '">' + x(e164(C[n])) + "</Number>").join("") +
+      cc.map((n) => '<Number url="' + x(B + "/twilio/whisper?log=" + row.id + "&cc=1") + '">' + x(n) + "</Number>").join("") +
       "</Dial>");
   }
 
@@ -4323,8 +4436,11 @@ async function handleTwilio(sub: string, url: URL, p: Record<string, string>): P
     }
     if (row) {
       await patchLog(logId, { status: "missed" });
+      let where = "";
+      try { where = await missedToSales(org, S, row); } catch (e) { console.error("missed call lead", e); }
       const who = row.party || "someone";
-      const body = company(S) + ": Missed call on the company line from " + gsm(who) + " " + (row.from_number || "") + ". Call them back from MoveCrew.";
+      const body = company(S) + ": Missed call on the company line from " + gsm(who) + " " + (row.from_number || "") + ". " +
+        (where ? where + " Call them back from MoveCrew." : "Call them back from MoveCrew.");
       for (const n of ringNames(S)) await sendText({ org, line, jobId: row.job_id || undefined, purpose: "missed-call", staff: n, to: C[n], body });
     }
     return xml("<Say>Sorry, no one could get to the phone. We got your number and will call you right back.</Say><Hangup/>");
@@ -4389,6 +4505,11 @@ export async function handle(req: Request): Promise<Response> {
   }
   if (req.method !== "POST") return json({ ok: false, message: "POST only" }, 405);
   if (sub === "/app" || sub === "/app/") return handleApp(req);
+  if (sub === "/lead" || sub === "/lead/") {
+    let b: J = {};
+    try { b = await req.json(); } catch { /* not JSON: answered below */ }
+    try { return json(await webLead(b && typeof b === "object" ? b : {})); } catch (e) { console.error("web lead", e); return json({ ok: false, message: "Something went wrong. Please call us instead." }, 500); }
+  }
   if (sub === "/stripe" || sub === "/stripe/") return handleStripe(req);
   if (sub === "/stripe/connect" || sub === "/stripe/connect/") return handleStripe(req, "connect");
   if (sub === "/square" || sub === "/square/") return handleSquare(req);

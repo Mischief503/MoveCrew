@@ -227,6 +227,27 @@ details.acc.card .acc-body{padding-bottom:14px}
 .cal-key span{display:inline-flex;align-items:center;gap:6px}
 .cal-key i{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--line)}
 /* the call center's Companies screen: the customer, the map, each company's rate card */
+/* Sales, batch 3 (Nov 14): the Get a quote form (the website's page and Setup's copy of it), and a call ringing */
+.wq{color:#141B2D}
+.wq h1{font:700 28px/1.1 "Barlow Condensed","Arial Narrow",Arial,sans-serif;margin:0 0 4px;letter-spacing:.3px;text-wrap:balance}
+.wq .wqsub{margin:0 0 8px;font-size:15px;opacity:.8}
+.wq label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px;opacity:1}
+.wq label small{font-weight:400;opacity:.7;color:inherit}
+.wq input,.wq select,.wq textarea{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:10px 12px;border:1px solid #CBD2DD;border-radius:10px;min-height:46px;background:#fff;color:#141B2D}
+.wq textarea{min-height:76px;resize:vertical}
+.wq input:focus,.wq select:focus,.wq textarea:focus{outline:2px solid #2563EB;outline-offset:1px;border-color:#2563EB}
+.wq button[type=submit]{display:block;width:100%;min-height:48px;margin-top:16px;border-radius:10px;border:1px solid #D9A000;background:#F5B700;color:#241A00;font-weight:700;font-size:16px;cursor:pointer}
+.wq button[type=submit]:disabled{opacity:.6}
+.wq .msg{max-width:none;align-self:auto;background:none;border:0;border-radius:0;padding:0;margin-top:10px;font-size:14px;min-height:18px;color:#141B2D}
+.wq .msg.bad{color:#B81C22}
+.wq .wqhp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.wq .wqfine{font-size:12.5px;opacity:.65;margin:12px 0 0}
+.wqframe{margin-top:12px;background:#F5F6F8;border:1px solid var(--line);border-radius:12px;padding:12px}
+.wqframe .wq{background:#fff;border:1px solid #E7EAF0;border-radius:12px;padding:16px}
+.ringbar{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top));z-index:90;display:flex;align-items:center;gap:8px;background:var(--card);color:var(--text);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:12px;padding:8px 10px;box-shadow:var(--shadow-lg);max-width:560px;margin:0 auto}
+.ringbar[hidden]{display:none}
+.ringbar .grow small{display:block;font-size:12px;color:var(--muted)}
+.ringbar .grow b{display:block;font-size:16px}
 /* Sales (Nov 14): the board's cards */
 .sfu{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted);margin-top:6px}
 .sthread{display:flex;flex-direction:column;gap:6px;margin:0 0 10px;max-height:320px;overflow-y:auto}
@@ -1242,6 +1263,8 @@ function css(){
   // the message line is a plain line here (the app's .msg is a chat bubble)
   '#login .msg{max-width:none;align-self:auto;background:none;border:0;border-radius:0;padding:0;margin-top:10px;font-size:13.5px;min-height:18px}#login .msg.bad{color:#C62026}#login .msg.ok{color:#0A7A3D}'+
   // a phone set to dark: last, so it wins over the light rules above (the box was white with light text)
+  '#login.wqpage,#login.wqpage .box{background:#F5F6F8;color:#141B2D}#login.wqpage .box{background:#fff;border-color:#E7EAF0;max-width:440px}#login.wqpage{align-items:flex-start}'+
+  '#login.wqpage input,#login.wqpage select,#login.wqpage textarea{background:#fff;color:#141B2D;border-color:#CBD2DD}#login.wqpage .wq label{font-size:13px;opacity:1;margin:12px 0 4px}'+
   '@media (prefers-color-scheme:dark){#login{background:#0E1422;color:#ECEFF5}#login .box{background:#151D30;border-color:#243049}#login input{background:#0E1422;color:#ECEFF5;border-color:#243049}#login button.org{border-color:#243049}#login .msg.bad{color:#FF8A80}#login .msg.ok{color:#5BE39A}}';
   document.head.appendChild(s);
 }
@@ -1559,6 +1582,12 @@ var commsApi={
   custInvite:function(id,url){return commsPost({action:'invite_app',jobId:id,url:url})},
   quoteText:function(id,url){return commsPost({action:'quote_text',jobId:id,url:url})},
   salesText:function(id,body){return commsPost({action:'sales_text',jobId:id,body:body})},
+  // the newest call to the company line in the last minute and a half (Sales, batch 3: who's calling, on screen)
+  ringing:function(){
+    return sb.from('comm_log').select('id,party,from_number,job_id,status,created_at').eq('org_id',ORG).eq('channel','call').eq('direction','in')
+      .filter('created_at','gt',new Date(Date.now()-90e3).toISOString()).order('created_at',{ascending:false}).limit(1)
+      .then(function(r){if(r.error)throw r.error;return (r.data||[])[0]||null});
+  },
   call:function(id){return commsPost({action:'call',jobId:id})},
   sos:function(id,kind){return commsPost({action:'sos',msgId:id,kind:kind,now:Date.now()})},
   log:function(id){
@@ -1630,9 +1659,45 @@ window.claude={use:function(what){
 }};
 window.tallySignOut=function(){sb.auth.signOut().then(function(){try{localStorage.removeItem(ORG_KEY);localStorage.removeItem(DAY_KEY)}catch(e){}reload()})};
 
+/* The website's Get a quote form (Nov 14, Sales batch 3): ?quote=<company> on the MoveCrew website, for that company's
+   customers. Nobody signs in: it asks the Edge Function whose form it is (POST /lead {probe}), then sends the request
+   there, which puts a new lead in the company's Sales. The form itself is the app's (webQuoteHtml), so Setup can show it. */
+var webQuote=(function(){try{var m=/[?&]quote=([0-9A-Fa-f-]{36})(?:&|$)/.exec(location.search);return m?m[1]:''}catch(e){return ''}})();
+function webQuotePost(body){
+  return fetch(CFG.url.replace(/\/+$/,'')+'/functions/v1/tally-twilio/lead',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.anonKey},body:JSON.stringify(Object.assign({org:webQuote},body))})
+    .then(function(r){return r.json().catch(function(){return {ok:false,message:'The server did not answer. Try again, or call us.'}})})
+    .catch(function(){return {ok:false,message:'Could not reach the server. Check your connection and try again.'}});
+}
+function webQuoteStart(){
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',webQuoteStart,{once:true});return}   // the form is the app's, which loads after this
+  css();
+  if(!el){el=document.createElement('div');el.id='login';document.body.appendChild(el)}
+  el.className='wqpage';
+  var shown=Date.now(),co='';
+  el.innerHTML='<div class="box">'+window.webQuoteHtml('')+'</div>';
+  if(window.tallySplashDone)window.tallySplashDone();
+  webQuotePost({probe:true}).then(function(r){
+    if(r&&r.ok&&r.company){co=r.company;var h=el.querySelector('#wqCo');if(h)h.textContent=co;try{document.title=co+': Get a moving quote'}catch(e){}}
+    else if(r&&r.ok===false){var b0=el.querySelector('.box');b0.innerHTML='<div class="wq"><h1>Get a moving quote</h1><p class="wqsub"></p></div>';b0.querySelector('.wqsub').textContent=r.message||'This form is not taking requests right now.'}
+  });
+  el.addEventListener('submit',function(e){
+    if(!e.target||e.target.id!=='wqForm')return;
+    e.preventDefault();
+    var v=window.webQuoteRead(el,shown),m=el.querySelector('#wqMsg'),b=el.querySelector('#wqSend');
+    if(v.err){m.className='msg bad';m.textContent=v.err;var f=el.querySelector('#'+v.field);if(f)f.focus();return}
+    b.disabled=true;m.className='msg';m.textContent='Sending…';
+    webQuotePost(v.data).then(function(r){
+      b.disabled=false;
+      if(r&&r.ok){el.querySelector('.box').innerHTML=window.webQuoteDone(r.company||co,v.data);window.scrollTo(0,0);return}
+      m.className='msg bad';m.textContent=(r&&r.message)||'That did not send. Try again, or call us.';
+    });
+  });
+}
 document.documentElement.classList.add('pre-auth');
-sb.auth.getSession().then(function(r){onSession(r.data&&r.data.session)});
+if(webQuote)webQuoteStart();
+else sb.auth.getSession().then(function(r){onSession(r.data&&r.data.session)});
 sb.auth.onAuthStateChange(function(ev,session){
+  if(webQuote)return;   // the Get a quote page stays what it is, whoever is signed in on this browser
   if(ev==='SIGNED_IN')onSession(session);
   if(ev==='SIGNED_OUT'){me={id:'',email:'',role:'',staff:'',isOwner:false,canEdit:false};showLogin()}
 });
@@ -1915,6 +1980,7 @@ var OPTS=[
   {g:'texts',p:'comms.alerts.forms',t:'Unsigned forms alert',h:'Text the office when a finished job is still waiting on a signature.'},
   {g:'texts',p:'comms.alerts.short',t:'Short crew alert',h:'Text the office when a crew lead starts a job with fewer movers than quoted, or someone leaves and it drops below.'},
   {g:'texts',p:'comms.alerts.custReq',t:'Move requests from customers',h:'Text the office when a customer asks for another move in the customer app, with the days they can move and their phone.'},
+  {g:'texts',p:'comms.alerts.webLead',t:'New leads from your website',h:'Text the office when someone asks for a quote on your website (Setup › Get a quote form).'},
   {g:'texts',k:'salesFollow',def:false,t:'Follow-up texts for quotes',h:'After a quote is texted from MoveCrew, the customer gets up to three check-in texts (about 1, 3 and 7 days later, in the evening) until they book, text back, or someone logs a call. Needs the company line and the evening texts (Supabase Cron).'},
   {g:'office',k:'drivers',t:'A driver for every truck',h:'Dispatch picks who drives each truck on a job. A truck with no driver shows as needing scheduling. Off: no drivers to pick.'},
   {g:'office',k:'dispatchPay',t:'Dispatch can take payments',h:'Dispatch can collect payments and send pay links.'},
@@ -3373,7 +3439,9 @@ function settled(j){return j.status==='paid'||(j.status==='done'&&balOf(j)<=0&&!
 function isHistory(j,t){return j.status==='lost'||(settled(j)&&jobDay(j)<(t||todayISO()))}
 // open work whose move date went by without the move being done in the app
 function datePassed(j,t){return ['lead','quoted','booked'].indexOf(j.status)>=0&&!!j.d.moveDate&&j.d.moveDate<(t||todayISO())}
-function namesLine(list){var n=list.map(function(j){return j.d.name||'Unnamed'});return n.length>3?n.slice(0,3).join(', ')+' and '+(n.length-3)+' more':n.join(', ')}
+// a job's name: the customer's, else (a missed call, before anyone has talked to them) their number
+function jobName(j){var d=(j&&j.d)||{};return d.name||(d.phone?fmtPhone(d.phone):'Unnamed')}
+function namesLine(list){var n=list.map(jobName);return n.length>3?n.slice(0,3).join(', ')+' and '+(n.length-3)+' more':n.join(', ')}
 var canEditJobs=function(){return state.ui.role==='owner'||state.ui.role==='dispatch'};
 // who's off is kept with the settings, which only the owner saves in the phone app (the database's rule)
 function canSetOff(){return canEditJobs()&&(sync.mode!=='shared'||sync.isAdmin)}
@@ -3477,9 +3545,11 @@ function renderToday(){
   var sRow=function(kind,title,sub,f){return '<button class="alert" data-act="sl:go" data-f="'+f+'"><span class="ic '+kind+'">!</span><span class="tx"><b>'+title+'</b><small>'+sub+'</small></span><span class="go">›</span></button>'};
   var sIn=state.jobs.filter(function(j){return !!salesIn(j)}).sort(function(a,b){return salesIn(b).at-salesIn(a).at});
   if(sIn.length)A.push(sRow('bad',sIn.length+(sIn.length===1?' customer texted back':' customers texted back'),esc(namesLine(sIn))+' · answer them in Sales','due'));
-  var sDue=state.jobs.filter(function(j){return salesDueCb(j)&&!salesIn(j)}).sort(function(a,b){return salesAt(a)-salesAt(b)});
+  var sMiss=state.jobs.filter(function(j){return !!salesMissed(j)&&!salesIn(j)}).sort(function(a,b){return salesMissed(b).at-salesMissed(a).at});
+  if(sMiss.length)A.push(sRow('bad',sMiss.length+(sMiss.length===1?' missed call':' missed calls')+' to call back',esc(namesLine(sMiss))+' · Sales','due'));
+  var sDue=state.jobs.filter(function(j){return salesDueCb(j)&&!salesIn(j)&&!salesMissed(j)}).sort(function(a,b){return salesAt(a)-salesAt(b)});
   if(sDue.length)A.push(sRow(sDue.some(function(j){return Date.now()-salesNext(j).at>=36e5})?'bad':'warn',sDue.length+' call-back'+(sDue.length===1?' is':'s are')+' due',esc(namesLine(sDue))+' · Sales','due'));
-  var sNew=state.jobs.filter(function(j){return salesNew(j)&&!reqOpen(j)}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});
+  var sNew=state.jobs.filter(function(j){return salesNew(j)&&!reqOpen(j)&&!salesMissed(j)}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});
   if(sNew.length){var sw=(Date.now()-(sNew[0].createdAt||Date.now()))/6e4;A.push(sRow(sw>=15?'bad':'warn',sNew.length+' new lead'+(sNew.length===1?'':'s')+' not called yet',esc(namesLine(sNew))+' · waiting '+minsWords(sw),'new'))}
   var cap=ui.allAlerts||A.length<=6?A.length:5;
   var moreBtn=A.length>6?'<button class="btn" style="width:100%;margin:0 0 4px" data-act="today:alerts" aria-expanded="'+!!ui.allAlerts+'">'+(ui.allAlerts?'Show fewer':'Show '+(A.length-5)+' more')+'</button>':'';
@@ -3684,7 +3754,7 @@ function renderJobs(){
     if(j.test)badges+=' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>';
     if(j.status==='done'&&bal>0)badges+=' <span class="pill due">'+money(bal)+' due</span>';
     if(depositDue(j,t)>0)badges+=' <span class="pill warn">No deposit yet</span>';
-    return '<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><div class="t">'+esc(j.d.name||'Unnamed')+'</div><div class="r">'+(j.quote.cf?money(totalOf(j)):'')+'</div></div><div class="route">'+esc(fmtDate(j.d.moveDate))+(j.d.time&&j.d.moveDate?' · '+fmtTime(j.d.time):'')+' · '+esc((j.d.from||'?')+' → '+(j.d.to||'?'))+'</div><div>'+pill(j.status)+badges+'</div></button>';
+    return '<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><div class="t">'+esc(jobName(j))+'</div><div class="r">'+(j.quote.cf?money(totalOf(j)):'')+'</div></div><div class="route">'+esc(fmtDate(j.d.moveDate))+(j.d.time&&j.d.moveDate?' · '+fmtTime(j.d.time):'')+' · '+esc((j.d.from||'?')+' → '+(j.d.to||'?'))+'</div><div>'+pill(j.status)+badges+'</div></button>';
   }).join('');
   var allPast=!jobs.length&&past>0;
   var histLine=past&&!allPast?'<div class="secline"><small>'+past+' paid or lost job'+(past===1?'':'s')+'</small><button data-act="hist:go">Job history ›</button></div>':'';
@@ -3902,7 +3972,7 @@ function renderSheet(){
   var rail=j.status==='lost'?'':'<div class="rail">'+steps.map(function(st,i){return '<span class="st '+(i<nowIx?'done':i===nowIx?'now':'')+'"><i></i><span>'+st[0]+'</span></span>'}).join('')+'</div>';
   var lateNote=datePassed(j)?'<div class="note">The move date ('+esc(fmtDate(j.d.moveDate))+') has passed. '+(j.status==='booked'?'If the move happened, set Status to Complete or Paid. If not, pick a new date or set Status to Lost.':'If they are still moving, pick a new date. If not, set Status to Lost.')+' Paid and lost jobs move to Job history.</div>':'';
   el.innerHTML='<div class="scrim" data-act="sheet:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="Job details">'+
-   '<div class="sheet-head"><div><h2>'+esc(j.d.name||'Unnamed')+'</h2><div style="margin-top:4px">'+pill(j.status)+(j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'')+' <small>'+fmtInt(q.cf)+' cu ft · '+q.crew+' movers · '+q.hours+' h'+(q.kind==='mileage'?' · mileage move':q.kind==='local'?' · local move':'')+(['active','done','paid'].indexOf(j.status)>=0&&leadOf(j)?' · Lead: '+esc(leadOf(j)):'')+'</small></div></div><button class="btn sm" data-act="sheet:close" id="sheetClose">Close</button></div>'+
+   '<div class="sheet-head"><div><h2>'+esc(jobName(j))+'</h2><div style="margin-top:4px">'+pill(j.status)+(j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'')+' <small>'+fmtInt(q.cf)+' cu ft · '+q.crew+' movers · '+q.hours+' h'+(q.kind==='mileage'?' · mileage move':q.kind==='local'?' · local move':'')+(['active','done','paid'].indexOf(j.status)>=0&&leadOf(j)?' · Lead: '+esc(leadOf(j)):'')+'</small></div></div><button class="btn sm" data-act="sheet:close" id="sheetClose">Close</button></div>'+
    '<div class="sheet-body">'+lateNote+rail+
    sheetMoney(j)+rqSheetTop(j)+reqSheetTop(j)+salesSheetTop(j)+
    '<div class="row sec">'+(na?'<button class="btn primary grow" data-act="'+na.act+'"'+(na.attrs||'')+'>'+na.label+'</button>':'')+(na&&na.act==='sh:requote'?'':'<button class="btn grow" data-act="sh:requote">Edit quote</button>')+'</div>'+
@@ -5085,8 +5155,10 @@ function salesNew(j){return isOpenQuote(j)&&!salesN(j)}
 function salesNext(j){var x=salesOf(j).next;return x&&x.at>0?x:null}
 // a text back from the customer nobody has answered yet (any call or text logged after it answers it)
 function salesIn(j){var s=salesOf(j),i=s.in;return isOpenQuote(j)&&i&&i.at>((s.last&&s.last.at)||0)?i:null}
+// a call from them nobody answered, and nobody has called or texted them since (Sales, batch 3)
+function salesMissed(j){var s=salesOf(j),m=s.missed;return isOpenQuote(j)&&m&&m.at>((s.last&&s.last.at)||0)?m:null}
 function salesDueCb(j,now){var x=salesNext(j);return isOpenQuote(j)&&!!x&&x.at<=(now||Date.now())}
-function salesDue(j,now){return salesDueCb(j,now)||!!salesIn(j)}
+function salesDue(j,now){return salesDueCb(j,now)||!!salesIn(j)||!!salesMissed(j)}
 function salesDueN(){if(!allowedTabs(state.ui.role).some(function(t){return t.id==='quotes'}))return 0;var n=Date.now();return state.jobs.filter(function(j){return salesNew(j)||salesDue(j,n)}).length}
 function salesStage(j){
   if(j.status==='lost')return 'lost';
@@ -5096,7 +5168,7 @@ function salesStage(j){
   return j.status==='quoted'?'quoted':'contacted';
 }
 // when to act on it: the call-back's time; a new one's arrival (the sooner the better); else two days after the last contact
-function salesAt(j){var x=salesNext(j),s=salesOf(j),i=salesIn(j);if(i)return i.at-1e13;if(x)return x.at;if(!salesN(j))return j.createdAt||0;return ((s.last&&s.last.at)||j.createdAt||0)+2*864e5}
+function salesAt(j){var x=salesNext(j),s=salesOf(j),i=salesIn(j),mi=salesMissed(j);if(i)return i.at-1e13;if(mi)return mi.at-1e13;if(x)return x.at;if(!salesN(j))return j.createdAt||0;return ((s.last&&s.last.at)||j.createdAt||0)+2*864e5}
 function salesMe(){return (isCC()?ccName():myName())||''}
 function salesWho(){return isCC()?ccWho():(myName()||'the office')}
 function bookedAt(j){var e=(j.log||[]).filter(function(l){return /^(Status: Booked|Created as Booked|Booked)/.test(String(l.ev))})[0];return e?e.ts:0}
@@ -5111,6 +5183,7 @@ function salesLine(j){
   var now=Date.now(),x=salesNext(j),s=salesOf(j);
   if(j.status==='lost'){var l=s.lost||{},w=LOST_WHY.filter(function(r){return r[0]===l.k})[0];return {cls:'',t:'Lost'+(w?': '+w[1].toLowerCase():'')+' · '+whenWords(lostAt(j))+(l.by?' ('+l.by+')':'')}}
   if(!isOpenQuote(j))return {cls:'',t:'Booked'+(bookedAt(j)?' '+whenWords(bookedAt(j)):'')};
+  var tm=salesMissed(j);if(tm&&!salesIn(j))return {cls:'bad',t:'Missed their call '+ago(tm.at)+' · call them back'};
   var ti=salesIn(j);if(ti)return {cls:'bad',t:'Texted back '+ago(ti.at)+': “'+String(ti.t||'').slice(0,90)+(String(ti.t||'').length>90?'…':'')+'”'};
   if(x){var late=now-x.at;return late<0?{cls:'',t:'Call back '+whenWords(x.at)}:late>=36e5?{cls:'bad',t:'Overdue: the call-back was '+whenWords(x.at)}:{cls:'warn',t:'Call back now'}}
   if(!salesN(j)){var m=(now-(j.createdAt||now))/6e4;return {cls:m>=15?'bad':m>=5?'warn':'',t:'New · waiting '+minsWords(m)+' · not called yet'}}
@@ -5207,7 +5280,7 @@ function salesCard(j){
   }
   if(open&&pm==='tx')panel=salesTextPanel(j);
   if(open&&pm==='lost')panel='<div class="spanel"><b>Why was it lost?</b><div class="chips">'+LOST_WHY.map(function(r){return '<button class="chip" data-act="sl:lost" data-k="'+r[0]+'" data-id="'+id+'">'+r[1]+'</button>'}).join('')+'</div></div>';
-  return '<section class="card qcard scard" data-job="'+id+'"><div class="row between" style="align-items:flex-start;gap:8px"><h3 style="margin:0">'+esc(j.d.name||'Customer')+'</h3><span class="pill sstage" data-st="'+st+'">'+STAGE_W[st]+'</span></div>'+
+  return '<section class="card qcard scard" data-job="'+id+'"><div class="row between" style="align-items:flex-start;gap:8px"><h3 style="margin:0">'+esc(jobName(j))+'</h3><span class="pill sstage" data-st="'+st+'">'+STAGE_W[st]+'</span></div>'+
     nextLn+
     '<div class="cc-sub">'+(j.d.moveDate?esc(fmtDate(j.d.moveDate)+' · '+fmtTime(j.d.time)):reqOpen(j)?'Asked in the customer app: can move '+esc(reqRange(j.req)):'No move date yet')+'</div>'+
     ((j.d.from||j.d.to)?'<div class="route">'+esc((j.d.from||'?')+' → '+(j.d.to||'?'))+'</div>':'')+
@@ -5262,6 +5335,117 @@ function salesSheetTop(j){
   return '<div class="note snote"><div class="row between" style="gap:8px;flex-wrap:nowrap"><span><b>Sales</b> · '+(own?esc(own)+' is working it':'No one is working it yet')+'</span><button class="btn sm" data-act="sl:show" data-id="'+j.id+'">Open in Sales</button></div>'+
     '<div class="snext">'+(ln.cls?'<span class="pill '+ln.cls+'">'+esc(ln.t)+'</span>':esc(ln.t))+'</div></div>';
 }
+/* ---------- leads that come in by themselves (Nov 14, Sales batch 3) ----------
+   The website's Get a quote form: the company's customers ask for a quote on the MoveCrew website (?quote=<company>,
+   the hosted block shows it before sign-in) and it lands in Sales as a new lead. Setup › Get a quote form has the link
+   and shows the form; in the claude.ai copy, trying it makes a lead here. */
+var WEB_SIZES=[['s1','Studio or 1 bedroom'],['b2','2 bedrooms'],['b3','3 bedrooms'],['b4','4 or more bedrooms'],['office','An office'],['few','A few items']];
+function webQuoteHtml(co){
+  var f=function(id,label,type,more){return '<label for="'+id+'">'+label+'</label><input id="'+id+'" type="'+type+'"'+(more||'')+'>'};
+  return '<div class="wq"><h1 id="wqCo">'+esc(co||'Get a moving quote')+'</h1><p class="wqsub">Tell us about your move, and we’ll call you with a price.</p>'+
+    '<form id="wqForm" novalidate>'+
+      f('wqName','Your name','text',' autocomplete="name" maxlength="80"')+
+      f('wqPhone','Phone','tel',' autocomplete="tel" inputmode="tel" maxlength="40"')+
+      f('wqEmail','Email <small>(optional)</small>','email',' autocomplete="email" maxlength="120"')+
+      f('wqFrom','Moving from','text',' autocomplete="street-address" maxlength="200" placeholder="Street and town"')+
+      f('wqTo','Moving to <small>(optional)</small>','text',' maxlength="200" placeholder="Street and town, or just the town"')+
+      f('wqDate','Move day <small>(leave it empty if you’re not sure)</small>','date',' min="'+todayISO()+'"')+
+      '<label for="wqSize">How big is the move? <small>(optional)</small></label><select id="wqSize"><option value="">Pick one</option>'+WEB_SIZES.map(function(x){return '<option value="'+x[0]+'">'+x[1]+'</option>'}).join('')+'</select>'+
+      '<label for="wqNote">Anything we should know? <small>(optional)</small></label><textarea id="wqNote" rows="3" maxlength="600" placeholder="Stairs, a piano, a day that’s set…"></textarea>'+
+      '<div class="wqhp" aria-hidden="true"><label for="wqSite">Leave this empty</label><input id="wqSite" type="text" tabindex="-1" autocomplete="off"></div>'+
+      '<button type="submit" id="wqSend">Send</button><div class="msg" id="wqMsg" role="status" aria-live="polite"></div>'+
+    '</form><p class="wqfine">Your number is only for calling or texting you about your move.</p></div>';
+}
+// what was typed, checked as the server checks it: {data} or {err, field}
+function webQuoteRead(root,shown){
+  var g=function(id){var x=root.querySelector('#'+id);return x?String(x.value||'').trim():''};
+  var d={name:g('wqName'),phone:g('wqPhone'),email:g('wqEmail'),from:g('wqFrom'),to:g('wqTo'),date:g('wqDate'),size:g('wqSize'),note:g('wqNote'),hp:g('wqSite'),ms:Date.now()-(shown||0)};
+  if(!d.name)return {err:'Put in your name.',field:'wqName'};
+  if(d.phone.replace(/\D/g,'').length<10)return {err:'Put in a phone number we can call you at.',field:'wqPhone'};
+  if(d.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email))return {err:'That email doesn’t look right. Fix it, or leave it empty.',field:'wqEmail'};
+  if(!d.from)return {err:'Put in where you’re moving from.',field:'wqFrom'};
+  if(d.date&&d.date<todayISO())return {err:'Pick a move day from today on, or leave it empty.',field:'wqDate'};
+  return {data:d};
+}
+function webQuoteDone(co,d){
+  return '<div class="wq wqdone"><h1>Thanks, '+esc(String(d.name||'').split(' ')[0])+'.</h1><p class="wqsub">'+esc(co||'The moving company')+' has your move and will call you soon at '+esc(fmtPhone(d.phone))+'.</p></div>';
+}
+window.webQuoteHtml=webQuoteHtml;window.webQuoteRead=webQuoteRead;window.webQuoteDone=webQuoteDone;
+// the company's link: the MoveCrew website with its company (the claude.ai copy has no company of its own)
+function webQuoteLink(){var o=window.TALLY_ORG_KEY;return custSite()+'?quote='+(o&&o!=='none'?o:'your-company')}
+// Setup › Get a quote form
+function webFormCard(){
+  var u=webQuoteLink(),here=!!(window.TALLY_ORG_KEY&&window.TALLY_ORG_KEY!=='none');
+  return '<section class="card"><h2>Get a quote form</h2><p class="sub">Your customers ask for a quote on the MoveCrew website. Each request lands in Sales as a new lead, and the office gets a text from the company line (Options › New leads from your website).</p>'+
+    '<div class="note"><b>Your link</b><br><span id="wqLink" style="overflow-wrap:anywhere">'+esc(u)+'</span>'+(here?'':'<br><small>Sign in on the MoveCrew website to see your own.</small>')+'</div>'+
+    '<div class="row" style="margin-top:8px"><button class="btn" data-act="wq:copy">Copy the link</button><button class="btn" data-act="wq:try" aria-expanded="'+!!ui.wqTry+'">'+(ui.wqTry?'Hide the form':'Try the form')+'</button></div>'+
+    '<p class="hint">Put it on your website (a “Get a quote” button), your Google Business Profile and your Facebook page. Someone who asks again while their lead is open goes on the same lead.</p>'+
+    (ui.wqTry?'<div class="wqframe">'+(ui.wqDone?webQuoteDone(state.settings.company,ui.wqDone)+'<div class="row" style="margin-top:10px"><button class="btn" data-act="wq:sales">See it in Sales</button><button class="btn" data-act="wq:again">Try it again</button></div>':webQuoteHtml(state.settings.company))+'</div>'+
+      (here?'<p class="hint">This is what your customers see. Sending it here makes a real lead in Sales, as the link does.</p>':'<p class="hint">This is what your customers see. In this copy, Send makes a sample lead in Sales.</p>'):'')+
+    '</section>';
+}
+// a request from Setup's form: on the website it goes to the server like the link's; in the claude.ai copy, a lead here
+function webTrySend(form){
+  var v=webQuoteRead(form,ui.wqShown||0),m=form.querySelector('#wqMsg');
+  if(v.err){if(m){m.className='msg bad';m.textContent=v.err}var f=form.querySelector('#'+v.field);if(f)f.focus();return}
+  var d=v.data,now=Date.now();
+  var dd=Object.assign(blankDraft(),{name:d.name,phone:d.phone,email:d.email,source:'Website',moveDate:d.date,time:'',from:d.from,to:d.to,
+    notes:[d.size?'Home: '+((WEB_SIZES.filter(function(x){return x[0]===d.size})[0]||[0,''])[1]).toLowerCase():'',d.note?'From the website: '+d.note:''].filter(Boolean).join('\n')});
+  var j=newJob(dd,state.settings,'lead');j.sales={web:{at:now}};logEv(j,'Asked for a quote on the website (tried in Setup)');
+  state.jobs.push(j);save();ui.wqDone=d;renderSettings();renderTabs();toast('A new lead from the form. It’s in Sales.');
+}
+document.addEventListener('submit',function(e){
+  var f=e.target;if(!f||f.id!=='wqForm'||!f.closest('#view'))return;   // the website's own page (#login) sends its own
+  e.preventDefault();
+  if(window.tallyComms&&window.TALLY_ORG_KEY&&window.TALLY_ORG_KEY!=='none'){
+    var v=webQuoteRead(f,ui.wqShown||0),m=f.querySelector('#wqMsg');
+    if(v.err){m.className='msg bad';m.textContent=v.err;return}
+    m.className='msg';m.textContent='Sending…';
+    fetch(webLeadUrl(),{method:'POST',headers:{'Content-Type':'application/json',apikey:String((window.TALLY_SUPABASE||{}).anonKey||'')},body:JSON.stringify(Object.assign({org:window.TALLY_ORG_KEY},v.data))})
+      .then(function(r){return r.json()}).then(function(r){if(r&&r.ok){ui.wqDone=v.data;renderSettings();toast('Sent. It’s in Sales as a new lead.')}else{m.className='msg bad';m.textContent=(r&&r.message)||'That did not send.'}})
+      .catch(function(){m.className='msg bad';m.textContent='Could not reach the server. Check your connection.'});
+    return;
+  }
+  webTrySend(f);
+});
+function webLeadUrl(){var c=window.TALLY_SUPABASE||{};return String(c.url||'').replace(/\/+$/,'')+'/functions/v1/tally-twilio/lead'}
+
+// a new lead from the website or a missed call, as it comes in: a pop-up message for whoever works Sales
+var leadSeen=null;
+function leadNotice(){
+  if(!allowedTabs(state.ui.role).some(function(t){return t.id==='quotes'}))return;
+  var ids={},now=Date.now();
+  state.jobs.forEach(function(j){if(isOpenQuote(j)&&(j.d.source==='Website'||j.d.source==='Missed call'))ids[j.id]=1});
+  if(leadSeen){
+    var fresh=state.jobs.filter(function(j){return ids[j.id]&&!leadSeen[j.id]&&now-(j.createdAt||0)<15*6e4});
+    if(fresh.length>1)toast(fresh.length+' new leads just came in. They’re in Sales.');
+    else if(fresh.length)toast(fresh[0].d.source==='Website'?'New lead from your website: '+jobName(fresh[0])+'. It’s in Sales.':'Missed call from '+jobName(fresh[0])+'. It’s in Sales to call back.');
+  }
+  leadSeen=ids;
+}
+
+// a call ringing on the company line: who it is, at the top of the office's screen, while MoveCrew is open. It asks
+// every few seconds (and not at all without a company line, or with MoveCrew in the background).
+var ringW={t:0,on:false,row:null,hide:{}};
+function ringStart(){if(!ringW.on&&window.tallyComms&&window.tallyComms.ringing){ringW.on=true;ringPoll()}}
+function ringPoll(){
+  clearTimeout(ringW.t);
+  if(commsReady()&&canEditJobs()&&!document.hidden)window.tallyComms.ringing().then(ringShow).catch(function(){});
+  ringW.t=setTimeout(ringPoll,4000);
+}
+function ringShow(row){
+  var bar=document.getElementById('ringBar');
+  var live=row&&row.status==='ringing'&&!ringW.hide[row.id]&&Date.now()-(Date.parse(row.created_at)||0)<60e3;
+  if(!live){ringW.row=null;if(bar)bar.hidden=true;return}
+  ringW.row=row;
+  if(!bar){bar=document.createElement('div');bar.id='ringBar';bar.className='ringbar';bar.setAttribute('role','alert');document.body.appendChild(bar)}
+  var j=row.job_id?byId(row.job_id):null,who=j?jobName(j):row.party&&!/^an unknown caller$/i.test(row.party)?row.party:fmtPhone(row.from_number);
+  var what=!j?'Not in MoveCrew yet':isOpenQuote(j)?STAGE_W[salesStage(j)]+(num((j.quote||{}).total)>0?' · '+money(j.quote.total):'')+(j.d.moveDate?' · '+fmtDate(j.d.moveDate):''):LABEL[j.status]+(j.d.moveDate?' · '+fmtDate(j.d.moveDate):'');
+  var go=!j?'<button class="btn sm primary" data-act="ring:quote">New quote</button>':isOpenQuote(j)?'<button class="btn sm primary" data-act="sl:show" data-id="'+esc(j.id)+'">Open in Sales</button>':'<button class="btn sm primary" data-act="job:open" data-id="'+esc(j.id)+'">Open job</button>';
+  bar.innerHTML='<div class="grow"><small>Calling the company line</small><b>'+esc(who)+'</b><small>'+esc(what)+'</small></div>'+go+'<button class="btn sm ghost" data-act="ring:hide" aria-label="Hide">✕</button>';
+  bar.hidden=false;
+}
+
 // when a quote was made, in calendar days: "Made today", "Made yesterday", "Made 4 days ago", "Made Oct 2"
 function madeWhen(ts){
   var a=parseISO(iso(new Date(ts))),b=parseISO(todayISO()),n=Math.round((b-a)/864e5);
@@ -6018,6 +6202,7 @@ function setupSecs(){
   add('pay','money','Payments',payWord,payCardHtml()+optGroup('pay','Ways to pay'),'stripe cards connect pay links cash checks');
   add('vault','money','Saved payment methods',state.vault.length+' saved',
     '<section class="card"><h2>Saved payment methods</h2><p class="sub">Only the last four digits are kept. Customers find their saved cards and bank accounts when they pay.</p>'+vaultList+'</section>','cards on file bank');
+  add('webform','money','Get a quote form','Your customers ask for a quote on the MoveCrew website',webFormCard(),'website web form get a quote leads link online request');
   add('salestexts','money','Sales texts','The quote and follow-up texts to customers',salesTplCard(),'sales quote follow up follow-up text templates wording');
   add('comms','money','Texts and calls',window.tallyComms?(line?'Company line '+fmtPhone(line):'Company line not connected yet'):'Sent from the hosted MoveCrew app',commsCard(),'twilio sms text alerts calls phone line');
   add('data','data','Your data','Export, import and test jobs',
@@ -7018,7 +7203,7 @@ function pullJobs(snap){
   // work it out again here, so the bill matches the job. Lines from another version of MoveCrew are left.
   Object.keys(remote).forEach(function(id){var cj=byId[id];if(clockStale(cj)){rebill(cj,'worked out again');changed=true}});
   sync.got.jobs=true;
-  jobMsgNotice();noteNotice();onJobNotice(false);rqNotice();
+  jobMsgNotice();noteNotice();onJobNotice(false);rqNotice();leadNotice();ringStart();
   // the call center's screens have no photos, and the hosted database doesn't give it them
   if(!ccDb())state.jobs.forEach(function(j){(j.photos||[]).forEach(function(p){if(!p.data)fetchPhoto(p.id,0)})});
   commsBaseline();
@@ -8097,7 +8282,8 @@ function commsCard(){
     (Array.isArray(C.ring)&&C.ring.length?'':'<p class="hint" style="margin-top:-4px">Nobody picked, so the office staff ring.</p>')+
     (missing.length?'<p class="hint">No phone number for '+esc(missing.join(', '))+', so they will not get texts.</p>':'')+
     '<label class="f" style="margin-top:12px"><span>Link in texts (opens Job messages so people can confirm)</span><input data-s="comms.appUrl" data-t="text" inputmode="url" placeholder="https://your-tally-site" value="'+esc(C.appUrl||'')+'"></label>'+
-    '<p class="hint">Texts go out 20 seconds after the last change to a job, so a mis-tap can be undone first. Every text and call is logged on the job.</p></section>';
+    '<p class="hint">Texts go out 20 seconds after the last change to a job, so a mis-tap can be undone first. Every text and call is logged on the job.</p>'+
+    '<p class="hint">While a call rings, MoveCrew shows who it is at the top of the office’s screen. A call nobody answers goes into Sales: on the caller’s lead or quote, or as a new lead to call back. With MoveCrew’s call center service, the call center’s phones ring too, and they hear your company’s name first.</p></section>';
 }
 // the text alerts' switches (the same rows as in Setup › Options)
 function commsToggles(){return '<div style="margin-top:6px">'+OPTS.filter(function(x){return x.g==='texts'}).map(optRow).join('')+'</div>'}
@@ -9758,6 +9944,14 @@ document.addEventListener('click',function(e){
     case 'sl:send':{var ssj=byId(t.dataset.id),sst=$('#slTx_'+t.dataset.id),ssv=sst?String(sst.value).trim():'';if(!ssj||!window.tallyComms||!window.tallyComms.salesText)break;
       if(!ssv){toast('Write the text first.');if(sst)sst.focus();break}
       t.disabled=true;window.tallyComms.salesText(ssj.id,ssv).then(function(r){t.disabled=false;toast((r&&r.message)||'The text did not go out.');if(r&&r.ok){var e2=$('#slTx_'+ssj.id);if(e2)e2.value='';commsLoadLog(ssj.id)}}).catch(function(){t.disabled=false;toast('The text did not go out. Check the connection and try again.')});break}
+    case 'wq:copy':{var wu=webQuoteLink(),selW=function(){var x=$('#wqLink');if(x)try{var rg=document.createRange();rg.selectNodeContents(x);var sl=window.getSelection();sl.removeAllRanges();sl.addRange(rg)}catch(y){}toast('Selected. Copy it from here.')};
+      try{navigator.clipboard.writeText(wu).then(function(){toast('Link copied.')},selW)}catch(x){selW()}break}
+    case 'wq:try':ui.wqTry=!ui.wqTry;ui.wqDone=null;ui.wqShown=Date.now();renderSettings();break;
+    case 'wq:again':ui.wqDone=null;ui.wqShown=Date.now();renderSettings();break;
+    case 'wq:sales':ui.wqTry=false;ui.wqDone=null;ui.slf='open';ui.ccq='';ui.tab='quotes';render();window.scrollTo(0,0);break;
+    case 'ring:hide':{if(ringW.row)ringW.hide[ringW.row.id]=1;var rb=document.getElementById('ringBar');if(rb)rb.hidden=true;break}
+    case 'ring:quote':{var rr=ringW.row;if(!rr)break;ringW.hide[rr.id]=1;var rb2=document.getElementById('ringBar');if(rb2)rb2.hidden=true;
+      state.draft=Object.assign(blankDraft(),{phone:fmtPhone(rr.from_number)});ui.qstep=1;save();ui.tab='quote';render();window.scrollTo(0,0);toast('A new quote with their number. Fill it in as you talk.');break}
     case 'sl:fustop':{var sfj=byId(t.dataset.id);if(!isOpenQuote(sfj)||!salesOf(sfj).fu)break;sfj.sales=Object.assign({},salesOf(sfj),{fu:null});logEv(sfj,'Follow-up texts stopped by '+salesWho());save();ccFill();toast('No more follow-up texts for '+(sfj.d.name||'this quote')+'.');break}
     case 'sl:call':{var scj=byId(t.dataset.id);if(!scj)break;ui.sp={id:scj.id,m:'log',after:true};ccFill();ccCall(scj.id);break}
     case 'sl:take':{var stj=byId(t.dataset.id),stme=salesMe();if(!isOpenQuote(stj)||!stme)break;if(salesOwner(stj)){toast(salesOwner(stj)+' is working it already.');ccFill();break}
@@ -10111,7 +10305,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
 })();
 </script>
 </body>

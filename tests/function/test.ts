@@ -364,7 +364,8 @@ twilioFail = "";
 h = await hook("voice", { CallSid: "CAin1", From: "+15125550142", To: "+15125550000" });
 const inRow = DB.comm_log.find((x) => x.sid === "CAin1")!;
 ok(inRow && inRow.job_id && inRow.party === 'Priya “P” Nair' && inRow.direction === "in", "callback matched to the customer's job");
-ok(/<Dial callerId="\+15125550000" timeout="22" action="[^"]*after\?log=\d+">(<Number url="[^"]*whisper[^"]*">\+1512555(0100|0199)<\/Number>){2}<\/Dial>/.test(h.text), "callback rings the office phones, not the mover");
+// the office's phones, not the mover; and (Nov 14, Sales batch 3) org-1 has MoveCrew's call center service, so Jess's phone too, told which company first
+ok(/<Dial callerId="\+15125550000" timeout="22" action="[^"]*after\?log=\d+">(<Number url="[^"]*whisper\?log=\d+">\+1512555(0100|0199)<\/Number>){2}<Number url="[^"]*whisper\?log=\d+&amp;cc=1">\+15125550107<\/Number><\/Dial>/.test(h.text), "callback rings the office phones, not the mover (and the call center's, with the service on)");
 h = await hook("whisper?log=" + inRow.id, { To: "+15125550100" });
 ok(/Move Crew call from Priya/.test(h.text), "office hears who is calling before picking up");
 n0 = sent.length;
@@ -374,7 +375,7 @@ ok(sent.length - n0 === 2 && /Missed call on the company line from Priya/.test(s
 
 putDoc(ORG, "org/settings", { ...settings, comms: { ...settings.comms, ring: ["Marcus"] } });
 h = await hook("voice", { CallSid: "CAin2", From: "+19995550000", To: "+15125550000" });
-ok(/<Number[^>]*>\+15125550101<\/Number>/.test(h.text) && (h.text.match(/<Number/g) || []).length === 1, "who answers the company line is set in Setup");
+ok(/<Number[^>]*>\+15125550101<\/Number>/.test(h.text) && !/\+1512555(0100|0199)</.test(h.text) && (h.text.match(/<Number/g) || []).length === 2 && /cc=1">\+15125550107</.test(h.text), "who answers the company line is set in Setup (the call center's phone rings with the service)");
 ok(DB.comm_log.find((x) => x.sid === "CAin2")!.party === "an unknown caller", "unknown caller logged without a job");
 putDoc(ORG, "org/settings", settings);
 

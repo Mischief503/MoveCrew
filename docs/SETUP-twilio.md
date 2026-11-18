@@ -152,6 +152,10 @@ back in first (same values as last time).
 - Make sure everyone has a phone number under **Crew** and **Office staff** — that's where
   texts go and which phone rings for a company-line call. The card lists anyone missing one.
 - Pick **who rings when a customer calls the company line**. Nobody picked = the office staff.
+  For a company with MoveCrew's call center service, the call center team's phones (MoveCrew admin ›
+  Call center team) ring too, and they hear "Call for <company>, from <caller>" first. While a call
+  rings, the office's MoveCrew shows who it is at the top of the screen (it checks every few
+  seconds while it's open). A call nobody answers goes into Sales.
 - The switches turn each kind of text on or off.
 - **Link in texts** fills itself in the first time you open this card on the hosted site. It's
   the address texts point to, so a tap opens the app at Job messages (or, in a truck-down text,
@@ -175,7 +179,8 @@ number.
 | Office taps "Text … a reminder" on a job | Everyone on it who hasn't confirmed |
 | A lead taps Start job with the arrival text ticked | The customer: "on the way, about N minutes" |
 | A lead exits signing with a form unsigned (after Done unloading) | Owner and dispatch (at most once every 6 hours per job) |
-| Nobody answers the company line | Whoever rings for it: "Missed call from…" |
+| Nobody answers the company line | Whoever rings for it: "Missed call from…", and the call goes into Sales: on the caller's open lead or quote, or as a new lead to call back ("It's in Sales as a new lead.") |
+| Someone asks for a quote on the company's website (Setup › Get a quote form) | Whoever rings for it: "New lead from your website: name, number, from, to, day. It's in Sales. Call them soon." (Options › New leads from your website) |
 | A customer texts the company line | Whoever rings for it, with the text; on an open lead or quote it also shows on the lead in Sales ("Texted back…") and stops its follow-ups |
 | The office or the call center taps **Text the quote** in Sales | The customer: the price, the day, the crew, and the link to see it and book online when the quote has their email (wording in Setup › Sales texts) |
 | Follow-up texts for quotes (Options, off to start; the evening run, 4b) | The customer: up to three check-ins, about 1, 3 and 7 days after the quote text, until they book, text back, someone logs a call, or Stop on the lead |
