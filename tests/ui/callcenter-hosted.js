@@ -126,6 +126,7 @@ const net = async (url) => {
   click('[data-act="q:book"]'); await sleep(900);
   ok(row('jobs/q1').status === 'booked' && !!row('sched/q1') && T.ui.tab === 'sched' && T.ui.schedDay === later, 'Book job: booked in the database, its copy is on the schedule, and she’s on its day');
   ok(Object.values(row('jobs/q1').log || {}).some((l) => l.ev === 'Booked by Jess (call center)'), 'the job’s activity: “Booked by Jess (call center)”');
+  ok(row('jobs/q1').bookedCC && row('jobs/q1').bookedCC.by === 'Jess' && row('jobs/q1').bookedCC.team === true && row('jobs/q1').bookedCC.at > 0, 'and the job says MoveCrew’s call center booked it, for billing (Nov 17)');
   ok(!row('jobs/q1').assign.truckId && !row('sched/q1').assign.truckId && row('jobs/q1').d.slots.join() === 't16' && row('sched/q1').d.slots.join() === 't16' && Object.values(row('jobs/q1').log || {}).some((l) => l.ev === 'Lined up in slot 1 at 9:00 AM'), 'lined up in slot 1, in the job and on the schedule’s copy, and no truck put on it (dispatch picks)');
   ok(!T.state().jobs.some((j) => j.id === 'q1') && (T.state().sched || []).some((r) => r.id === 'q1') && /Ortega family/.test(view()) && !/\$/.test(view()), 'the job itself leaves her phone; the schedule shows it from the copy, without the money');
 

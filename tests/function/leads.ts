@@ -309,5 +309,32 @@ DB.docs.find((x) => x.org_id === ORG && x.path === "org/settings").data.comms.ri
 h = await hook("voice", { From: "+15125550189", To: "+15125550000", CallSid: "CAin7" });
 ok(/No one can take your call right now/.test(h.text) && jobsBy("Missed call").some((x) => x.d.phone === "(512) 555-0189"), "nobody to ring: the caller is told, and it's a lead to call back");
 
+/* ---------- MoveCrew admin: what the call center booked, by company and month (Nov 17, Sales batch 4) ---------- */
+{
+  const now = Date.UTC(2026, 10, 17, 20, 0, 0);   // Nov 17, 2026, noon in Oregon
+  const at = (y: number, m: number, d: number, h = 18) => Date.UTC(y, m, d, h, 0, 0);
+  const jb = (org: string, id: string, data: any) => DB.docs.push({ org_id: org, path: "jobs/" + id, collection: "jobs", doc_id: id, updated_at: "x", data: { id, ...data } });
+  const lg = (ev: string, ts: number) => ({ k1: { ts, ev } });
+  // Ace (ORG): Jess made a quote and booked it this month; Ana booked the office's quote this month; Jess made one as Booked in October (before bookedCC)
+  jb(ORG, "b1", { status: "booked", createdAt: at(2026, 10, 3), createdCC: true, log: lg("Created as Quoted by Jess (call center)", at(2026, 10, 3)), bookedCC: { at: at(2026, 10, 5), by: "Jess", team: true } });
+  jb(ORG, "b2", { status: "booked", createdAt: at(2026, 9, 20), log: lg("Created as Quoted by Owner", at(2026, 9, 20)), bookedCC: { at: at(2026, 10, 9), by: "Ana", team: true } });
+  jb(ORG, "b3", { status: "done", createdAt: at(2026, 9, 14), createdCC: true, log: [{ ts: at(2026, 9, 14), ev: "Created as Booked by Jess (call center)" }] });
+  // a company's own call center person (Tanya) doesn't count, by the job's flag or by her name; nor a quote left as a lead
+  jb(ORG, "b4", { status: "booked", createdAt: at(2026, 10, 6), createdCC: true, log: lg("Created as Booked by Tanya (call center)", at(2026, 10, 6)), bookedCC: { at: at(2026, 10, 6), by: "Tanya", team: false } });
+  jb(ORG, "b5", { status: "lead", createdAt: at(2026, 10, 7), createdCC: true, log: lg("Created as Lead by Jess (call center)", at(2026, 10, 7)) });
+  // late on Oct 31 in Oregon is Nov 1 in UTC: it's October's
+  jb(ORG, "b6", { status: "booked", createdAt: at(2026, 9, 31), createdCC: true, log: lg("Created as Quoted by Jess (call center)", at(2026, 9, 31)), bookedCC: { at: Date.UTC(2026, 10, 1, 5, 30), by: "Jess", team: true } });
+  // Green (ORG2): one booking in September; and something from last year that's too old
+  jb(ORG2, "g1", { status: "paid", createdAt: at(2026, 8, 2), createdCC: true, log: lg("Created as Quoted by Ana (call center)", at(2026, 8, 2)), bookedCC: { at: at(2026, 8, 4), by: "Ana" } });
+  jb(ORG2, "g2", { status: "paid", createdAt: at(2025, 8, 2), createdCC: true, log: lg("Created as Booked by Ana (call center)", at(2025, 8, 2)) });
+  const bill = await fn.ccBill(DB.tally_cc_team, now);
+  const of = (org: string) => (bill.find((x: any) => x.org === org) || { months: {} }).months;
+  const A = of(ORG), G = of(ORG2);
+  ok(A["2026-11"] && A["2026-11"].booked === 2 && A["2026-11"].quoted === 1, "Ace in November: Jess's booking and Ana's (on the office's quote), one quote made: " + JSON.stringify(A["2026-11"]));
+  ok(A["2026-10"] && A["2026-10"].booked === 2 && A["2026-10"].quoted === 2, "Ace in October: the job Jess made as Booked (before Nov 17) and the one booked late on Oct 31 in Oregon: " + JSON.stringify(A["2026-10"]));
+  ok(G["2026-09"] && G["2026-09"].booked === 1 && G["2026-09"].quoted === 1 && !G["2025-09"] && Object.keys(G).length === 1, "Green in September; last year's is too old");
+  ok(!JSON.stringify(bill).includes("Tanya") && A["2026-11"].booked === 2, "a company's own call center person (Tanya) and a quote left as a lead don't count");
+}
+
 console.log(`\nleads: ${passes} passed, ${failures} failed`);
 if (failures) Deno.exit(1);

@@ -248,6 +248,15 @@ details.acc.card .acc-body{padding-bottom:14px}
 .ringbar[hidden]{display:none}
 .ringbar .grow small{display:block;font-size:12px;color:var(--muted)}
 .ringbar .grow b{display:block;font-size:16px}
+/* Reports › Sales (Nov 17): the funnel's bars and the lost reasons */
+.sfuns{display:flex;flex-direction:column;gap:6px;margin:4px 0 0}
+.sfun{display:grid;grid-template-columns:minmax(0,7.5em) minmax(0,1fr) 2.5em;gap:8px;align-items:center;font-size:13.5px}
+.sfun.swhy{grid-template-columns:minmax(0,12em) minmax(0,1fr) 2.5em}
+.sfun span{min-width:0;overflow-wrap:anywhere}
+.sfun i{display:block;height:12px;border-radius:6px;background:var(--line2);overflow:hidden}
+.sfun i b{display:block;height:100%;border-radius:6px;background:var(--tape)}
+.sfun.swhy i b{background:var(--muted)}
+.sfun em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums;font-weight:var(--w-mid)}
 /* Sales (Nov 14): the board's cards */
 .sfu{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted);margin-top:6px}
 .sthread{display:flex;flex-direction:column;gap:6px;margin:0 0 10px;max-height:320px;overflow-y:auto}
@@ -3715,13 +3724,13 @@ function saveQuote(kind){
     var hadOk=!!(j.quote&&j.quote.rqOk);j.d=clone(d);delete j.d.editId;j.quote=q;if(hadOk)q.rqOk=null;j.items=itemsOf(d,S);logEv(j,'Quote updated');
     if(reqOpen(j)){j.req.quotedAt=Date.now();logEv(j,'Quote made for the customer’s request'+(who?' by '+who:''))}
     if(String(j.d.notes||'')!==oldNotes){j.d.notesBy=myName()||'Office';j.d.notesAt=Date.now();logEv(j,'Job notes updated by '+j.d.notesBy)}
-    if(kind==='book'&&(j.status==='lead'||j.status==='quoted')){setStatus(j,'booked');if(cc)logEv(j,'Booked by '+ccWho());daySlot(j,fit)}
+    if(kind==='book'&&(j.status==='lead'||j.status==='quoted')){setStatus(j,'booked');if(cc){logEv(j,'Booked by '+ccWho());j.bookedCC=ccBooking()}daySlot(j,fit)}
     else if(j.status==='lead'&&q.cf)setStatus(j,'quoted');
     // a finished job billed by the clock is worked out again against the new quote
     if(j.clockAt)rebill(j,'quote changed');
   }else{
     var s=kind==='book'?'booked':(q.cf?'quoted':'lead');
-    j=newJob(d,S,s);if(who){j.createdBy=who;var nw=Date.now();j.sales={owner:who,ownerAt:nw,n:1,first:nw,last:{k:'quote',at:nw,by:who}}}if(cc)j.createdCC=true;logEv(j,'Created as '+LABEL[s]+(cc?' by '+ccWho():who?' by '+who:''));if(s==='booked')daySlot(j,fit);state.jobs.push(j);
+    j=newJob(d,S,s);if(who){j.createdBy=who;var nw=Date.now();j.sales={owner:who,ownerAt:nw,n:1,first:nw,last:{k:'quote',at:nw,by:who}}}if(cc){j.createdCC=true;if(s==='booked')j.bookedCC=ccBooking()}logEv(j,'Created as '+LABEL[s]+(cc?' by '+ccWho():who?' by '+who:''));if(s==='booked')daySlot(j,fit);state.jobs.push(j);
     if(String(j.d.notes||'').trim()){j.d.notesBy=myName()||'Office';j.d.notesAt=Date.now()}
   }
   if(cc){
@@ -4731,6 +4740,8 @@ function canQuote(){var r=state.ui.role;return r==='owner'||r==='dispatch'||r===
 // the call center person: signed in (the hosted app), or the one picked in See it their way
 function ccName(){return String((ccDb()?sync.identity.staff:(previewing()&&ui.preview.role==='callcenter'?ui.preview.staff:(ccHouse()?viewerName():'')))||'')}
 function ccWho(){var n=ccName();return n?n+' (call center)':'the call center'}
+// a booking by the call center, on the job (Sales, batch 4): MoveCrew's team bills the company for it, a company's own call center person doesn't
+function ccBooking(){return {at:Date.now(),by:ccName(),team:!ccHouse()}}
 function isOpenQuote(j){return !!j&&(j.status==='lead'||j.status==='quoted')}
 var SCHED_ST=['booked','active'];
 // a scheduled job as the call center sees it: everything but the money (supabase-callcenter.sql's sched_of)
@@ -6017,7 +6028,8 @@ function renderReports(){
   var srcCard='<section class="card"><h2>Where jobs come from</h2><table class="tbl"><tr><th>Source</th><th class="n">Leads</th><th class="n">Won</th><th class="n">Collected</th></tr>'+(srcRows||'<tr><td colspan="4"><small>No jobs in this range.</small></td></tr>')+'</table></section>';
   var phase=phaseCard(finished);
   // in three runs: the money, where the work comes from, then the crews' time
-  if(!owner){v.innerHTML=out+srcCard+phase;return}
+  var salesCard=salesReport(inR);
+  if(!owner){v.innerHTML=out+salesCard+srcCard+phase;return}
 
   /* owner only: bid accuracy, job hours, employee hours */
   var meas=finished.filter(function(j){return bidActual(j)>=0.5&&j.quote.hours>0});
@@ -6059,7 +6071,54 @@ function renderReports(){
   jobs.forEach(function(j){(j.costs||[]).forEach(function(c){byCat[c.cat||'Other']=(byCat[c.cat||'Other']||0)+c.amt})});
   var catRows=Object.keys(byCat).sort().map(function(k){return '<tr><td>'+esc(k)+'</td><td class="n">'+money(byCat[k])+'</td></tr>'}).join('');
   var matCard='<section class="card"><h2>Materials and job costs</h2><div class="kpis k3"><div class="kpi"><b>'+money(mBilled)+'</b><span>Materials billed</span></div><div class="kpi"><b>'+money(mCost)+'</b><span>Materials cost</span></div><div class="kpi"><b>'+money(cAll)+'</b><span>Job costs</span></div></div>'+(catRows?'<table class="tbl"><tr><th>Job cost type</th><th class="n">Total</th></tr>'+catRows+'</table>':'<p class="hint">No job costs logged in this range.</p>')+'</section>';
-  v.innerHTML=out+profit+matCard+srcCard+'<section class="card"><h2>Bid accuracy</h2>'+accHtml+'</section>'+phase+hoursHtml;
+  v.innerHTML=out+salesCard+profit+matCard+srcCard+'<section class="card"><h2>Bid accuracy</h2>'+accHtml+'</section>'+phase+hoursHtml;
+}
+
+/* ---------- Reports › Sales (Nov 17, Sales batch 4) ----------
+   The leads that came in between From and To (by the day they came in) and what became of them: reached, priced,
+   booked, lost and why; how soon the first call or text came, for leads that came in by themselves (the website,
+   a missed call, a customer's request); by who worked them and where they came from; the call center's part.
+   Right now: what's waiting in Sales. */
+var BOOKED_ST=['booked','active','done','paid'];
+function salesReport(inR){
+  var leads=state.jobs.filter(function(j){return !j.test&&inR(iso(new Date(j.createdAt||0)))});
+  var open=state.jobs.filter(function(j){return isOpenQuote(j)&&!j.test}),fresh=open.filter(salesNew).length,due=open.filter(function(j){return salesDue(j)}).length;
+  var now='<div class="row between" style="gap:8px;margin:0 0 10px"><span class="hint" style="margin:0">Right now: '+open.length+' open in Sales'+(fresh?', '+fresh+' not called yet':'')+(due?', '+due+' due':'')+'.</span><button class="btn sm" data-act="sl:go" data-f="'+(due?'due':'open')+'">Open Sales</button></div>';
+  var head='<section class="card" id="salesRep"><h2>Sales</h2><p class="sub">The leads that came in '+(ui.from||ui.to?(ui.from&&ui.to?'from '+esc(fmtDate(ui.from))+' to '+esc(fmtDate(ui.to)):ui.from?'from '+esc(fmtDate(ui.from))+' on':'up to '+esc(fmtDate(ui.to))):'any time')+', and what became of them.</p>'+now;
+  if(!leads.length)return head+'<p class="hint">No leads came in then.</p></section>';
+  // reached: a call, text or quote made with them (a priced quote counts: it's made talking to them), or booked
+  var won=function(j){return BOOKED_ST.indexOf(j.status)>=0},priced=function(j){return num((j.quote||{}).total)>0},reached=function(j){return salesN(j)>0||won(j)||priced(j)};
+  var pct=function(a,b){return b?Math.round(a/b*100)+'%':'—'};
+  // minutes from coming in to the first call or text, for a lead nobody made by hand while on the phone with them
+  var firstMins=function(list){return list.filter(function(j){return !j.createdBy&&salesOf(j).first>0}).map(function(j){return (salesOf(j).first-(j.createdAt||0))/6e4}).filter(function(m){return m>=0}).sort(function(a,b){return a-b})};
+  var median=function(a){return a.length?a[Math.floor((a.length-1)/2)]:null};
+  var nL=leads.length,nR=leads.filter(reached).length,nP=leads.filter(priced).length,nB=leads.filter(won).length,lost=leads.filter(function(j){return j.status==='lost'}),fm=median(firstMins(leads));
+  var still=leads.filter(isOpenQuote).length;
+  var kpi='<div class="kpis"><div class="kpi"><b>'+nL+'</b><span>Lead'+(nL===1?'':'s')+' came in</span></div><div class="kpi"><b>'+pct(nR,nL)+'</b><span>Reached ('+nR+')</span></div>'+
+    '<div class="kpi'+(nB?' paid':'')+'"><b>'+pct(nB,nL)+'</b><span>Booked ('+nB+')</span></div><div class="kpi"><b>'+(fm===null?'—':minsWords(fm))+'</b><span>To the first call</span></div></div>';
+  // the funnel: each step's bar against the leads that came in
+  var step=function(lbl,n){return '<div class="sfun"><span>'+lbl+'</span><i><b style="width:'+Math.max(n?2:0,Math.round(n/nL*100))+'%"></b></i><em>'+n+'</em></div>'};
+  var fun='<div class="sfuns">'+step('Came in',nL)+step('Reached',nR)+step('Priced',nP)+step('Booked',nB)+'</div><p class="hint" style="margin:4px 0 0">'+lost.length+' lost · '+still+' still open'+(fm===null?'':' · half got their first call within '+minsWords(fm))+'</p>';
+  // by who worked them
+  var by={},bySrc={};
+  leads.forEach(function(j){
+    var k=salesOwner(j)||'No one',r=by[k]||(by[k]={n:0,r:0,b:0});r.n++;if(reached(j))r.r++;if(won(j))r.b++;
+    var sk=j.d.source||'No source',sr=bySrc[sk]||(bySrc[sk]={n:0,b:0,list:[]});sr.n++;if(won(j))sr.b++;sr.list.push(j);
+  });
+  var whoRows=Object.keys(by).sort(function(a,b){return by[b].n-by[a].n||(a<b?-1:1)}).map(function(k){var r=by[k];return '<tr><td>'+esc(k)+'</td><td class="n">'+r.n+'</td><td class="n">'+r.r+'</td><td class="n">'+r.b+'</td><td class="n">'+pct(r.b,r.n)+'</td></tr>'}).join('');
+  var srcRows=Object.keys(bySrc).sort(function(a,b){return bySrc[b].n-bySrc[a].n||(a<b?-1:1)}).map(function(k){var r=bySrc[k],m=median(firstMins(r.list));return '<tr><td>'+esc(k)+'</td><td class="n">'+r.n+'</td><td class="n">'+r.b+'</td><td class="n">'+pct(r.b,r.n)+'</td><td class="n">'+(m===null?'—':minsWords(m))+'</td></tr>'}).join('');
+  // lost, and why
+  var why={};lost.forEach(function(j){var l=salesOf(j).lost,k=l&&l.k?l.k:'none';why[k]=(why[k]||0)+1});
+  var wl=function(k){var x=LOST_WHY.filter(function(y){return y[0]===k})[0];return x?x[1]:'No reason given'};
+  var whyRows=Object.keys(why).sort(function(a,b){return why[b]-why[a]}).map(function(k){return step(esc(wl(k)),why[k]).replace('sfun','sfun swhy')}).join('');
+  // the call center's part
+  var ccMade=leads.filter(function(j){return j.createdCC}).length,ccB=leads.filter(function(j){return won(j)&&(j.bookedCC||(j.createdCC&&/^Created as Booked/.test(((j.log||[])[0]||{}).ev||'')))}),ccTeam=ccB.filter(function(j){return !j.bookedCC||j.bookedCC.team}).length;
+  var ccLine=ccMade||ccB.length?'<p class="hint">The call center made '+ccMade+' of these and booked '+ccB.length+(ccB.length?' ('+(ccTeam===ccB.length?'all by MoveCrew’s call center':ccTeam?ccTeam+' by MoveCrew’s call center, '+(ccB.length-ccTeam)+' by your own':'all by your own call center people')+')':'')+'.</p>':'';
+  return head+kpi+fun+
+    '<h3 style="margin:14px 0 4px">By who worked them</h3><div class="tblwrap" tabindex="0" role="region" aria-label="Leads by who worked them"><table class="tbl"><tr><th>Who</th><th class="n">Leads</th><th class="n">Reached</th><th class="n">Booked</th><th class="n">Rate</th></tr>'+whoRows+'</table></div>'+
+    '<h3 style="margin:14px 0 4px">By where they came from</h3><div class="tblwrap" tabindex="0" role="region" aria-label="Leads by where they came from"><table class="tbl"><tr><th>Source</th><th class="n">Leads</th><th class="n">Booked</th><th class="n">Rate</th><th class="n">First call</th></tr>'+srcRows+'</table></div>'+
+    '<p class="hint">First call: half of them got it within this, for leads that came in by themselves (not made by hand while on the phone).</p>'+
+    '<h3 style="margin:14px 0 4px">Lost, and why</h3>'+(whyRows?'<div class="sfuns">'+whyRows+'</div>':'<p class="hint">None lost.</p>')+ccLine+'</section>';
 }
 
 /* ---------- SETTINGS ---------- */
@@ -6994,7 +7053,7 @@ function jobDoc(j){
   var dd=Object.assign({},j.d);
   dd.items=Object.keys(j.d.items||{}).map(function(k){return {id:k,q:j.d.items[k]}});
   var o={id:j.id,status:j.status,createdAt:j.createdAt,d:dd,quote:j.quote,items:j.items||[],assign:j.assign||{truckId:'',crew:[]},tally:j.tally||{}};
-  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','crewAsk','eta','cust','sales'].forEach(function(k){if(j[k]!=null)o[k]=j[k]});
+  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales'].forEach(function(k){if(j[k]!=null)o[k]=j[k]});
   o.payments=toMap(j.payments,function(x){return x.id});
   o.signed=toMap(j.signed,function(x){return x.id});
   o.extras=toMap(j.extras,function(x){return x.id});
@@ -7020,7 +7079,7 @@ function docToJob(v){
     materials:mapArr(v.materials,'ts'),costs:mapArr(v.costs,'ts'),confirm:(v.confirm&&typeof v.confirm==='object')?v.confirm:{},
     crewOn:(v.crewOn&&typeof v.crewOn==='object')?v.crewOn:undefined,crewAdj:mapArr(v.crewAdj,'ts'),
     log:mapArr(v.log,'ts').slice(-60)};
-  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','crewAsk','eta','cust','sales'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
+  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
   return j;
 }
 /* A change to a document as a merge patch, the way the database's doc_patch applies it (RFC 7386): only what changed,
@@ -9268,7 +9327,7 @@ function renderAdmin(){
     fld('Company name','<input id="admName" maxlength="120" autocomplete="off">')+fld('Owner’s email','<input id="admEmail" type="email" autocomplete="off" placeholder="owner@company.com">')+'</div>'+
     '<label class="check"><input type="checkbox" id="admTest"> Test company (never charged)</label><div class="row"><button class="btn primary" data-act="adm:add">Add company</button></div>'+
     '<p class="hint">The owner goes straight in when they sign in to MoveCrew with that email. Use your own email to be its owner yourself.</p>'+(adm.addMsg?'<p class="hint" role="status">'+esc(adm.addMsg)+'</p>':'')+'</section>';
-  v.innerHTML=head+sum+'<div class="secline"><h2>Companies</h2><button data-act="adm:reload">Refresh</button></div>'+(cos.length?cos.map(admCompany).join(''):'<p class="hint">No companies yet.</p>')+admTeam(d)+plan+add;
+  v.innerHTML=head+sum+'<div class="secline"><h2>Companies</h2><button data-act="adm:reload">Refresh</button></div>'+(cos.length?cos.map(admCompany).join(''):'<p class="hint">No companies yet.</p>')+admTeam(d)+admCcBill(d)+plan+add;
 }
 // The call center: MoveCrew's own team, who quote and book for the companies switched on above (Richie bills them)
 function admTeam(d){
@@ -9281,6 +9340,18 @@ function admTeam(d){
     (rows||'<p class="hint">Nobody yet.</p>')+
     '<div class="grid2 stack" style="margin-top:8px">'+fld('Name','<input id="admCcName" maxlength="80" autocomplete="off">')+fld('Email they sign in with','<input id="admCcEmail" type="email" autocomplete="off" placeholder="name@yourcallcenter.com">')+fld('Their phone (for calls through a company’s line)','<input id="admCcPhone" type="tel" autocomplete="off" placeholder="512-555-0107">')+'</div>'+
     '<div class="row"><button class="btn primary" data-act="adm:ccadd">Add to the team</button></div>'+(adm.ccMsg?'<p class="hint" role="status">'+esc(adm.ccMsg)+'</p>':'')+'</section>';
+}
+// What MoveCrew's call center booked for each company, month by month, to bill them (Sales, batch 4)
+function admCcBill(d){
+  if(!d.team||!d.ccBill)return '';
+  var ms=[],n=new Date();for(var i=0;i<3;i++){var dt=new Date(n.getFullYear(),n.getMonth()-i,1);ms.push(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'))}
+  var names={};(d.companies||[]).forEach(function(c){names[c.id]=c.name});
+  var cell=function(x){return '<td class="n">'+(x&&(x.booked||x.quoted)?'<b>'+(x.booked||0)+'</b> booked<br><small>'+(x.quoted||0)+' quote'+(x.quoted===1?'':'s')+'</small>':'<small>—</small>')+'</td>'};
+  var rows=d.ccBill.filter(function(b){return ms.some(function(m){return b.months[m]})}).sort(function(a,b){return String(names[a.org]||'').localeCompare(String(names[b.org]||''))})
+    .map(function(b){return '<tr><td>'+esc(names[b.org]||'A company no longer here')+'</td>'+ms.map(function(m){return cell(b.months[m])}).join('')+'</tr>'}).join('');
+  var mw=function(m){return parseISO(m+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'})};
+  return '<section class="card" id="admBill"><h2>Call center work</h2><p class="sub">What your call center team booked for each company, by the month it was booked, to bill them. Quotes made are under each number. A company’s own call center people don’t count. Months are in Pacific time.</p>'+
+    (rows?'<div class="tblwrap" tabindex="0" role="region" aria-label="Call center work"><table class="tbl"><tr><th>Company</th>'+ms.map(function(m){return '<th class="n">'+esc(mw(m))+'</th>'}).join('')+'</tr>'+rows+'</table></div>':'<p class="hint">Nothing booked by your team in the last three months yet.</p>')+'</section>';
 }
 function adminCcAdd(){
   var n=(($('#admCcName')||{}).value||'').trim(),e=(($('#admCcEmail')||{}).value||'').trim(),ph=(($('#admCcPhone')||{}).value||'').trim();
@@ -10305,7 +10376,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
 })();
 </script>
 </body>

@@ -2689,7 +2689,9 @@ async function adminContext(): Promise<J> {
 export async function adminList(me: J): Promise<J> {
   if (!(await isAdmin(me.uid))) return adminOnly();
   const ctx = await adminContext();
-  return { ok: true, plan: ctx.plan, payments: stripeMode() || "", companies: ctx.orgs.map((o: J) => adminCompany(o, ctx)), team: ctx.team };
+  let bill: J[] | null = null;
+  try { if (ctx.team) bill = await ccBill(ctx.team); } catch (e) { console.error("call center billing", e); }
+  return { ok: true, plan: ctx.plan, payments: stripeMode() || "", companies: ctx.orgs.map((o: J) => adminCompany(o, ctx)), team: ctx.team, ccBill: bill };
 }
 // One company's deal: test company, fee waived, discount, note, and the call center service. Any running
 // membership follows at once.
@@ -2730,6 +2732,42 @@ export async function adminSet(me: J, b: J): Promise<J> {
    bookings . So call center will only be able to see companys that pay for that service ." He bills them himself.
    A person on the team is linked to their sign-in by claim_cc_team() when they open MoveCrew with that email. */
 const CC_SQL = "The call center isn't set up in the database yet. Run supabase-callcenter.sql in the Supabase SQL editor first.";
+/* What MoveCrew's call center booked for each company, by month, to bill them (Nov 17, Sales batch 4): for this
+   month and the five before, the bookings MoveCrew's team made (bookedCC on the job from Nov 17; before that, a job
+   it made as Booked) and the quotes it made. A company's own call center people work for the company, so their
+   bookings don't count: the job says so (bookedCC.team), or else the name isn't on MoveCrew's team. Months are in
+   Pacific time, MoveCrew's own. */
+const PACIFIC_MONTH = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit" });
+export async function ccBill(team: J[], now = Date.now()): Promise<J[]> {
+  const names = new Set(team.map((t: J) => String(t.name || "").trim().toLowerCase()).filter(Boolean));
+  const ours = (by: unknown, flag?: unknown) => flag === true || (flag !== false && names.has(String(by || "").trim().toLowerCase()));
+  const month = (ts: number) => PACIFIC_MONTH.format(new Date(ts)).slice(0, 7);
+  const d = new Date(now), since = String(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 5, 1) - 864e5);
+  const made = (await rest("GET", "docs?select=org_id,data&collection=eq.jobs&" + q("data->>createdCC") + "=eq.true&" + q("data->>createdAt") + "=gte." + since + "&limit=20000")) || [];
+  const booked = (await rest("GET", "docs?select=org_id,data&collection=eq.jobs&" + q("data->bookedCC->>at") + "=gte." + since + "&limit=20000")) || [];
+  const out: Record<string, Record<string, { quoted: number; booked: number }>> = {};
+  const add = (org: string, m: string, k: "quoted" | "booked") => {
+    const o = out[org] || (out[org] = {}), r = o[m] || (o[m] = { quoted: 0, booked: 0 });
+    r[k]++;
+  };
+  for (const r of made) {
+    const j = r.data || {}, logs = Array.isArray(j.log) ? j.log : Object.values(j.log || {});
+    const first = logs.map((l: J) => /^Created as (Lead|Quoted|Booked) by (.+) \(call center\)$/.exec(String((l && l.ev) || ""))).find(Boolean);
+    if (!first || !ours(first[2])) continue;
+    if (first[1] !== "Lead") add(r.org_id, month(Number(j.createdAt) || 0), "quoted");
+    if (first[1] === "Booked" && !j.bookedCC) add(r.org_id, month(Number(j.createdAt) || 0), "booked");   // before Nov 17
+  }
+  for (const r of booked) {
+    const b = (r.data || {}).bookedCC || {};
+    if (ours(b.by, b.team)) add(r.org_id, month(Number(b.at) || 0), "booked");
+  }
+  const first = month(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 5, 1) + 864e5);
+  return Object.keys(out).map((org) => {
+    const months: J = {};
+    for (const m of Object.keys(out[org]).sort()) if (m >= first) months[m] = out[org][m];
+    return { org, months };
+  }).filter((x) => Object.keys(x.months).length);
+}
 async function ccTeam(): Promise<J[]> {
   const rows = await rest("GET", "tally_cc_team?select=email,name,phone,user_id,added_at&order=added_at.asc&limit=500");
   return (rows || []).map((r: J) => ({ email: r.email, name: r.name || "", phone: r.phone || "", signedIn: !!r.user_id, added: r.added_at }));

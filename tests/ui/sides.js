@@ -86,7 +86,7 @@ const L = (m) => label + ': ' + m;
   click($('#dayPlan [data-act="dp:time"]')); await sleep(10);
   click('[data-act="q:book"]'); await sleep(20);
   const gina = st().jobs.find((j) => j.d.name === 'Gina Ruiz');
-  ok(!!gina && gina.status === 'booked' && gina.createdCC === true && gina.log.some((l) => l.ev === 'Created as Booked by Tanya (call center)') && !gina.assign.truckId && gina.d.slots.length === 1 && T.ui.tab === 'sched' && /in slot \d\. Dispatch adds the truck and crew\.$/.test(toast()),
+  ok(!!gina && gina.status === 'booked' && gina.createdCC === true && gina.log.some((l) => l.ev === 'Created as Booked by Tanya (call center)') && gina.bookedCC && gina.bookedCC.by === 'Tanya' && gina.bookedCC.team === false && !gina.assign.truckId && gina.d.slots.length === 1 && T.ui.tab === 'sched' && /in slot \d\. Dispatch adds the truck and crew\.$/.test(toast()),
     L('booked by Tanya (call center), in a slot, no truck: “' + toast() + '”'));
   click('[data-act="tab"][data-tab="crew"]'); await sleep(15);
   ok(T.ui.tab === 'crew' && /Tanya/.test($('#view').textContent), L('and her Jobs are still hers'));
