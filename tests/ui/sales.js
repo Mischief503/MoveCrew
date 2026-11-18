@@ -37,7 +37,7 @@ const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
 
   /* ---------- the board ---------- */
   await tap('[data-act="sl:f"][data-f="open"]');
-  ok(chips().join(' | ') === 'Open 2 | Due now 1 | New 1 | Contacted 0 | Quoted 0 | Follow up 1 | Mine 1 | Booked 0 | Lost 1', L('the lists, with counts: ' + chips().join(' | ')));
+  ok(chips().join(' | ') === 'Open 2 | Due now 1 | Walk-throughs 0 | New 1 | Contacted 0 | Quoted 0 | Follow up 1 | Mine 1 | Booked 0 | Lost 1', L('the lists, with counts: ' + chips().join(' | ')));
   ok($$('#ccList .scard').map((c) => c.dataset.job).join() === [S.id, O.id].join(), L('the most urgent first: the new lead, then the call-back tomorrow'));
   ok(/^New · waiting 1[23] min · not called yet$/.test(line(S)) && !!card(S).querySelector('.snext .pill.warn') && txt(card(S).querySelector('.sstage')) === 'New', L('the new lead: “' + line(S) + '” (amber after 5 minutes)'));
   ok(/^Call back tomorrow 10:00\sAM$/.test(line(O)) && txt(card(O).querySelector('.sstage')) === 'Follow up' && card(O).querySelector('select[data-sown]').value === 'Owner', L('Ortega family: “' + line(O) + '”, Follow up, Owner working it'));

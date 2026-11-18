@@ -337,16 +337,22 @@ putDoc(ORG, "jobs/q2", job("q2", { d: { ...job("x").d, moveDate: past } }));
 r = await app("tok-priya", { action: "cust_book", org: ORG, jobId: "q2" });
 ok(!r.body.ok && /That day has passed/.test(r.body.message), "a day that has passed can't be booked");
 // how long the price is good (Sales, batch 5, Nov 17): her copy says, and a price that ran out can't be booked
-putDoc(ORG, "jobs/q3", job("q3", { quote: { ...job("x").quote, until: past } }));
-putDoc(ORG, "jobs/q4", job("q4", { quote: { ...job("x").quote, until: later } }));
+putDoc(ORG, "jobs/q3", job("q3", { quote: { ...job("x").quote, until: past }, survey: { at: Date.now() + 864e5, kind: "video", who: "Al", done: Date.now() } }));
+putDoc(ORG, "jobs/q4", job("q4", { quote: { ...job("x").quote, until: later }, survey: { at: Date.now() + 864e5, kind: "voice", who: "Dee Ramos", by: "Owner", set: 1 } }));
 r = await app("tok-priya", { action: "cust_list" });
 {
   const q3c = r.body.moves.find((m: any) => m.id === "q3"), q4c = r.body.moves.find((m: any) => m.id === "q4"), b1c = r.body.moves.find((m: any) => m.id === "b1");
   ok(q3c.quote.until === past && q4c.quote.until === later && b1c.quote.until === "", "her copy says how long each open quote's price is good (a booked move's, nothing)");
+  ok(q4c.survey && q4c.survey.kind === "voice" && q4c.survey.who === "Dee" && q4c.survey.at > Date.now() && !("by" in q4c.survey) && q3c.survey === null && b1c.survey === null,
+    "and a walk-through call set from Sales (batch 6): its time, voice or video and the first name of who calls; not one that's done");
 }
 r = await app("tok-priya", { action: "cust_book", org: ORG, jobId: "q3" });
 ok(!r.body.ok && r.body.message === "This price was good until " + fn.fmtDay(past) + ". Call or text Ace Moving for a new one." && doc("jobs/q3").status === "quoted", "a price that ran out can't be booked: " + r.body.message);
-DB.docs = DB.docs.filter((x) => x.path !== "jobs/q3" && x.path !== "jobs/q4");
+// no price yet (a website lead with her email): nothing to book (batch 6)
+putDoc(ORG, "jobs/q5", job("q5", { status: "lead", quote: { total: 0, lines: [] } }));
+r = await app("tok-priya", { action: "cust_book", org: ORG, jobId: "q5" });
+ok(!r.body.ok && r.body.message === "Your price isn't set yet. Call or text Ace Moving for it." && doc("jobs/q5").status === "lead", "a lead with no price yet can't be booked: " + r.body.message);
+DB.docs = DB.docs.filter((x) => x.path !== "jobs/q3" && x.path !== "jobs/q4" && x.path !== "jobs/q5");
 
 /* ---------- signing ahead ---------- */
 const SIG = "data:image/png;base64," + "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

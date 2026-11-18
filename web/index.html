@@ -294,6 +294,9 @@ details.acc.card .acc-body{padding-bottom:14px}
 .cm-until{flex-basis:100%;font-size:13px;color:var(--muted)}
 .cm-until.soon{color:var(--text);font-weight:var(--w-mid)}
 .cm-until.out{color:var(--bad);font-weight:var(--w-mid)}
+/* Sales, batch 6 (Nov 17): walk-throughs under their days, and the customer's */
+.sday{font:600 12px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 2px 6px}
+.cm-survey{background:var(--accSoft);border:1px solid var(--tape-edge);border-radius:10px;padding:8px 10px;color:var(--text)}
 .sown select{min-height:36px;border:1px solid var(--line);border-radius:8px;background:var(--field);color:var(--text);padding:4px 8px;font-size:14px;max-width:100%}
 .sbtns{margin-top:8px;gap:6px;flex-wrap:wrap}
 .sbtns .btn.on{border-color:var(--text)}
@@ -1906,7 +1909,7 @@ var CATS=['Living room','Bedroom','Dining','Kitchen & laundry','Office','Boxes',
 function defaultSettings(){return {
   company:'Your Moving Co.',
   rates:{r2:140,r3:195,r4:250},
-  minHours:3,prod:45,mph:30,shopAddress:'',shopTravel:true,lateMins:30,activities:['Job day','Warehouse','Dump run','Truck and shop upkeep','Other'],truckFee:45,includedMiles:20,mileRate:1.5,stairFee:25,packPerBox:8,taxPct:0,depositPct:25,ntePct:15,quoteDays:30,crewCost:24,
+  minHours:3,prod:45,mph:30,shopAddress:'',shopTravel:true,lateMins:30,activities:['Job day','Warehouse','Dump run','Truck and shop upkeep','Other'],truckFee:45,includedMiles:20,mileRate:1.5,stairFee:25,packPerBox:8,taxPct:0,depositPct:25,ntePct:15,quoteDays:30,commPct:0,crewCost:24,
   trucks:[{id:'t26',name:'Box 1 (26 ft)',cf:1700},{id:'t20',name:'Box 2 (20 ft)',cf:1000},{id:'t16',name:'Van (16 ft)',cf:800}],
   crew:['Marcus','Dee','Luis','Tanya','Andre','Kim'],ccStaff:[],
   sources:['Google','Referral','Yelp','Facebook','Repeat customer','Other'],
@@ -2741,6 +2744,7 @@ function custMoveOf(j,S){
     day:{startedAt:j.startedAt||0,eta:j.eta&&j.eta.at?j.eta.at:0,phases:Object.assign({},j.phases||{}),finishedAt:j.finishedAt||0},
     crew:{lead:String(ld).split(' ')[0],n:crew.length},
     tips:opt('custTips',S),book:opt('custBook',S),review:custReviewUrl(S),reviewed:!!c.reviewAt,bookedBy:c.bookedAt?'customer':'',
+    survey:surveyOf(j)?{at:j.survey.at,kind:j.survey.kind==='voice'?'voice':'video',who:String(j.survey.who||'').split(' ')[0]}:null,
     req:j.req?{from:String(j.req.from||''),to:String(j.req.to||''),at:num(j.req.at),note:String(j.req.note||''),quoted:!!j.req.quotedAt}:null};
 }
 function custKeyOf(m){return (m.org?m.org+'/':'')+m.id}
@@ -2789,11 +2793,13 @@ function custBtn(m,act,label,pri){return '<button class="btn'+(pri?' primary':''
 function custCardHtml(m){
   var s=custStage(m),pl=CUST_PILL[s],q=m.quote,day=m.d.moveDate;
   if(s==='request')return '<section class="card cm-card"><div class="cm-top"><span class="pill" data-s="'+pl[1]+'">'+pl[0]+'</span>'+(m.test?'<span class="pill">Test</span>':'')+'</div>'+
-    '<h2 class="cm-when">'+esc(reqRange(m.req))+'</h2><p class="cm-sub">The days you can move. '+esc(m.company||'Your mover')+' will call or text you to set the day.</p>'+custRouteHtml(m)+
+    '<h2 class="cm-when">'+esc(reqRange(m.req))+'</h2><p class="cm-sub">The days you can move. '+esc(m.company||'Your mover')+' will call or text you to set the day.</p>'+custSurveyHtml(m)+custRouteHtml(m)+
     (m.items.length?'<p class="cm-sub">'+custItemsN(m)+' things moving</p>':'')+'</section>';
   var when=day?'<h2 class="cm-when">'+esc(custLong(day))+'</h2><p class="cm-sub">'+(m.d.time?'Your move crew will arrive at '+esc(fmtTime(m.d.time)):'Arrival time to be set')+((s==='booked'||s==='quote')&&custIn(day)?' · '+custIn(day):'')+'</p>'
     :'<h2 class="cm-when">Day not set yet</h2><p class="cm-sub">Call or text us to pick a day.</p>';
-  var price=s==='quote'?'<div class="cm-price"><b>'+money(q.total)+'</b><span>'+(q.flat?'Flat price':'Estimate, billed by the hour'+(q.nte?' · top price about '+money(q.nte):''))+'</span>'+custUntilHtml(q)+'</div>':'';
+  var price=s==='quote'&&!(num(q.total)>0)?'<p class="cm-sub">Your price isn’t set yet: '+esc(m.company||'your mover')+' will send it soon.</p>'
+    :s==='quote'?'<div class="cm-price"><b>'+money(q.total)+'</b><span>'+(q.flat?'Flat price':'Estimate, billed by the hour'+(q.nte?' · top price about '+money(q.nte):''))+'</span>'+custUntilHtml(q)+'</div>':'';
+  if(s==='quote')when+=custSurveyHtml(m);
   var crew=(s==='booked'||s==='today')&&m.crew.lead?'<p class="cm-sub">'+esc(m.crew.lead)+' leads your move crew'+(m.crew.n>1?' of '+m.crew.n:'')+'.</p>':'';
   return '<section class="card cm-card"><div class="cm-top"><span class="pill" data-s="'+pl[1]+'">'+pl[0]+'</span>'+(m.test?'<span class="pill">Test</span>':'')+'</div>'+when+custRouteHtml(m)+(custSizeWords(m)?'<p class="cm-sub">'+esc(custSizeWords(m))+'</p>':'')+price+crew+'</section>';
 }
@@ -2810,8 +2816,8 @@ function custNextHtml(m){
     return '<section class="card"><h3>What’s next</h3><ol class="cm-steps">'+out.join('')+'</ol></section>';
   }
   var past=!!m.d.moveDate&&m.d.moveDate<todayISO(),aheadAll=(m.forms||[]).filter(function(f){return f.ahead});
-  var ranOut=s==='quote'&&!!m.quote.until&&untilLeft(m.quote.until)<0;
-  if(s==='quote')add('now','Book your move crew today',!m.d.moveDate?'Call or text us to pick a day first.':past?'That day has passed. Call or text us to pick a new one.':ranOut?'This price was good until '+esc(fmtDayShort(m.quote.until))+'. Call or text us for a new one.':m.book?'Check the details and book it here.':'Call or text us to book it.',m.book&&m.d.moveDate&&!past&&!ranOut?custBtn(m,'cs:book','Book my move crew',1):'');
+  var ranOut=s==='quote'&&!!m.quote.until&&untilLeft(m.quote.until)<0,noPrice=s==='quote'&&!(num(m.quote.total)>0);
+  if(s==='quote')add('now','Book your move crew today',noPrice?'Your price comes first. We’ll send it soon.':!m.d.moveDate?'Call or text us to pick a day first.':past?'That day has passed. Call or text us to pick a new one.':ranOut?'This price was good until '+esc(fmtDayShort(m.quote.until))+'. Call or text us for a new one.':m.book?'Check the details and book it here.':'Call or text us to book it.',m.book&&m.d.moveDate&&!past&&!ranOut&&!noPrice?custBtn(m,'cs:book','Book my move crew',1):'');
   else add('done','Booked',m.bookedBy==='customer'?'You booked it here.':'');
   var crewOnly=A.length===1&&A[0].kind==='crew';
   if(aheadAll.length&&(s==='quote'||s==='booked'))add(A.length?(s==='booked'?'now':'later'):'done',A.length?(crewOnly?'Sign for your bigger crew':A.length===1?'Sign a form before move day':'Sign '+A.length+' forms before move day'):'Forms signed',A.length?esc(crewOnly?A[0].n+' movers at '+money(A[0].rate)+'/hr, before your crew loads':A.map(function(f){return f.title}).join(', ')):'',A.length&&s==='booked'?custBtn(m,'cs:sign','Sign now',!due.amt):'');
@@ -3138,6 +3144,7 @@ function custGoReview(m){
 // can the customer book this quote: a day that hasn't passed, and still room on the trucks then
 function custBookWhy(j){
   if(['lead','quoted'].indexOf(j.status)<0)return 'This quote was already booked or closed.';
+  if(!(num(j.quote&&j.quote.total)>0))return 'Your price isn’t set yet. Call or text us for it.';
   if(!j.d.moveDate)return 'Call or text us to pick a day first.';
   if(j.d.moveDate<todayISO())return 'That day has passed. Call or text us to pick a new one.';
   if(quoteRanOut(j))return 'This price was good until '+fmtDayShort(j.quote.until)+'. Call or text us for a new one.';
@@ -3585,6 +3592,8 @@ function renderToday(){
   if(sDue.length)A.push(sRow(sDue.some(function(j){return Date.now()-salesNext(j).at>=36e5})?'bad':'warn',sDue.length+' call-back'+(sDue.length===1?' is':'s are')+' due',esc(namesLine(sDue))+' · Sales','due'));
   var sRo=state.jobs.filter(function(j){return !!salesRunsOut(j)&&!salesDueCb(j)&&!salesIn(j)&&!salesMissed(j)}).sort(function(a,b){return quoteUntil(a)<quoteUntil(b)?-1:quoteUntil(a)>quoteUntil(b)?1:0});
   if(sRo.length)A.push(sRow('warn',sRo.length+' quote'+(sRo.length===1?'’s price runs':'s’ prices run')+' out soon',esc(namesLine(sRo))+' · call them before it does · Sales','due'));
+  var sSv=state.jobs.filter(function(j){var v=surveyOf(j);return !!v&&iso(new Date(v.at))===todayISO()}).sort(function(a,b){return surveyOf(a).at-surveyOf(b).at});
+  if(sSv.length)A.push(sRow(sSv.some(function(j){return surveyDue(j)})?'warn':'ok',sSv.length+' walk-through'+(sSv.length===1?'':'s')+' today',sSv.map(function(j){return esc(jobName(j))+' '+esc(fmtClock(surveyOf(j).at))}).slice(0,3).join(', ')+(sSv.length>3?' and '+(sSv.length-3)+' more':'')+' · Sales','survey'));
   var sNew=state.jobs.filter(function(j){return salesNew(j)&&!reqOpen(j)&&!salesMissed(j)}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});
   if(sNew.length){var sw=(Date.now()-(sNew[0].createdAt||Date.now()))/6e4;A.push(sRow(sw>=15?'bad':'warn',sNew.length+' new lead'+(sNew.length===1?'':'s')+' not called yet',esc(namesLine(sNew))+' · waiting '+minsWords(sw),'new'))}
   var cap=ui.allAlerts||A.length<=6?A.length:5;
@@ -3761,6 +3770,9 @@ function saveQuote(kind){
     j=newJob(d,S,s);if(who){j.createdBy=who;var nw=Date.now();j.sales={owner:who,ownerAt:nw,n:1,first:nw,last:{k:'quote',at:nw,by:who}}}if(cc){j.createdCC=true;if(s==='booked')j.bookedCC=ccBooking()}logEv(j,'Created as '+LABEL[s]+(cc?' by '+ccWho():who?' by '+who:''));if(s==='booked')daySlot(j,fit);state.jobs.push(j);
     if(String(j.d.notes||'').trim()){j.d.notesBy=myName()||'Office';j.d.notesAt=Date.now()}
   }
+  // who made the quote, for the commission (Sales, batch 6): the first to save it with a price; MoveCrew's call center
+  // team is marked, because its work is billed to the company instead
+  if(!j.quotedBy&&who&&num(j.quote&&j.quote.total)>0){j.quotedBy=who;if(cc&&!ccHouse())j.quotedTeam=true}
   // the price is good for the rate card's days, from today (Sales, batch 5)
   if(isOpenQuote(j)&&num(j.quote&&j.quote.total)>0&&quoteDaysOf(S))j.quote.until=addDays(todayISO(),quoteDaysOf(S));
   if(cc){
@@ -5177,6 +5189,84 @@ var SALES_TPL={quote:'{company}: Hi {first}, your moving quote is {total} for {w
   f2:'{company}: Hi {first}, your move on {when} is still open with us. Reply YES and we\'ll call to set it up, or ask us anything.',
   f3:'{company}: Hi {first}, last check-in on your {total} moving quote.{until} If plans changed, no problem. Reply anytime to book.'};
 var SALES_TPL_W={quote:'The quote',f1:'Follow-up 1 (about a day later)',f2:'Follow-up 2 (about 3 days later)',f3:'Follow-up 3 (about a week later)'};
+// sales commission (Sales, batch 6, Nov 17; Richie: "% of the final bill, once paid", to "Whoever made the quote"):
+// Setup › Sales commission (S.commPct, 0 = none); whoever first priced the quote (quotedBy; before Nov 17 whoever made
+// it) earns that share of the final bill (totalOf: the quote, extras and materials, never tips) once the move is paid.
+// MoveCrew's own call center team earns none: its work is billed to the company as call center work.
+function commPctOf(S){var n=num((S||state.settings).commPct);return n>0?Math.min(n,100):0}
+function quoteMaker(j){return String((j&&(j.quotedBy||j.createdBy))||'')}
+function ownPerson(S,n){S=S||state.settings;return !!n&&((S.office||[]).some(function(o){return o.name===n})||(S.crew||[]).indexOf(n)>=0||(S.ccStaff||[]).indexOf(n)>=0)}
+function paidDay(j){var d='';(j.payments||[]).forEach(function(p){if(payCounts(p)&&p.date&&p.date>d)d=p.date});return d}
+// {who, team, pct, base, amt, paid, day}, for a booked, running, finished or paid move with a quote maker
+function commOf(j,S){
+  S=S||state.settings;var who=quoteMaker(j);if(!who||j.test||['booked','active','done','paid'].indexOf(j.status)<0)return null;
+  var team=!!j.quotedTeam||(!j.quotedBy&&!!j.createdCC&&!ownPerson(S,who)),pct=commPctOf(S),base=totalOf(j),paid=j.status==='paid'&&base>0;
+  return {who:who,team:team,pct:pct,base:base,amt:team?0:round2(base*pct/100),paid:paid,day:paid?(paidDay(j)||j.d.moveDate||''):''};
+}
+function commCard(){
+  if(state.ui.role!=='owner')return '';
+  return '<section class="card"><h2>Sales commission</h2><p class="sub">Whoever made the quote earns this share of the final bill (the quote, extras and materials, never tips) once the move is paid. Reports › Commissions adds it up. MoveCrew’s own call center isn’t paid commission: its work is billed to you as call center work.</p><div class="grid2 stack">'+
+    fld('Commission (% of the final bill)','<input type="number" inputmode="decimal" step="0.5" min="0" max="100" data-s="commPct" data-t="num" value="'+esc(String(num(state.settings.commPct)||0))+'">')+'</div><p class="hint">0 means no commission.</p></section>';
+}
+// Reports › Commissions (owner): the paid moves in the days picked, by who made the quote
+function commReport(inR){
+  var S=state.settings,pct=commPctOf(S),rows={},wait={n:0,amt:0};
+  state.jobs.forEach(function(j){
+    var c=commOf(j,S);if(!c)return;
+    if(!c.paid){if(!c.team){wait.n++;wait.amt+=round2(c.base*pct/100)}return}
+    if(!inR(c.day))return;
+    var k=c.team?'\u0000team':c.who,r=rows[k]||(rows[k]={who:c.team?'MoveCrew’s call center':c.who,team:c.team,n:0,base:0,amt:0});
+    r.n++;r.base=round2(r.base+c.base);r.amt=round2(r.amt+c.amt);
+  });
+  var list=Object.keys(rows).map(function(k){return rows[k]}).sort(function(a,b){return (a.team-b.team)||(b.amt-a.amt)||(b.base-a.base)||(a.who<b.who?-1:1)});
+  var tot=list.reduce(function(a,r){return {n:a.n+r.n,base:round2(a.base+r.base),amt:round2(a.amt+r.amt)}},{n:0,base:0,amt:0});
+  var head='<p class="sub">'+(pct?pct+'% of the final bill to whoever made the quote, once the move is paid, for the moves paid on the days picked.':'No commission % is set yet: set one in Setup › Sales commission. Here are the paid moves each person quoted.')+'</p>';
+  var body=list.length?'<div class="tblwrap" tabindex="0" role="region" aria-label="Commission by who made the quote"><table class="tbl"><tr><th>Who</th><th class="n">Paid moves</th><th class="n">Billed</th><th class="n">Commission</th></tr>'+
+      list.map(function(r){return '<tr><td>'+esc(r.who)+'</td><td class="n">'+r.n+'</td><td class="n">'+money(r.base)+'</td><td class="n">'+(r.team?'<small>billed as call center work</small>':pct?money(r.amt):'—')+'</td></tr>'}).join('')+
+      (list.length>1?'<tr><td><b>Total</b></td><td class="n"><b>'+tot.n+'</b></td><td class="n"><b>'+money(tot.base)+'</b></td><td class="n"><b>'+(pct?money(tot.amt):'—')+'</b></td></tr>':'')+'</table></div>'
+    :'<p class="hint">No paid moves with a quote maker in these days.</p>';
+  var w=wait.n&&pct?'<p class="hint">Not paid yet: '+wait.n+' booked or finished move'+(wait.n===1?'':'s')+', about '+money(wait.amt)+' in commission once '+(wait.n===1?'it’s':'they’re')+' paid.</p>':'';
+  return '<section class="card" id="commRep"><h2>Commissions</h2>'+head+body+w+'</section>';
+}
+// on the job sheet (owner): the commission on this move
+function commLine(j){
+  if(state.ui.role!=='owner')return '';var c=commOf(j);if(!c||(!c.pct&&!c.team))return '';
+  return '<p class="hint" style="margin:4px 0 0">'+(c.team?'Quoted by MoveCrew’s call center ('+esc(c.who)+'): billed as call center work, no commission.'
+    :c.paid?'Commission: '+money(c.amt)+' to '+esc(c.who)+' ('+c.pct+'% of the '+money(c.base)+' bill).'
+    :'Commission: '+esc(c.who)+' earns '+c.pct+'% of the final bill once it’s paid (about '+money(c.amt)+' now).')+'</p>';
+}
+// walk-throughs (Sales, batch 6, Nov 17; Richie: "Video or voice call walk through", taken by "The person who quoted
+// and booked the job . Once a call center person is on a job , that person stays on that job"): set from a lead in Sales
+// for a day and time (j.survey {at, kind:'video'|'voice', who, by, set, texted?, done?}); whoever works the lead takes
+// it, the customer can be texted the time, and Sales, Today and the customer app show it until it's done
+var SURVEY_W={video:'Video call',voice:'Voice call'};
+function surveyOf(j){var s=j&&j.survey;return s&&s.at>0&&!s.done&&isOpenQuote(j)?s:null}
+function surveyDue(j,now){var s=surveyOf(j);return !!s&&(now||Date.now())>=s.at-6e5}   // from 10 minutes before
+function surveyWords(s){return (s.kind==='voice'?'Voice':'Video')+' walk-through '+whenWords(s.at)+(s.who?' with '+s.who:'')}
+function surveyText(j,line){
+  var s=j.survey,first=String(j.d.name||'').trim().split(/\s+/)[0]||'there';
+  var day=new Date(s.at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' at '+fmtClock(s.at);
+  return 'Hi '+first+', your '+(s.kind==='voice'?'walk-through call':'video walk-through')+' is set for '+day+'. '+(s.who?s.who.split(' ')[0]:'We')+' will '+(s.kind==='voice'?'call':'video call')+' you at '+fmtPhone(j.d.phone)+' then'+(s.kind==='voice'?' to go over what’s moving.':', so have your phone ready to show us what’s moving.')+' Reply here to change the time.';
+}
+function surveyPanel(j){
+  var id=esc(j.id),s=surveyOf(j),office=canEditJobs(),me=salesMe(),own=salesOwner(j),k=(ui.sp&&ui.sp.k)||(s&&s.kind)||'video',who=(s&&s.who)||own||me;
+  var at=s?s.at:backAt('am'),line=commsReady(),first=(j.d.name||'them').split(' ')[0];
+  var whoRow=office?'<label class="f" style="margin-top:8px"><span>Who takes it</span><select id="svWho_'+id+'">'+ownerOpts(who).replace('<option value=""'+(who?'':' selected')+'>No one yet</option>','')+'</select></label>'
+    :'<p class="hint" style="margin:6px 0 0">'+(who&&who!==me?esc(who)+' takes it.':'You take it.')+'</p>';
+  return '<div class="spanel"><b>A walk-through with '+esc(j.d.name||'them')+'</b>'+
+    (s?'<p class="hint" style="margin:0 0 8px">'+esc(surveyWords(s))+(s.texted?' · texted '+esc(whenWords(s.texted)):'')+'</p>':'<p class="hint" style="margin:0 0 8px">A video or voice call where they show you what’s moving, so the quote is right.</p>')+
+    '<div class="chips" role="group" aria-label="Video or voice">'+['video','voice'].map(function(x){return '<button class="chip'+(k===x?' on':'')+'" data-act="sl:svk" data-k="'+x+'" data-id="'+id+'" aria-pressed="'+(k===x)+'">'+SURVEY_W[x]+'</button>'}).join('')+'</div>'+
+    '<input type="datetime-local" id="svAt_'+id+'" class="inline-sel" style="width:100%" aria-label="Walk-through on" value="'+esc(localInput(at))+'">'+whoRow+
+    (j.d.phone?'<label class="check" style="margin-top:4px"><input type="checkbox" id="svTx_'+id+'"'+(s&&s.texted?'':' checked')+'> Text '+esc(first)+' the time'+(line?'':' (from your phone)')+'</label>':'')+
+    '<div class="row" style="margin-top:8px"><button class="btn primary sm" data-act="sl:sv" data-id="'+id+'">'+(s?'Change it':'Set the walk-through')+'</button>'+
+      (s?'<button class="btn sm" data-act="sl:svdone" data-id="'+id+'">It’s done</button><button class="btn sm ghost" data-act="sl:svoff" data-id="'+id+'">Cancel it</button>':'')+'</div>'+
+    (ui.sp&&ui.sp.sms&&s&&j.d.phone?'<a class="btn sm" style="margin-top:8px" data-act="sl:svsms" data-id="'+id+'" href="'+esc(smsHref(j.d.phone,String(state.settings.company||'Your Moving Co.')+': '+surveyText(j,false)))+'">Text '+esc(first)+' the time from my phone</a>':'')+'</div>';
+}
+// the customer app: their walk-through, while it's ahead
+function custSurveyHtml(m){
+  var s=m&&m.survey;if(!s||!(s.at>0)||s.at<Date.now()-2*36e5)return '';
+  return '<p class="cm-sub cm-survey"><b>Your '+(s.kind==='voice'?'walk-through call':'video walk-through')+':</b> '+esc(new Date(s.at).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' at '+fmtClock(s.at))+'. '+(s.who?esc(s.who)+' will '+(s.kind==='voice'?'call':'video call')+' you then.':'We’ll call you then.')+'</p>';
+}
 // the call script (Sales, batch 5, Nov 17): what to ask on a sales call, as a checklist at the top of a new quote, for the
 // office and the call center; the job keeps what was ticked (d.asked: the lines, as written). Setup › Call script changes
 // it (S.callScript); until then, MoveCrew's. An empty one shows no checklist.
@@ -5215,6 +5305,7 @@ function untilTag(j){var u=quoteUntil(j);if(!u)return '';var n=untilLeft(u);retu
 function quoteMetaHtml(j){
   var out='',u=quoteUntil(j),A=askedOf(j.d);
   if(u){var n=untilLeft(u);out+='<p class="hint" style="margin:4px 0 0">'+(n<0?'<span class="pill bad">The price ran out '+esc(fmtDayShort(u))+'</span> Save the quote again for a new date.':n<=2?'<span class="pill warn">The price is good until '+esc(untilWords(u))+'</span>':'The price is good until '+esc(fmtDayShort(u))+'.')+'</p>'}
+  out+=commLine(j);
   if(j.d&&Array.isArray(j.d.asked)&&j.d.asked.length&&A.of)out+='<p class="hint" style="margin:4px 0 0">Call script: '+A.n+' of '+A.of+' asked'+(A.not.length?'. Not asked: '+esc(A.not.join('; '))+'.':'.')+'</p>';
   return out;
 }
@@ -5253,7 +5344,7 @@ function salesIn(j){var s=salesOf(j),i=s.in;return isOpenQuote(j)&&i&&i.at>((s.l
 // a call from them nobody answered, and nobody has called or texted them since (Sales, batch 3)
 function salesMissed(j){var s=salesOf(j),m=s.missed;return isOpenQuote(j)&&m&&m.at>((s.last&&s.last.at)||0)?m:null}
 function salesDueCb(j,now){var x=salesNext(j);return isOpenQuote(j)&&!!x&&x.at<=(now||Date.now())}
-function salesDue(j,now){return salesDueCb(j,now)||!!salesIn(j)||!!salesMissed(j)||!!salesRunsOut(j)}
+function salesDue(j,now){return salesDueCb(j,now)||!!salesIn(j)||!!salesMissed(j)||!!salesRunsOut(j)||surveyDue(j,now)}
 function salesDueN(){if(!allowedTabs(state.ui.role).some(function(t){return t.id==='quotes'}))return 0;var n=Date.now();return state.jobs.filter(function(j){return salesNew(j)||salesDue(j,n)}).length}
 function salesStage(j){
   if(j.status==='lost')return 'lost';
@@ -5263,7 +5354,7 @@ function salesStage(j){
   return j.status==='quoted'?'quoted':'contacted';
 }
 // when to act on it: the call-back's time; a new one's arrival (the sooner the better); else two days after the last contact
-function salesAt(j){var x=salesNext(j),s=salesOf(j),i=salesIn(j),mi=salesMissed(j);if(i)return i.at-1e13;if(mi)return mi.at-1e13;if(salesRunsOut(j)&&!(x&&x.at<=Date.now()))return parseISO(addDays(quoteUntil(j),-2)).getTime();if(x)return x.at;if(!salesN(j))return j.createdAt||0;return ((s.last&&s.last.at)||j.createdAt||0)+2*864e5}
+function salesAt(j){var x=salesNext(j),s=salesOf(j),i=salesIn(j),mi=salesMissed(j);if(i)return i.at-1e13;if(mi)return mi.at-1e13;if(surveyDue(j)||(surveyOf(j)&&!(x&&x.at<surveyOf(j).at)&&!salesRunsOut(j)))return surveyOf(j).at;if(salesRunsOut(j)&&!(x&&x.at<=Date.now()))return parseISO(addDays(quoteUntil(j),-2)).getTime();if(x)return x.at;if(!salesN(j))return j.createdAt||0;return ((s.last&&s.last.at)||j.createdAt||0)+2*864e5}
 function salesMe(){return (isCC()?ccName():myName())||''}
 function salesWho(){return isCC()?ccWho():(myName()||'the office')}
 function bookedAt(j){var e=(j.log||[]).filter(function(l){return /^(Status: Booked|Created as Booked|Booked)/.test(String(l.ev))})[0];return e?e.ts:0}
@@ -5280,9 +5371,11 @@ function salesLine(j){
   if(!isOpenQuote(j))return {cls:'',t:'Booked'+(bookedAt(j)?' '+whenWords(bookedAt(j)):'')};
   var tm=salesMissed(j);if(tm&&!salesIn(j))return {cls:'bad',t:'Missed their call '+ago(tm.at)+' · call them back'};
   var ti=salesIn(j);if(ti)return {cls:'bad',t:'Texted back '+ago(ti.at)+': “'+String(ti.t||'').slice(0,90)+(String(ti.t||'').length>90?'…':'')+'”'};
-  var ro=salesRunsOut(j);
-  if(x&&(now>=x.at||!ro)){var late=now-x.at;return late<0?{cls:'',t:'Call back '+whenWords(x.at)}:late>=36e5?{cls:'bad',t:'Overdue: the call-back was '+whenWords(x.at)}:{cls:'warn',t:'Call back now'}}
+  var ro=salesRunsOut(j),sv=surveyOf(j);
+  if(sv&&now>=sv.at-6e5)return now-sv.at>=36e5?{cls:'bad',t:'The walk-through was '+whenWords(sv.at)+': log how it went'}:{cls:'warn',t:(sv.kind==='voice'?'Voice':'Video')+' walk-through now'+(sv.who?' with '+sv.who:'')+' · call them'};
+  if(x&&(now>=x.at||(!ro&&!(sv&&sv.at<=x.at)))){var late=now-x.at;return late<0?{cls:'',t:'Call back '+whenWords(x.at)}:late>=36e5?{cls:'bad',t:'Overdue: the call-back was '+whenWords(x.at)}:{cls:'warn',t:'Call back now'}}
   if(ro)return {cls:'warn',t:'The price runs out '+ro+' · call them'+(x?' (a call-back is set for '+whenWords(x.at)+')':'')};
+  if(sv)return {cls:'',t:surveyWords(sv)};
   if(!salesN(j)){var m=(now-(j.createdAt||now))/6e4;return {cls:m>=15?'bad':m>=5?'warn':'',t:'New · waiting '+minsWords(m)+' · not called yet'}}
   var lt=s.last;return {cls:'',t:(lt&&TOUCH[lt.k]?'Last: '+TOUCH[lt.k].toLowerCase()+', '+whenWords(lt.at)+(lt.by?' ('+lt.by+')':'')+' · ':'')+'No call-back set'};
 }
@@ -5302,6 +5395,7 @@ function salesFilter(j,f,me){
   if(!isOpenQuote(j))return false;
   if(f==='open')return true;
   if(f==='due')return salesDue(j)||salesNew(j);
+  if(f==='survey')return !!surveyOf(j);
   if(f==='mine')return !!me&&salesOwner(j)===me;
   return salesStage(j)===f;
 }
@@ -5314,7 +5408,7 @@ function ccMatch(j,q){
 function renderQuotes(){
   var v=$('#view'),all=salesJobs(),me=salesMe(),office=canEditJobs();
   if(!ui.slf)ui.slf='open';
-  var fs=[['open','Open'],['due','Due now']].concat(STAGES).concat(me?[['mine','Mine']]:[]).concat(office?[['booked','Booked'],['lost','Lost']]:[]);
+  var fs=[['open','Open'],['due','Due now'],['survey','Walk-throughs']].concat(STAGES).concat(me?[['mine','Mine']]:[]).concat(office?[['booked','Booked'],['lost','Lost']]:[]);
   var chips=fs.map(function(f){
     var n=all.filter(function(j){return salesFilter(j,f[0],me)}).length,on=ui.slf===f[0];
     return '<button class="chip'+(on?' on':'')+(f[0]==='due'&&n&&!on?' due':'')+'" data-act="sl:f" data-f="'+f[0]+'" aria-pressed="'+on+'">'+f[1]+' <small>'+n+'</small></button>';
@@ -5330,12 +5424,16 @@ function ccFill(){
   var all=salesJobs(),me=salesMe(),f=ui.slf||'open',q=String(ui.ccq||'').trim().toLowerCase();
   // the card being worked on stays in its list until its panel closes (logging a call takes a new lead out of New)
   var list=all.filter(function(j){return (q||(ui.sp&&ui.sp.id===j.id)?true:salesFilter(j,f,me))&&ccMatch(j,q)});
-  list.sort(f==='booked'?function(a,b){return bookedAt(b)-bookedAt(a)}:f==='lost'?function(a,b){return lostAt(b)-lostAt(a)}:function(a,b){return salesAt(a)-salesAt(b)});
+  list.sort(f==='survey'&&!q?function(a,b){return surveyOf(a).at-surveyOf(b).at}:f==='booked'?function(a,b){return bookedAt(b)-bookedAt(a)}:f==='lost'?function(a,b){return lostAt(b)-lostAt(a)}:function(a,b){return salesAt(a)-salesAt(b)});
   if(!all.length){el.innerHTML='<div class="card empty"><h3>No open leads or quotes</h3><p>Tap + to make a quote.</p></div>';return}
-  var head={open:'Open leads and quotes',due:'Due now: new leads and call-backs',new:'New, not called yet',contacted:'Contacted, no quote yet',quoted:'Quoted',follow:'Follow up',mine:'Yours',booked:'Booked in the last 2 weeks',lost:'Lost in the last 30 days'}[f];
+  var head={open:'Open leads and quotes',due:'Due now: new leads and call-backs',survey:'Walk-throughs: what’s coming up',new:'New, not called yet',contacted:'Contacted, no quote yet',quoted:'Quoted',follow:'Follow up',mine:'Yours',booked:'Booked in the last 2 weeks',lost:'Lost in the last 30 days'}[f];
   el.innerHTML='<div class="secline"><h2>'+(q?'Found':head)+'</h2><small>'+list.length+'</small></div>'+
-    (list.length?list.map(salesCard).join(''):q?'<div class="card empty"><h3>Nothing matches “'+esc(ui.ccq)+'”</h3><p>Try part of the name, the phone number or a street.</p></div>'
-      :'<div class="card empty"><h3>'+(f==='due'?'Nothing to call right now':'None here')+'</h3><p>'+(f==='due'?'New leads and call-backs that are due show here.':'Pick another list above.')+'</p></div>');
+    (list.length?(f==='survey'&&!q?surveyDays(list):list.map(salesCard).join('')):q?'<div class="card empty"><h3>Nothing matches “'+esc(ui.ccq)+'”</h3><p>Try part of the name, the phone number or a street.</p></div>'
+      :'<div class="card empty"><h3>'+(f==='due'?'Nothing to call right now':f==='survey'?'No walk-throughs set':'None here')+'</h3><p>'+(f==='due'?'New leads and call-backs that are due show here.':f==='survey'?'Set one from a lead: Walk-through, then the day and time.':'Pick another list above.')+'</p></div>');
+}
+// the walk-throughs ahead, under their days
+function surveyDays(list){
+  var last='';return list.map(function(j){var d=iso(new Date(surveyOf(j).at)),t=todayISO(),h=d===last?'':'<div class="sday">'+(d<t?'Earlier':d===t?'Today':d===addDays(t,1)?'Tomorrow':esc(fmtDayShort(d)))+'</div>';last=d;return h+salesCard(j)}).join('');
 }
 // the office picks who works a lead: its own people and its call center people, or anyone already on it
 function ownerOpts(cur){
@@ -5364,6 +5462,7 @@ function salesCard(j){
   var btns=open?'<div class="row sbtns">'+(j.d.phone?'<button class="btn sm" data-act="sl:call" data-id="'+id+'">Call</button><button class="btn sm'+(pm==='tx'?' on':'')+'" data-act="sl:p" data-m="tx" data-id="'+id+'" aria-expanded="'+(pm==='tx')+'">Text</button>':'')+
       '<button class="btn sm'+(pm==='log'?' on':'')+'" data-act="sl:p" data-m="log" data-id="'+id+'" aria-expanded="'+(pm==='log')+'">Log a call</button>'+
       '<button class="btn sm'+(pm==='back'?' on':'')+'" data-act="sl:p" data-m="back" data-id="'+id+'" aria-expanded="'+(pm==='back')+'">Call back</button>'+
+      '<button class="btn sm'+(pm==='sv'?' on':'')+'" data-act="sl:p" data-m="sv" data-id="'+id+'" aria-expanded="'+(pm==='sv')+'">Walk-through</button>'+
       '<button class="btn primary sm" data-act="cc:open" data-id="'+id+'">Open quote</button>'+
       '<button class="btn sm ghost" data-act="sl:p" data-m="lost" data-id="'+id+'" aria-expanded="'+(pm==='lost')+'">Lost</button></div>'
     :'<div class="row sbtns">'+(office?'<button class="btn sm" data-act="job:open" data-id="'+id+'">Open job</button>':'')+(office&&j.status==='lost'?'<button class="btn sm" data-act="sl:reopen" data-id="'+id+'">Reopen</button>':'')+'</div>';
@@ -5376,6 +5475,7 @@ function salesCard(j){
       (x?'<button class="btn sm ghost" style="margin-top:6px" data-act="sl:noback" data-id="'+id+'">No call-back</button>':'')+'</div>';
   }
   if(open&&pm==='tx')panel=salesTextPanel(j);
+  if(open&&pm==='sv')panel=surveyPanel(j);
   if(open&&pm==='lost')panel='<div class="spanel"><b>Why was it lost?</b><div class="chips">'+LOST_WHY.map(function(r){return '<button class="chip" data-act="sl:lost" data-k="'+r[0]+'" data-id="'+id+'">'+r[1]+'</button>'}).join('')+'</div></div>';
   return '<section class="card qcard scard" data-job="'+id+'"><div class="row between" style="align-items:flex-start;gap:8px"><h3 style="margin:0">'+esc(jobName(j))+'</h3><span class="pill sstage" data-st="'+st+'">'+STAGE_W[st]+'</span></div>'+
     nextLn+
@@ -6158,7 +6258,7 @@ function renderReports(){
   jobs.forEach(function(j){(j.costs||[]).forEach(function(c){byCat[c.cat||'Other']=(byCat[c.cat||'Other']||0)+c.amt})});
   var catRows=Object.keys(byCat).sort().map(function(k){return '<tr><td>'+esc(k)+'</td><td class="n">'+money(byCat[k])+'</td></tr>'}).join('');
   var matCard='<section class="card"><h2>Materials and job costs</h2><div class="kpis k3"><div class="kpi"><b>'+money(mBilled)+'</b><span>Materials billed</span></div><div class="kpi"><b>'+money(mCost)+'</b><span>Materials cost</span></div><div class="kpi"><b>'+money(cAll)+'</b><span>Job costs</span></div></div>'+(catRows?'<table class="tbl"><tr><th>Job cost type</th><th class="n">Total</th></tr>'+catRows+'</table>':'<p class="hint">No job costs logged in this range.</p>')+'</section>';
-  v.innerHTML=out+salesCard+profit+matCard+srcCard+'<section class="card"><h2>Bid accuracy</h2>'+accHtml+'</section>'+phase+hoursHtml;
+  v.innerHTML=out+salesCard+commReport(inR)+profit+matCard+srcCard+'<section class="card"><h2>Bid accuracy</h2>'+accHtml+'</section>'+phase+hoursHtml;
 }
 
 /* ---------- Reports › Sales (Nov 17, Sales batch 4) ----------
@@ -6351,6 +6451,7 @@ function setupSecs(){
   add('webform','money','Get a quote form','Your customers ask for a quote on the MoveCrew website',webFormCard(),'website web form get a quote leads link online request');
   add('salestexts','money','Sales texts','The quote and follow-up texts to customers',salesTplCard(),'sales quote follow up follow-up text templates wording');
   add('callscript','money','Call script',callScript().length?callScript().length+' questions on new quotes':'Off: no checklist on quotes',callScriptCard(),'call script questions checklist phone sales calls ask');
+  add('commission','money','Sales commission',commPctOf()?commPctOf()+'% of the final bill to whoever made the quote':'None set yet',commCard(),'commission sales pay percent salespeople earn quote maker');
   add('comms','money','Texts and calls',window.tallyComms?(line?'Company line '+fmtPhone(line):'Company line not connected yet'):'Sent from the hosted MoveCrew app',commsCard(),'twilio sms text alerts calls phone line');
   add('data','data','Your data','Export, import and test jobs',
     '<section class="card"><h2>Your data</h2><p class="sub">'+(sync.mode==='shared'?'This workspace is shared, so these actions change data for everyone.':'Stored on this device. Copy an export to back it up or move it.')+'</p><div class="row"><button class="btn" data-act="st:export">Export data</button><label class="check" style="min-height:44px"><input type="checkbox" id="expPhotos"> Include photos</label></div><textarea class="code" id="dataBox" placeholder="Export appears here. Paste an export here to import." aria-label="Data export or import">'+esc(ui.exportText||'')+'</textarea><div class="row" style="margin-top:8px"><button class="btn" data-act="st:copy">Copy</button><button class="btn primary" data-act="st:import">Import</button></div>'+
@@ -7141,7 +7242,7 @@ function jobDoc(j){
   var dd=Object.assign({},j.d);
   dd.items=Object.keys(j.d.items||{}).map(function(k){return {id:k,q:j.d.items[k]}});
   var o={id:j.id,status:j.status,createdAt:j.createdAt,d:dd,quote:j.quote,items:j.items||[],assign:j.assign||{truckId:'',crew:[]},tally:j.tally||{}};
-  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales'].forEach(function(k){if(j[k]!=null)o[k]=j[k]});
+  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales','quotedBy','quotedTeam','survey'].forEach(function(k){if(j[k]!=null)o[k]=j[k]});
   o.payments=toMap(j.payments,function(x){return x.id});
   o.signed=toMap(j.signed,function(x){return x.id});
   o.extras=toMap(j.extras,function(x){return x.id});
@@ -7167,7 +7268,7 @@ function docToJob(v){
     materials:mapArr(v.materials,'ts'),costs:mapArr(v.costs,'ts'),confirm:(v.confirm&&typeof v.confirm==='object')?v.confirm:{},
     crewOn:(v.crewOn&&typeof v.crewOn==='object')?v.crewOn:undefined,crewAdj:mapArr(v.crewAdj,'ts'),
     log:mapArr(v.log,'ts').slice(-60)};
-  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
+  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales','quotedBy','quotedTeam','survey'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
   return j;
 }
 /* A change to a document as a merge patch, the way the database's doc_patch applies it (RFC 7386): only what changed,
@@ -10117,7 +10218,24 @@ document.addEventListener('click',function(e){
     case 'sl:call':{var scj=byId(t.dataset.id);if(!scj)break;ui.sp={id:scj.id,m:'log',after:true};ccFill();ccCall(scj.id);break}
     case 'sl:take':{var stj=byId(t.dataset.id),stme=salesMe();if(!isOpenQuote(stj)||!stme)break;if(salesOwner(stj)){toast(salesOwner(stj)+' is working it already.');ccFill();break}
       stj.sales=Object.assign({},salesOf(stj),{owner:stme,ownerAt:Date.now()});logEv(stj,salesWho()+' took this lead');save();ccFill();renderTabs();toast('It’s yours. Call them soon: the sooner, the likelier they book.');break}
-    case 'sl:log':{var slj=byId(t.dataset.id),slk=t.dataset.k;if(!isOpenQuote(slj)||!TOUCH[slk])break;salesTouch(slj,slk);save();ui.sp={id:slj.id,m:'back'};ccFill();renderTabs();
+    case 'sl:svk':{if(ui.sp&&ui.sp.id===t.dataset.id){ui.sp.k=t.dataset.k==='voice'?'voice':'video';ccFill()}break}
+    case 'sl:sv':{var svj=byId(t.dataset.id),sva=$('#svAt_'+t.dataset.id),svw=$('#svWho_'+t.dataset.id),svx=$('#svTx_'+t.dataset.id),svt=sva&&sva.value?new Date(sva.value).getTime():0;if(!isOpenQuote(svj))break;
+      if(!(svt>0)){toast('Pick a day and time first.');break}
+      if(svt<Date.now()-6e4){toast('That time has passed. Pick a time ahead.');break}
+      var svme=salesMe(),svwho=(svw&&svw.value)||(surveyOf(svj)&&surveyOf(svj).who)||salesOwner(svj)||svme,svk=(ui.sp&&ui.sp.k)||(surveyOf(svj)&&surveyOf(svj).kind)||'video',sv0=surveyOf(svj);
+      svj.survey={at:svt,kind:svk,who:svwho,by:svme,set:Date.now()};
+      if(!salesOwner(svj)&&svwho)svj.sales=Object.assign({},salesOf(svj),{owner:svwho,ownerAt:Date.now()});
+      logEv(svj,(sv0?'Walk-through moved to ':'Walk-through set for ')+whenWords(svt)+' ('+SURVEY_W[svk].toLowerCase()+(svwho?', with '+svwho:'')+'), by '+salesWho());
+      var svTxt=!!(svx&&svx.checked&&svj.d.phone),svLine=commsReady()&&window.tallyComms&&window.tallyComms.salesText;
+      save();ui.sp={id:svj.id,m:'sv',k:svk,sms:svTxt&&!svLine};ccFill();renderTabs();
+      if(svTxt&&svLine){window.tallyComms.salesText(svj.id,surveyText(svj,true)).then(function(r){if(r&&r.ok){var sj=byId(svj.id);if(sj&&sj.survey){sj.survey=Object.assign({},sj.survey,{texted:Date.now()});save();ccFill()}commsLoadLog(svj.id)}toast(r&&r.ok?'Walk-through set, and '+(svj.d.name||'they').split(' ')[0]+' has the time by text.':'Walk-through set. '+((r&&r.message)||'The text did not go out.'))}).catch(function(){toast('Walk-through set. The text did not go out: check the connection.')})}
+      else toast('Walk-through set: '+surveyWords(svj.survey)+'.'+(svTxt?' Text them the time from your phone below.':''));
+      break}
+    case 'sl:svsms':{var ssj3=byId(t.dataset.id);if(ssj3&&ssj3.survey){ssj3.survey=Object.assign({},ssj3.survey,{texted:Date.now()});logEv(ssj3,'Walk-through time texted by '+salesWho());save();setTimeout(function(){if(ui.sp)ui.sp.sms=false;ccFill()},0)}break}
+    case 'sl:svdone':{var sdj=byId(t.dataset.id);if(!surveyOf(sdj))break;sdj.survey=Object.assign({},sdj.survey,{done:Date.now()});logEv(sdj,'Walk-through done ('+salesWho()+')');save();ui.sp=null;ccFill();renderTabs();toast('Walk-through done. Price it now: Open quote.');break}
+    case 'sl:svoff':{var soj=byId(t.dataset.id);if(!surveyOf(soj))break;soj.survey=null;logEv(soj,'Walk-through cancelled by '+salesWho());save();ui.sp=null;ccFill();renderTabs();toast('Walk-through cancelled.');break}
+    case 'sl:log':{var slj=byId(t.dataset.id),slk=t.dataset.k;if(!isOpenQuote(slj)||!TOUCH[slk])break;salesTouch(slj,slk);
+      if(slk==='talked'&&surveyOf(slj)&&Date.now()>=surveyOf(slj).at-18e5){slj.survey=Object.assign({},slj.survey,{done:Date.now()});logEv(slj,'Walk-through done ('+salesWho()+')')}save();ui.sp={id:slj.id,m:'back'};ccFill();renderTabs();
       toast('Logged: '+TOUCH[slk].toLowerCase()+'. '+(slk==='talked'?'Open the quote to price it, or set when to call back.':'When should someone call back?'));break}
     case 'sl:back':{var sbj=byId(t.dataset.id),sbat=backAt(t.dataset.k);if(!isOpenQuote(sbj)||!sbat)break;salesSetBack(sbj,sbat);save();ui.sp=null;ccFill();renderTabs();toast('Call back '+whenWords(sbat)+'.');break}
     case 'sl:backat':{var sbj2=byId(t.dataset.id),sbi=$('#slAt_'+t.dataset.id),sbv=sbi&&sbi.value?new Date(sbi.value).getTime():0;if(!isOpenQuote(sbj2))break;
@@ -10445,7 +10563,7 @@ state.ui.realRole=null;if(state.ui.role!=='owner')state.ui.role='owner';
 })();
 (function migrate6(){if(!state.ui.callPrefs)state.ui.callPrefs={}})();
 (function migrate8(){if(state.demo)state.jobs.forEach(function(j){if(!j.phases&&j.startedAt&&j.finishedAt&&(j.log||[]).some(function(l){return l.ev==='Sample job'}))j.phases=demoPhases(j)})})();
-(function migrate7(){var S=state.settings,D=defaultSettings();if(!S.comms)S.comms=D.comms;S.comms.alerts=Object.assign({},D.comms.alerts,S.comms.alerts||{});if(!Array.isArray(S.comms.ring))S.comms.ring=[];if(!S.opt||typeof S.opt!=='object')S.opt={};if(S.quoteDays==null)S.quoteDays=D.quoteDays})();
+(function migrate7(){var S=state.settings,D=defaultSettings();if(!S.comms)S.comms=D.comms;S.comms.alerts=Object.assign({},D.comms.alerts,S.comms.alerts||{});if(!Array.isArray(S.comms.ring))S.comms.ring=[];if(!S.opt||typeof S.opt!=='object')S.opt={};if(S.quoteDays==null)S.quoteDays=D.quoteDays;if(S.commPct==null)S.commPct=0})();
 (function migrate5(){var S=state.settings,D=defaultSettings();if(!S.materials)S.materials=D.materials;if(!S.costCats)S.costCats=D.costCats;state.jobs.forEach(function(j){if(!j.materials)j.materials=[];if(!j.costs)j.costs=[]})})();
 window.addEventListener('resize',function(){renderTabs()});
 setInterval(function(){
@@ -10468,7 +10586,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
 })();
 </script>
 </body>

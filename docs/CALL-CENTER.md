@@ -75,6 +75,9 @@ the call center's phone looks the shop up itself and remembers it.
   or a text of your own), **Log a call**, **Call back** (when), **Open quote** and **Lost** (with the
   reason). Search by name, phone (or its last digits) or address. Since Nov 17 a quote also says how
   long its price is good, and comes up in Due now two days before it runs out.
+  **Walk-through** books a video or voice call walk-through with the customer for a day and time (the person
+  working the lead takes it, and keeps it), texts them the time, and puts it under Walk-throughs, the list of what's
+  coming up.
 - **New quote.** The same quote builder as the office (since Nov 17: the company's call script as a
   checklist at the top, from its Setup › Call script, and the 2, 3 and 4 mover prices side by side
   under the price), with three differences: the price step has

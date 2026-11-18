@@ -3668,6 +3668,12 @@ export function quoteUntilOf(job: J): string {
   const u = String((job && job.quote && job.quote.until) || "");
   return /^\d{4}-\d{2}-\d{2}$/.test(u) && !!job && (job.status === "lead" || job.status === "quoted") ? u : "";
 }
+// a walk-through call set from Sales (batch 6, Nov 17), for her copy: while the lead is open and it isn't done
+export function custSurvey(job: J): J | null {
+  const s = job && job.survey;
+  if (!s || typeof s !== "object" || !(Number(s.at) > 0) || s.done || !(job.status === "lead" || job.status === "quoted")) return null;
+  return { at: Number(s.at), kind: s.kind === "voice" ? "voice" : "video", who: String(s.who || "").split(" ")[0] };
+}
 export function custCopy(org: string, S: J, job: J, o: { company: string; phone: string; paidC: number; pages?: Record<string, string> }): J {
   const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [];
   const totalC = jobTotalCents(job), dueC = Math.max(0, totalC - o.paidC);
@@ -3692,6 +3698,7 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     day: { startedAt: Number(job.startedAt) || 0, eta: (job.eta && Number(job.eta.at)) || 0, phases: job.phases && typeof job.phases === "object" ? job.phases : {}, finishedAt: Number(job.finishedAt) || 0 },
     crew: { lead: String(leadOf(S, job)).split(" ")[0], n: crew.length },
     tips: !optOff(S, "custTips"), book: !optOff(S, "custBook"), review: custReviewUrl(S), reviewed: !!c.reviewAt, bookedBy: c.bookedAt ? "customer" : "",
+    survey: custSurvey(job),
     req: job.req && typeof job.req === "object" ? { from: String(job.req.from || ""), to: String(job.req.to || ""), at: Number(job.req.at) || 0, note: String(job.req.note || ""), quoted: !!job.req.quotedAt } : null,
   };
 }
@@ -3838,6 +3845,7 @@ async function custBook(user: J, org: string, jobId: string): Promise<J> {
   if (c.job.status === "booked" && c.job.cust && c.job.cust.bookedAt) return { ok: true };   // a second tap
   if (optOff(S, "custBook")) return { ok: false, message: "Call or text " + co + " to book it." };
   if (c.job.status !== "lead" && c.job.status !== "quoted") return { ok: false, message: "This quote was already booked or closed." };
+  if (!(Number(c.job.quote && c.job.quote.total) > 0)) return { ok: false, message: "Your price isn't set yet. Call or text " + co + " for it." };
   const ut0 = quoteUntilOf(c.job);
   if (ut0 && ut0 < today()) return { ok: false, message: "This price was good until " + fmtDay(ut0) + ". Call or text " + co + " for a new one." };
   if (await custFull(org, S, c.job)) return { ok: false, message: "That time just filled up. Call or text " + co + " to pick another time." };
@@ -3848,6 +3856,7 @@ async function custBook(user: J, org: string, jobId: string): Promise<J> {
     const d = job.d || {};
     if (!d.moveDate) return "Call or text " + co + " to pick a day first.";
     if (String(d.moveDate) < today()) return "That day has passed. Call or text " + co + " to pick a new one.";
+    if (!(Number(job.quote && job.quote.total) > 0)) return "Your price isn't set yet. Call or text " + co + " for it.";
     const ut = quoteUntilOf(job);
     if (ut && ut < today()) return "This price was good until " + fmtDay(ut) + ". Call or text " + co + " for a new one.";
     job.status = "booked";

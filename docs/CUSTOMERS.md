@@ -34,7 +34,12 @@ most first, and a list of the rest.
   top price on hourly moves), the price lines and what's moving. **Book my move** (Options › Customers book their own
   quote): the day must not have passed, and there must still be room on the trucks then. It's booked with no truck:
   dispatch adds the truck and crew (Needs scheduling), and the owner and dispatch get a text when the company line is
-  set up.
+  set up. Since Nov 17: the price is good until the day the quote says (Rate card › Quotes are good for, 30 days to
+  start), and after it the app says "This price was good until … Call or text us for a new one." and won't book it;
+  a lead with no price yet says "Your price isn't set yet" and has nothing to book (the server refuses both too).
+- **A walk-through** (Nov 17): when the office or the call center sets a video or voice call walk-through from Sales,
+  their move shows "Your video walk-through: Wednesday, November 18 at 10:00 AM. Dee will video call you then." until
+  it's done.
 - **The deposit**: straight after booking, when the company takes deposits.
 - **Forms to sign ahead**: the required forms marked **Customer signs ahead** in Setup › Forms to sign (a sample
   moving agreement is one tap away there). Signed ahead, the crew isn't asked for them at the end. The delivery receipt
