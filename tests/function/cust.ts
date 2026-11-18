@@ -336,6 +336,17 @@ ok(r.body.ok && logs("q1").filter((x) => /Booked by the customer/.test(x)).lengt
 putDoc(ORG, "jobs/q2", job("q2", { d: { ...job("x").d, moveDate: past } }));
 r = await app("tok-priya", { action: "cust_book", org: ORG, jobId: "q2" });
 ok(!r.body.ok && /That day has passed/.test(r.body.message), "a day that has passed can't be booked");
+// how long the price is good (Sales, batch 5, Nov 17): her copy says, and a price that ran out can't be booked
+putDoc(ORG, "jobs/q3", job("q3", { quote: { ...job("x").quote, until: past } }));
+putDoc(ORG, "jobs/q4", job("q4", { quote: { ...job("x").quote, until: later } }));
+r = await app("tok-priya", { action: "cust_list" });
+{
+  const q3c = r.body.moves.find((m: any) => m.id === "q3"), q4c = r.body.moves.find((m: any) => m.id === "q4"), b1c = r.body.moves.find((m: any) => m.id === "b1");
+  ok(q3c.quote.until === past && q4c.quote.until === later && b1c.quote.until === "", "her copy says how long each open quote's price is good (a booked move's, nothing)");
+}
+r = await app("tok-priya", { action: "cust_book", org: ORG, jobId: "q3" });
+ok(!r.body.ok && r.body.message === "This price was good until " + fn.fmtDay(past) + ". Call or text Ace Moving for a new one." && doc("jobs/q3").status === "quoted", "a price that ran out can't be booked: " + r.body.message);
+DB.docs = DB.docs.filter((x) => x.path !== "jobs/q3" && x.path !== "jobs/q4");
 
 /* ---------- signing ahead ---------- */
 const SIG = "data:image/png;base64," + "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

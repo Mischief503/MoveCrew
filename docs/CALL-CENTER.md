@@ -32,7 +32,7 @@ A company's owner sees what the call center sees with **More › See it their wa
 
 ## What the team sees
 
-The bottom bar: **Companies**, **Schedule**, **Quotes**, the round **+** for a new quote, and
+The bottom bar: **Companies**, **Schedule**, **Sales** (it was Quotes until Nov 14), the round **+** for a new quote, and
 **More** (the look, their profile, sign out). No Truck down, no chat.
 
 **Companies.** The customer's pickup address and move date at the top, then a map of every company
@@ -46,7 +46,8 @@ with the service, then the companies in a list:
   numbered dots take the same colours (green, orange, red), the same ones as the Schedule's calendar.
 - Tapping a company (or its dot) opens its **rate card**: the hourly rate for 2, 3 and 4 movers,
   the minimum hours, the truck and fuel fee, stairs, packing, the local area and the rate per mile
-  past it, the deposit, sales tax, the estimated top price (a guide) and the specialty items' fees,
+  past it, the deposit, sales tax, the estimated top price (a guide), how long quotes are good and
+  the specialty items' fees,
   whether the move is local for them, their shop and their trucks.
 - **Make a quote for <company>** opens that company's quote builder with the pickup and the date
   already filled in. **Their schedule** opens that company's calendar on the move date.
@@ -69,9 +70,14 @@ the call center's phone looks the shop up itself and remembers it.
   movers and trucks ("5 movers · 1 truck") and the hours. Open one for the phone (with **Call**), the
   email, the addresses, stairs, how many movers are on it so far (not who), the truck, the custom
   fields, the items and the job notes. Never the price, the payments or the bill.
-- **Quotes.** Every open quote and lead, newest first, with its price and when it was made. Search by
-  name, phone (or its last digits) or address. **Open quote**, **Call**, **Mark lost** (tap twice).
-- **New quote.** The same quote builder as the office, with three differences: the price step has
+- **Sales.** Every open lead and quote, the most urgent first: a missed call or a text back at the top,
+  then new leads by how long they've waited and call-backs by their time. **Call**, **Text** (the quote,
+  or a text of your own), **Log a call**, **Call back** (when), **Open quote** and **Lost** (with the
+  reason). Search by name, phone (or its last digits) or address. Since Nov 17 a quote also says how
+  long its price is good, and comes up in Due now two days before it runs out.
+- **New quote.** The same quote builder as the office (since Nov 17: the company's call script as a
+  checklist at the top, from its Setup › Call script, and the 2, 3 and 4 mover prices side by side
+  under the price), with three differences: the price step has
   no **Discount** (a discount the office gave stays as it was); **Book job** needs the move date, so
   the job lands on the schedule; and they put the move in a slot of that day first, where it fits
   (The day plan, below). After booking: "Booked for Thu, Oct 30 at 8:00 AM in slot 2. Dispatch adds

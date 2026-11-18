@@ -19,7 +19,7 @@ function schedOf(j) {
 }
 // the database's rate card copy (ratecard_of): the settings' prices and what makes them, kept like ratecard_sync
 // (and, since Oct 25, each truck's day and the movers' counts: how many, and how many off each day, never who)
-const CARD_KEYS = ['company', 'rates', 'minHours', 'prod', 'mph', 'shopAddress', 'shopTravel', 'shopGeo', 'includedMiles', 'mileRate', 'truckFee', 'stairFee', 'packPerBox', 'taxPct', 'depositPct', 'ntePct', 'nteCap', 'trucks', 'catalog', 'sources', 'customFields', 'opt', 'truckDay'];
+const CARD_KEYS = ['company', 'rates', 'minHours', 'prod', 'mph', 'shopAddress', 'shopTravel', 'shopGeo', 'includedMiles', 'mileRate', 'truckFee', 'stairFee', 'packPerBox', 'taxPct', 'depositPct', 'ntePct', 'nteCap', 'trucks', 'catalog', 'sources', 'customFields', 'opt', 'truckDay', 'quoteDays', 'callScript'];
 function ratecardOf(s) {
   const o = {}; CARD_KEYS.forEach((k) => { if (s && s[k] !== undefined) o[k] = clone(s[k]); });
   if (s && Array.isArray(s.crew)) {

@@ -199,6 +199,14 @@ putDoc(ORG, "jobs/q5", quote("q5", { d: { name: "Hollis & Reed Law", phone: "", 
   ok(fn.salesBody(settings, quote("x", { d: { name: "Hollis & Reed Law", moveDate: "" } }), "quote", SITE, "") .indexOf("Hi there, your moving quote is $1,065 for the day you pick (3 movers") > 0, "a company's name isn't a first name, and no day yet says so");
   ok(fn.salesBody(settings, quote("x", { d: { name: "Sam", email: "" } }), "quote", SITE, "").indexOf("book online") < 0, "no email on the quote: no link (they sign in with it)");
   ok(fn.salesBody({ ...settings, opt: { custBook: false } }, quote("x"), "quote", SITE, "").indexOf("book online") < 0, "customers can't book their own quote: no link");
+  // how long the price is good (Sales, batch 5, Nov 17): {until}, in the quote and the last follow-up, while it's good
+  const until = new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10), gone = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
+  const qu = quote("x", { quote: { total: 1065, crew: 3, hours: 5, until } });
+  ok(fn.salesBody(settings, qu, "quote", SITE, "").indexOf("(3 movers, about 5 hours). The price is good until " + fn.fmtDay(until) + ". See it and book online") > 0, "the quote text says how long the price is good");
+  ok(fn.salesBody(settings, qu, "f3", SITE, "").indexOf("moving quote. The price is good until " + fn.fmtDay(until) + ". If plans changed") > 0, "and the last follow-up");
+  ok(fn.salesBody(settings, quote("x", { quote: { total: 1065, crew: 3, hours: 5, until: gone } }), "quote", SITE, "").indexOf("good until") < 0 && fn.salesBody(settings, quote("x", { status: "booked", quote: { total: 1065, crew: 3, hours: 5, until } }), "quote", SITE, "").indexOf("good until") < 0,
+    "not once it ran out, nor on a booked job");
+  ok(fn.quoteUntilOf(qu) === until && fn.quoteUntilOf(quote("x", { status: "booked", quote: { until } })) === "" && fn.quoteUntilOf(quote("x", { quote: { until: "soon" } })) === "", "an open quote's last day, a real date only");
   ok(fn.salesBody({ ...settings, salesTpl: { quote: "{company}: {first}, {total} on {when}. Call {phone}." } }, quote("x"), "quote", SITE, "(512) 555-0000") === "Ace Moving - Austin: Sam, $1,065 on " + day + " at 9:00 AM. Call (512) 555-0000.",
     "the company's own wording, filled in");
   ok(/^Ace Moving - Austin: Hi Sam, checking you got your moving quote: \$1,065 for /.test(fn.salesBody(settings, quote("x"), "f1", "", "(512) 555-0000")) && /call \(512\) 555-0000\.$/.test(fn.salesBody(settings, quote("x"), "f1", "", "(512) 555-0000")), "follow-up 1 names the price, the day and the company line");

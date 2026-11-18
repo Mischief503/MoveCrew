@@ -238,8 +238,9 @@ delete from public.docs s where s.collection = 'sched' and not exists (
 -- custom fields, the switches, the shop and its spot on the map), each truck's day (truckDay: its start,
 -- hours, most moves and the time between them), and how many movers there are and how many are off each
 -- day (movers: {n, off: {day: count}}, counts only), so the call center books a move where it fits on the
--- day's trucks and movers; copied to ratecard/main on every save of the settings; never the crew's names,
--- pay, costs, phones or anything else of the company's own.
+-- day's trucks and movers, how long a quote's price is good (quoteDays) and the call script (callScript);
+-- copied to ratecard/main on every save of the settings; never the crew's names, pay, costs, phones or
+-- anything else of the company's own.
 create or replace function public.ratecard_of(s jsonb) returns jsonb
 language sql immutable set search_path = public as $$
   select coalesce(jsonb_object_agg(k, s->k), '{}'::jsonb)
@@ -254,7 +255,7 @@ language sql immutable set search_path = public as $$
             else '{}'::jsonb end
     from unnest(array['company','rates','minHours','prod','mph','shopAddress','shopTravel','shopGeo','includedMiles',
                       'mileRate','truckFee','stairFee','packPerBox','taxPct','depositPct','ntePct','nteCap','trucks',
-                      'catalog','sources','customFields','opt','truckDay']) as k
+                      'catalog','sources','customFields','opt','truckDay','quoteDays','callScript']) as k
    where s ? k
 $$;
 create or replace function public.ratecard_sync() returns trigger

@@ -1,12 +1,12 @@
 # Options: what the owner can switch on and off
 
-**Setup › Options** has 45 switches, in nine groups. They apply to everyone in the company and save
+**Setup › Options** has 47 switches, in nine groups. They apply to everyone in the company and save
 as soon as they're flipped. Each switch also sits in the Setup section it belongs to, so the Rate
 card has the pricing switches, Roles has what crew, leads and dispatch can do, and so on. Only the
 owner can change them.
 
-All of them start on, except **Photos before finishing**, **Office approves new quotes from the crew**
-and **Sales tax** (it starts on only when a tax % is set). The **Options** row in Setup shows how many are on, and the search box at the top of
+All of them start on, except **Photos before finishing**, **Office approves new quotes from the crew**,
+**Follow-up texts for quotes** and **Sales tax** (it starts on only when a tax % is set). The **Options** row in Setup shows how many are on, and the search box at the top of
 Setup finds a switch by name.
 
 Switching something off hides it from the screens; it doesn't delete anything. Switched back on,
@@ -80,6 +80,8 @@ The number under a switch (radius, %, $) shows only while the switch is on. See
 | Unsigned forms alert | No text to the office about a job waiting on a signature. |
 | Short crew alert | No text to the office when a crew lead starts a job with fewer movers than quoted, or someone leaves and it drops below. The office still sees it on Today. |
 | Move requests from customers | No text to the office when a customer asks for another move in the customer app (Nov 7). The request still comes in as a lead, and Today still shows it. |
+| New leads from your website | No text to the office when someone asks for a quote with your Get a quote form (Nov 17). The request still lands in Sales as a new lead. |
+| Follow-up texts for quotes (starts off) | On: a quote texted from MoveCrew gets up to three check-ins from the company line, about 1, 3 and 7 days later in the evening, until they book, text back or someone logs a call (Nov 14). Needs the company line and the evening texts. |
 | A driver for every truck | No driver boxes on jobs, no Who drives list in Setup › Fleet and drivers, and a truck without a driver doesn't make a job need scheduling. The texts just name the truck. |
 | Office approves new quotes from the crew (starts off) | On: a crew lead's new quote waits for the owner or dispatch to approve it (Today: *New quote to approve*), then the customer signs it. Off: the customer's signature is enough, and the office is told. |
 | Dispatch can take payments | Dispatch has no payment buttons (*The owner takes payments on this job*); the server refuses dispatch's payments too. |

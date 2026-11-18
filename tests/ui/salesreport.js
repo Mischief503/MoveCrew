@@ -52,7 +52,7 @@ const txt = (el) => { if (!el) return ''; const out = []; const walk = (n) => { 
   click('#salesRep [data-act="sl:go"]'); await sleep(15);
   ok(T.ui.tab === 'quotes' && T.ui.slf === 'due', L('Open Sales: the board, on Due now'));
   // dispatch sees it too
-  T.ui.role = 'dispatch'; T.ui.tab = 'reports'; T.render(); await sleep(15);
+  T.state().ui.role = 'dispatch'; T.ui.tab = 'reports'; T.render(); await sleep(15);
   ok(!!card() && /Leads came in/.test(txt(card())), L('dispatch sees Sales in Reports too'));
   ok(A.errors.length === 0, L('no errors (' + A.errors.slice(0, 3).join(' | ') + ')'));
 

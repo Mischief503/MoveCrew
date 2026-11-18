@@ -18,7 +18,8 @@ function seed() {
     contacts: { Owner: '512-555-0100', Marcus: '512-555-0101' }, crewCost: 24, rates: { r2: 140, r3: 195, r4: 250 }, minHours: 3, includedMiles: 20, mileRate: 1.5,
     shopAddress: '1200 Industrial Blvd, Austin, TX', shopGeo: { lat: 30.33, lon: -97.7, addr: '1200 Industrial Blvd, Austin, TX' },
     trucks: [{ id: 't16', name: 'Van (16 ft)', cf: 800 }, { id: 't26', name: 'Box 1 (26 ft)', cf: 1700 }],
-    forms: [{ id: 'f_bol', title: 'Bill of lading', kind: 'pages', required: false, pages: [], pageIds: ['fp1'] }], opt: {} };
+    forms: [{ id: 'f_bol', title: 'Bill of lading', kind: 'pages', required: false, pages: [], pageIds: ['fp1'] }], opt: {},
+    quoteDays: 21, callScript: ['Get their name', 'Ask for the booking: the deposit holds their day'] };
   const blue = { company: 'Bluebonnet Moving', crew: ['Ty', 'Ana', 'Bo'], contacts: { Ty: '512-555-0177' }, rates: { r2: 135, r3: 190, r4: 245 }, minHours: 2, includedMiles: 30, mileRate: 1.6,
     shopAddress: '500 Leander Rd, Georgetown, TX', trucks: [{ id: 'b1', name: 'Box (26 ft)', cf: 1700 }], opt: {} };
   put(ORG, 'meta/init', { ts: 1 }); put(ORG, 'org/settings', settings);
@@ -107,6 +108,7 @@ const net = async (url) => {
   ok(/Ortega family/.test(view()) && /Sam Kowalski/.test(view()) && /\$515/.test(view()), 'Quotes: both open ones, with their prices');
   click('#view [data-act="cc:open"][data-id="q1"]'); await sleep(15);
   ok(T.ui.tab === 'quote' && T.state().draft.editId === 'q1' && T.state().draft.discount === '50', 'Open quote: into the quote builder (the office’s discount comes along, unseen)');
+  ok($$('#view details.qscript input[data-ask]').length === 2 && /Get their name/.test($('#view details.qscript').textContent), 'the company’s own call script, from its rate card copy (Nov 17)');
   click('[data-act="q:step"][data-s="3"]'); await sleep(15);
   ok(!$('[data-d="discount"]'), 'the price step has no discount for her');
   const crewSel = $('[data-d="crew"]'); crewSel.value = '3'; crewSel.dispatchEvent(new w.Event('input', { bubbles: true })); await sleep(10);
@@ -114,6 +116,7 @@ const net = async (url) => {
   click('#qSave'); await sleep(700);
   const w1 = ccWrites().slice(n0);
   ok(w1.length === 1 && w1[0].path === 'jobs/q1' && w1[0].patch && w1[0].patch.quote && w1[0].patch.quote.crew === 3 && !(w1[0].patch.d && 'discount' in w1[0].patch.d) && w1[0].patch.quote.lines.some((l) => l.label === 'Discount' && l.amt === -50), 'Save: one change through cc_save, the new crew in it, and the office’s discount left out of it (only what changed goes)');
+  { const d21 = new Date(); d21.setHours(12, 0, 0, 0); d21.setDate(d21.getDate() + 21); ok(row('jobs/q1').quote.until === iso(d21), 'the price is good for the company’s 21 days (Nov 17): ' + row('jobs/q1').quote.until); }
   ok(row('jobs/q1').quote.crew === 3 && row('jobs/q1').d.discount === '50' && T.ui.tab === 'quotes' && /Saved\. It’s in Sales\./.test(toast()), 'saved in the database, with the office’s discount; back to Quotes');
   ok(!A.calls.writes.some((x) => (x.op === 'patch' || (x.table === 'docs' && !x.op)) && /^jobs\//.test((x.row && x.row.path) || '')), 'nothing went to the jobs any other way');
   click('#view [data-act="cc:open"][data-id="q1"]'); await sleep(15);

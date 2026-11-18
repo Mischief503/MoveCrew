@@ -3662,6 +3662,12 @@ export async function custJobs(key: string): Promise<J[]> {
 function custReviewUrl(S: J): string { const u = String((S && S.reviewUrl) || "").trim(); return /^https:\/\/[^\s<>"']+$/.test(u) ? u : ""; }
 function ownerPhone(S: J): string { const ow = ((S && S.office) || []).find((o: J) => o && o.kind === "owner"); return ow ? String(contacts(S)[ow.name] || "") : ""; }
 // a customer's copy of a move (the app's custMoveOf); paidC: what's paid, from the job and the ledger
+// the price's last day (Sales, batch 5, Nov 17): a quote saved while Rate card › Quotes are good for (days) is set keeps it
+// as quote.until; an open quote's only
+export function quoteUntilOf(job: J): string {
+  const u = String((job && job.quote && job.quote.until) || "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(u) && !!job && (job.status === "lead" || job.status === "quoted") ? u : "";
+}
 export function custCopy(org: string, S: J, job: J, o: { company: string; phone: string; paidC: number; pages?: Record<string, string> }): J {
   const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [];
   const totalC = jobTotalCents(job), dueC = Math.max(0, totalC - o.paidC);
@@ -3679,7 +3685,7 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     id: String(job.id || ""), org, company: o.company, phone: o.phone, status: job.status, test: !!job.test,
     d: { name: String(d.name || ""), phone: String(d.phone || ""), email: String(d.email || ""), moveDate: String(d.moveDate || ""), time: String(d.time || ""), from: String(d.from || ""), to: String(d.to || "") },
     quote: { lines: (Array.isArray(qt.lines) ? qt.lines : []).map((l: J) => ({ label: String((l && l.label) || ""), amt: r2(l && l.amt) })), total: r2(qt.total),
-      nte: !qt.flat && qt.capNte !== false ? r2(qt.nte) : 0, deposit: r2(qt.deposit), crew: Number(qt.crew) || 0, hours: Number(qt.hours) || 0, trucks: Number(qt.nTrucks) || 1, flat: !!qt.flat },
+      nte: !qt.flat && qt.capNte !== false ? r2(qt.nte) : 0, deposit: r2(qt.deposit), crew: Number(qt.crew) || 0, hours: Number(qt.hours) || 0, trucks: Number(qt.nTrucks) || 1, flat: !!qt.flat, until: quoteUntilOf(job) },
     items: (Array.isArray(job.items) ? job.items : []).map((it: J) => ({ name: String((it && it.name) || ""), qty: Number(it && it.qty) || 0 })),
     bill: { total: totalC / 100, paid: o.paidC / 100, due: dueC / 100, deposit: depC / 100 },
     pays, forms,
@@ -3832,6 +3838,8 @@ async function custBook(user: J, org: string, jobId: string): Promise<J> {
   if (c.job.status === "booked" && c.job.cust && c.job.cust.bookedAt) return { ok: true };   // a second tap
   if (optOff(S, "custBook")) return { ok: false, message: "Call or text " + co + " to book it." };
   if (c.job.status !== "lead" && c.job.status !== "quoted") return { ok: false, message: "This quote was already booked or closed." };
+  const ut0 = quoteUntilOf(c.job);
+  if (ut0 && ut0 < today()) return { ok: false, message: "This price was good until " + fmtDay(ut0) + ". Call or text " + co + " for a new one." };
   if (await custFull(org, S, c.job)) return { ok: false, message: "That time just filled up. Call or text " + co + " to pick another time." };
   const ts = Date.now();
   const w = await custWrite(user, org, jobId, (job) => {
@@ -3840,6 +3848,8 @@ async function custBook(user: J, org: string, jobId: string): Promise<J> {
     const d = job.d || {};
     if (!d.moveDate) return "Call or text " + co + " to pick a day first.";
     if (String(d.moveDate) < today()) return "That day has passed. Call or text " + co + " to pick a new one.";
+    const ut = quoteUntilOf(job);
+    if (ut && ut < today()) return "This price was good until " + fmtDay(ut) + ". Call or text " + co + " for a new one.";
     job.status = "booked";
     job.cust = { ...mapOf(job.cust), bookedAt: ts };
     addLog(job, ts, "Status: Booked");
@@ -4064,10 +4074,10 @@ export async function custInvite(org: string, me: J, jobId: string, url: unknown
    follow-ups; the office answers it from the lead (sales_text; not cust_..., which is the customer side's own route). The wording is the company's own (Setup › Sales texts,
    S.salesTpl), with {first} {company} {total} {when} {movers} {hours} {phone} {book}. */
 export const SALES_TPL: Record<string, string> = {
-  quote: "{company}: Hi {first}, your moving quote is {total} for {when} ({movers} movers, about {hours} hours).{book} Reply here with any questions.",
+  quote: "{company}: Hi {first}, your moving quote is {total} for {when} ({movers} movers, about {hours} hours).{until}{book} Reply here with any questions.",
   f1: "{company}: Hi {first}, checking you got your moving quote: {total} for {when}. Want us to hold the day for you? Reply here or call {phone}.",
   f2: "{company}: Hi {first}, your move on {when} is still open with us. Reply YES and we'll call to set it up, or ask us anything.",
-  f3: "{company}: Hi {first}, last check-in on your {total} moving quote. If plans changed, no problem. Reply anytime to book.",
+  f3: "{company}: Hi {first}, last check-in on your {total} moving quote.{until} If plans changed, no problem. Reply anytime to book.",
 };
 const FU_DAYS = [1, 3, 7];   // follow-ups this many days after the quote went out
 const SALES_TEXTS_PER_HOUR = 40;
@@ -4081,6 +4091,7 @@ export function salesVars(S: J, job: J, site: string, phone: string): Record<str
     when: d.moveDate ? fmtDay(d.moveDate) + (d.time ? " at " + fmtTime(d.time) : "") : "the day you pick",
     movers: String(Number(qt.crew) || 2),
     hours: String(Number(qt.hours) || 2),
+    until: (() => { const u = quoteUntilOf(job); return u && u >= today() ? " The price is good until " + fmtDay(u) + "." : ""; })(),
     phone: phone,
     book: site && emailKey(email) && !optOff(S, "custBook") ? " See it and book online: " + site + " (sign in with " + email + ")." : "",
   };

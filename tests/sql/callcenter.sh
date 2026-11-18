@@ -198,6 +198,9 @@ check $JESS "06:30|11|3|45|2|1|2|false|false" "select concat_ws('|', data->'truc
 check $JESS "false|false|false" "select (data ? 'daysOff')::text||'|'||(data::text like '%Dee%')::text||'|'||(data::text like '%Marcus%')::text from docs where path='ratecard/main'" "and never who: no names in it"
 as $OWN "update docs set data=data-'crew' where path='org/settings'" >/dev/null
 check $JESS "false" "select (data ? 'movers')::text from docs where path='ratecard/main'" "no crew list: no counts (the trucks alone decide)"
+# the sales tools (Nov 17): how long a quote's price is good, and the call script, reach the call center's copy
+as $OWN "update docs set data=data||'{\"quoteDays\":14,\"callScript\":[\"Get their name\",\"Ask for the booking\"]}'::jsonb where path='org/settings'" >/dev/null
+check $JESS "14|2|Ask for the booking" "select concat_ws('|', data->>'quoteDays', jsonb_array_length(data->'callScript'), data->'callScript'->>1) from docs where path='ratecard/main'" "how long quotes are good, and the call script, reach the rate card copy"
 
 # the service switched off, and a team member removed
 pg "delete from cc_orgs where org_id='$O'" >/dev/null

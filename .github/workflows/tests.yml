@@ -10,7 +10,9 @@ jobs:
     # Ubuntu 24.04, not ubuntu-latest: GitHub moved ubuntu-latest to Ubuntu 26.04 (from Oct 19, 2026), where the
     # Playwright these tests use can't install its browsers ("Playwright does not support chromium on ubuntu26.04").
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    # 50 (Nov 17: 35 until then): installing Playwright's system packages took 16 minutes that day, from a slow
+    # Ubuntu mirror, against 45 seconds usually, and two runs ran out of time before the checks finished
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v5
 
