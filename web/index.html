@@ -1041,7 +1041,7 @@ body.wkon .toast{z-index:77}
 .wkov .btn[aria-pressed="true"]{background:#EEF2F8;border-color:#EEF2F8;color:#0B101B}
 .wk-ctl{padding-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px}
 .wk-btns{gap:10px;justify-content:center;flex-wrap:wrap}
-.wk-btns .btn{min-width:110px;min-height:46px}
+.wk-btns .btn{min-width:110px;min-height:46px;white-space:nowrap}
 .wk-recl{min-height:18px}
 .wk-rec{color:#FF8A80;font-weight:700;font-size:13.5px}
 .wk-norec{color:#AEB8C9;font-size:13px}
@@ -1066,7 +1066,7 @@ body.wkon .toast{z-index:77}
 .wkv-parts{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .wkv-part,.wkv-rm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .wkv-rm{font-size:13.5px}
-.wkplay{position:fixed;inset:0;z-index:76;background:rgba(5,8,15,.97);color:#EEF2F8;display:flex;align-items:center;justify-content:center;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
+.wkplay{position:fixed;inset:0;z-index:76;background:#05080F;color:#EEF2F8;display:flex;align-items:center;justify-content:center;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
 .wkp-in{width:100%;max-width:960px;display:flex;flex-direction:column;gap:10px;max-height:100%}
 .wkp-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .wkp-top b{display:block;font:700 18px/1.2 var(--display)}
@@ -1074,7 +1074,7 @@ body.wkon .toast{z-index:77}
 .wkp-vid{width:100%;max-height:calc(100vh - 170px);background:#000;border-radius:10px;display:block}
 .wkp-msg{min-height:200px;display:flex;align-items:center;justify-content:center;color:#C9D2E0;border-radius:10px;background:#000;padding:20px;text-align:center}
 .wkp-nav{justify-content:space-between}
-@media (max-width:520px){.wk-self{width:84px;height:112px}.wk-btns .btn{min-width:0;flex:1}}
+@media (max-width:520px){.wk-self{width:84px;height:112px}.wk-btns{flex-wrap:nowrap;width:100%}.wk-btns .btn{min-width:0;flex:1 1 0;padding:8px 6px;font-size:14px}}
 </style>
 <style id="splashCss">
 /* the loading screen: a hand truck with boxes, rolling (Richie, Nov 6), in the new icon's colours */
