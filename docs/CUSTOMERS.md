@@ -39,7 +39,9 @@ most first, and a list of the rest.
   a lead with no price yet says "Your price isn't set yet" and has nothing to book (the server refuses both too).
 - **A walk-through** (Nov 17): when the office or the call center sets a video or voice call walk-through from Sales,
   their move shows "Your video walk-through: Wednesday, November 18 at 10:00 AM. Dee will video call you then." until
-  it's done.
+  it's done. Since Nov 19 a video walk-through has its own link (walk.html on the website, no sign-in): the text has
+  it, and from half an hour before, their move shows **Join the video walk-through**. The page says the call is
+  recorded for the moving crew before they join (VIDEO-WALKTHROUGHS.md).
 - **The deposit**: straight after booking, when the company takes deposits.
 - **Forms to sign ahead**: the required forms marked **Customer signs ahead** in Setup › Forms to sign (a sample
   moving agreement is one tap away there). Signed ahead, the crew isn't asked for them at the end. The delivery receipt

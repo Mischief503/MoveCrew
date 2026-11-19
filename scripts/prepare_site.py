@@ -34,6 +34,12 @@ if html.count('PASTE_YOUR_PROJECT_URL') != 1 or html.count('PASTE_YOUR_ANON_PUBL
     sys.exit('could not find the two Supabase lines in web/index.html')
 html = html.replace('PASTE_YOUR_PROJECT_URL', url.rstrip('/')).replace('PASTE_YOUR_ANON_PUBLIC_KEY', key)
 open(p, 'w', encoding='utf-8').write(html)
+# the customer's side of a walk-through video call: it talks to the Edge Function only (no key needed)
+w = os.path.join(OUT, 'walk.html')
+wh = open(w, encoding='utf-8').read()
+if wh.count('PASTE_YOUR_PROJECT_URL') != 1:
+    sys.exit('could not find the Supabase line in web/walk.html')
+open(w, 'w', encoding='utf-8').write(wh.replace('PASTE_YOUR_PROJECT_URL', url.rstrip('/')))
 open(os.path.join(OUT, '.nojekyll'), 'w').close()   # GitHub Pages serves the files as they are
 print('Supabase:', url)
 print('wrote _site/ (%d files)' % sum(len(f) for _, _, f in os.walk(OUT)))

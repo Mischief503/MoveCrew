@@ -11,6 +11,8 @@
 //   STRIPE_PUBLISHABLE_KEY  the matching pk_ key, for typing a card into the app
 //   STRIPE_WEBHOOK_SECRET   optional: only if you made the Stripe webhook yourself. Otherwise the
 //                        function makes its own the first time a payment starts.
+//   WALK_CAP_MB          optional: how much storage walk-through videos may fill before new ones stop (800 to start,
+//                        for the free plan's 1 GB; raise it on a plan with more room)
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   provided by Supabase automatically
 //
 // Deploy with "Enforce JWT verification" OFF: Twilio and Stripe cannot send a Supabase token.
@@ -23,8 +25,12 @@
 //                        and a customer's own: {action:'cust_list'|'cust_book'|'cust_sign'|'cust_pay'|'cust_check'|'cust_reviewed'|'cust_profile'|'cust_request'}
 //                        and Sales: {action:'quote_text'|'sales_text', org, jobId, url | body} (any cust_… goes to the customer side)
 //                        and {action:'sos', org, msgId, kind:'start'|'end'} for emergency alerts
+//                        and walk-through video calls: {action:'walk_open'|'walk_poll'|'walk_offer'|'walk_end'|'walk_part'|
+//                        'walk_saved', org, jobId, room, …} for the host, 'walk_watch'|'walk_remove' {id} and 'walk_sweep'
 //   POST /lead           a website's Get a quote form (no sign-in: the company's link is the MoveCrew website with
 //                        ?quote=<company>): {org, probe} for its name, then the request, which lands in Sales
+//   POST /walk           the customer's side of a walk-through video call (walk.html, no sign-in; the link's code is the
+//                        key): {action:'join'|'poll'|'answer'|'bye', w}
 //   POST /stripe         Stripe events (payments finishing or failing, pay links used, refunds, disputes,
 //                        memberships)
 //   POST /stripe/connect Stripe events on the companies' own (connected) accounts
@@ -41,7 +47,8 @@
 //   /twilio/after        the office did not pick up: tell the caller, text the office, and put the call in Sales
 //   /twilio/sms          someone texted the company number
 //   /twilio/status       Twilio delivery and call-status reports
-//   /cron/tomorrow       the evening-before texts, and the quotes' follow-up texts; called by Supabase Cron with the
+//   /cron/tomorrow       the evening-before texts, the quotes' follow-up texts, and walk-through videos 30 days after the
+//                        move was paid; called by Supabase Cron with the
 //                        header x-tally-cron: <TALLY_CRON_SECRET>
 // (the /twilio/... and /cron/... routes are POST too)
 
@@ -3547,6 +3554,12 @@ async function handleApp(req: Request): Promise<Response> {
         return json({ ok: false, message: stripeTrouble(e) });
       }
     }
+    if (/^walk_/.test(String(b.action || ""))) {
+      const out = await walkApp(org, me, jobId, b);
+      const st = out.status;
+      delete out.status;
+      return json(out, typeof st === "number" ? st : 200);
+    }
     const pay: Record<string, (o: string, m: J, j: string, x: J) => Promise<J>> = {
       pay_link: payLink, pay_intent: payIntent, pay_saved: paySaved, pay_check: payCheck,
       pay_forget: (o: string, m: J, _j: string, x: J) => payForget(o, m, x),
@@ -3669,10 +3682,13 @@ export function quoteUntilOf(job: J): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(u) && !!job && (job.status === "lead" || job.status === "quoted") ? u : "";
 }
 // a walk-through call set from Sales (batch 6, Nov 17), for her copy: while the lead is open and it isn't done
-export function custSurvey(job: J): J | null {
+export function custSurvey(job: J, org?: string): J | null {
   const s = job && job.survey;
   if (!s || typeof s !== "object" || !(Number(s.at) > 0) || s.done || !(job.status === "lead" || job.status === "quoted")) return null;
-  return { at: Number(s.at), kind: s.kind === "voice" ? "voice" : "video", who: String(s.who || "").split(" ")[0] };
+  const out: J = { at: Number(s.at), kind: s.kind === "voice" ? "voice" : "video", who: String(s.who || "").split(" ")[0] };
+  // a video walk-through's link (batch 7): the customer joins from their app too
+  if (out.kind === "video" && org && typeof s.room === "string" && WALK_ROOM_RE.test(s.room) && job.id) out.w = org + "." + job.id + "." + s.room;
+  return out;
 }
 export function custCopy(org: string, S: J, job: J, o: { company: string; phone: string; paidC: number; pages?: Record<string, string> }): J {
   const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [];
@@ -3698,7 +3714,7 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     day: { startedAt: Number(job.startedAt) || 0, eta: (job.eta && Number(job.eta.at)) || 0, phases: job.phases && typeof job.phases === "object" ? job.phases : {}, finishedAt: Number(job.finishedAt) || 0 },
     crew: { lead: String(leadOf(S, job)).split(" ")[0], n: crew.length },
     tips: !optOff(S, "custTips"), book: !optOff(S, "custBook"), review: custReviewUrl(S), reviewed: !!c.reviewAt, bookedBy: c.bookedAt ? "customer" : "",
-    survey: custSurvey(job),
+    survey: custSurvey(job, org),
     req: job.req && typeof job.req === "object" ? { from: String(job.req.from || ""), to: String(job.req.to || ""), at: Number(job.req.at) || 0, note: String(job.req.note || ""), quoted: !!job.req.quotedAt } : null,
   };
 }
@@ -4539,6 +4555,402 @@ async function handleTwilio(sub: string, url: URL, p: Record<string, string>): P
 }
 
 /* ---------- entry ---------- */
+/* ---------- walk-through video calls (Sales, batch 7, Nov 19) ----------
+   Richie: "The walk through videos should be saved to the crew notes so they can veiw it and see what they are in for",
+   then picked "MoveCrew runs the call" and "Delete 30 days after move".
+   The office or the call center person starts the call from the lead (a video walk-through, batch 6); the customer opens
+   the link in the walk-through text on their phone (walk.html on the website: no app and no sign-in). The link's code
+   is <company>.<job>.<room>, the room being the job's survey.room, made by the app when the walk-through is set. The two
+   connect straight to each other (WebRTC; Twilio's relay helps phones on cell data when Twilio's keys are in, else a
+   public STUN server); the host's MoveCrew records the customer's camera and both voices and saves it in parts to the
+   private walk-videos bucket, and each saved part goes on the job (walkVids), where the crew on the job and the office
+   watch it in the job's notes. A video goes 30 days after the move is paid (or the lead was lost), and new ones stop
+   before the storage reaches WALK_CAP_MB (800 to start: the free plan has 1 GB in all).
+   The call's offer and answer wait in walk_rooms (one row per job; only this function reads or writes it).
+   supabase-walk.sql makes the bucket, the table and walk_space(). */
+const WALK_BUCKET = "walk-videos";
+export const WALK_PART_MAX = 50 * 1024 * 1024;   // the free plan's largest file
+export const WALK_KEEP_DAYS = 30;
+const WALK_TYPES: Record<string, string> = { "video/mp4": "mp4", "video/webm": "webm" };
+const WALK_MB_PER_MIN = 4.2;                      // what the host's recorder makes (500 kb/s video, 48 kb/s sound), and a bit
+const WALK_OPEN = ["lead", "quoted", "booked"];
+const WALK_ROOM_RE = /^[A-Za-z0-9_-]{12,40}$/;
+const WALK_CALL_RE = /^[A-Za-z0-9_-]{6,40}$/;
+export function walkCap(): number {
+  const mb = Number(env("WALK_CAP_MB"));
+  return Math.round((mb > 0 ? mb : 800) * 1048576);
+}
+// the link's code: <company>.<job>.<room>
+export function walkParse(code: unknown): { org: string; jobId: string; room: string } | null {
+  const m = /^([A-Za-z0-9-]{1,40})\.([A-Za-z0-9_-]{1,40})\.([A-Za-z0-9_-]{12,40})$/.exec(String(code == null ? "" : code).trim());
+  return m ? { org: m[1], jobId: m[2], room: m[3] } : null;
+}
+function walkFresh(at: unknown, ms = 9000): boolean {
+  const t = Date.parse(String(at || ""));
+  return t > 0 && Date.now() - t < ms;
+}
+function walkSdp(d: J, type: string): J {
+  const sdp = d && typeof d.sdp === "string" ? d.sdp : "";
+  return sdp && sdp.length < 24000 && /^v=0/.test(sdp) ? { type, sdp } : null;
+}
+// which moves' videos are due to go: paid 30 days ago (the latest payment's day), lost 30 days ago, or the job is gone
+function walkPaidAt(job: J): number {
+  let d = "";
+  Object.values(mapOf(job.payments)).forEach((p: J) => {
+    if (!p || typeof p !== "object") return;
+    const counts = p.stripe ? p.live !== false : Number(p.amt) > 0;
+    if (counts && typeof p.date === "string" && p.date > d) d = p.date;
+  });
+  if (d) return Date.parse(d + "T12:00:00Z") || 0;
+  return Number(job.finishedAt) || 0;
+}
+function walkLostAt(job: J): number {
+  const l = job.sales && job.sales.lost;
+  if (l && Number(l.at) > 0) return Number(l.at);
+  let t = 0;
+  Object.values(mapOf(job.log)).forEach((e: J) => { if (e && /^(Status: Lost|Marked lost)/.test(String(e.ev)) && Number(e.ts) > t) t = Number(e.ts); });
+  return t || Number(job.createdAt) || 0;
+}
+export function walkDue(job: J, now = Date.now()): string {
+  if (!job) return "gone";
+  const keep = WALK_KEEP_DAYS * 864e5;
+  if (job.status === "paid") { const t = walkPaidAt(job); return t > 0 && now - t >= keep ? "paid" : ""; }
+  if (job.status === "lost") { const t = walkLostAt(job); return t > 0 && now - t >= keep ? "lost" : ""; }
+  return "";
+}
+export function walkVidsOf(job: J): J[] {
+  return Object.values(mapOf(job && job.walkVids)).filter((v: J) => v && typeof v === "object" && typeof v.path === "string");
+}
+function walkMins(secs: unknown): string {
+  const m = Math.max(1, Math.round((Number(secs) || 0) / 60));
+  return m + " min";
+}
+
+/* storage, as the service role */
+function storageUrl(p: string): string { return env("SUPABASE_URL").replace(/\/+$/, "") + "/storage/v1/" + p; }
+async function storage(method: string, p: string, body?: J): Promise<J> {
+  const key = env("SUPABASE_SERVICE_ROLE_KEY");
+  const headers: Record<string, string> = { apikey: key, Authorization: "Bearer " + key };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const r = await fetch(storageUrl(p), { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const t = await r.text();
+  if (!r.ok) throw new Error("storage " + r.status + ": " + t.slice(0, 200));
+  return t ? JSON.parse(t) : null;
+}
+const walkEnc = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+// an address the host's MoveCrew puts one part to, good for 2 hours (Storage's own limit)
+async function walkUploadUrl(path: string): Promise<string> {
+  const out = await storage("POST", "object/upload/sign/" + WALK_BUCKET + "/" + walkEnc(path), {});
+  const rel = String((out && out.url) || "");
+  if (!/[?&]token=/.test(rel)) throw new Error("storage gave no upload token");
+  return storageUrl(rel.replace(/^\//, ""));
+}
+async function walkWatchUrl(path: string, secs: number): Promise<string> {
+  const out = await storage("POST", "object/sign/" + WALK_BUCKET + "/" + walkEnc(path), { expiresIn: secs });
+  const rel = String((out && (out.signedURL || out.signedUrl)) || "");
+  if (!rel) throw new Error("storage gave no link");
+  return encodeURI(storageUrl(rel.replace(/^\//, "")));
+}
+async function walkList(prefix: string): Promise<J[]> {
+  const out: J[] = [];
+  for (let off = 0; off < 10000; off += 1000) {
+    const page = await storage("POST", "object/list/" + WALK_BUCKET, { prefix, limit: 1000, offset: off, sortBy: { column: "name", order: "asc" } });
+    if (!Array.isArray(page)) break;
+    out.push(...page);
+    if (page.length < 1000) break;
+  }
+  return out;
+}
+async function walkRemoveFiles(paths: string[]): Promise<void> {
+  for (let i = 0; i < paths.length; i += 100) await storage("DELETE", "object/" + WALK_BUCKET, { prefixes: paths.slice(i, i + 100) });
+}
+// how much is stored: {walk, all} in bytes (walk_space() in supabase-walk.sql)
+export async function walkSpace(): Promise<{ walk: number; all: number }> {
+  const r = await rest("POST", "rpc/walk_space", {});
+  return { walk: Number(r && r.walk) || 0, all: Number(r && r.all) || 0 };
+}
+function walkMinsLeft(all: number): number {
+  return Math.max(0, Math.floor((walkCap() - all) / 1048576 / WALK_MB_PER_MIN));
+}
+
+/* the relay for phones on cell data: Twilio's (Network Traversal Service) when its keys are in, else STUN only */
+let walkIceCache: { at: number; list: J[] } | null = null;
+export async function walkIce(): Promise<J[]> {
+  const stun = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+  const sid = env("TWILIO_ACCOUNT_SID"), tok = env("TWILIO_AUTH_TOKEN");
+  if (!sid || !tok) return stun;
+  if (walkIceCache && Date.now() - walkIceCache.at < 30 * 60e3) return walkIceCache.list;
+  try {
+    const r = await fetch("https://api.twilio.com/2010-04-01/Accounts/" + encodeURIComponent(sid) + "/Tokens.json", {
+      method: "POST",
+      headers: { Authorization: "Basic " + btoa(sid + ":" + tok), "Content-Type": "application/x-www-form-urlencoded" },
+      body: "Ttl=7200",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) { console.error("twilio ice", r.status); return stun; }
+    const out = await r.json();
+    const list = (Array.isArray(out && out.ice_servers) ? out.ice_servers : []).map((s: J) => {
+      const o: J = { urls: s.urls || s.url };
+      if (s.username) o.username = s.username;
+      if (s.credential) o.credential = s.credential;
+      return o;
+    }).filter((s: J) => typeof s.urls === "string" || Array.isArray(s.urls));
+    if (!list.length) return stun;
+    walkIceCache = { at: Date.now(), list };
+    return list;
+  } catch (e) {
+    console.error("twilio ice", e);
+    return stun;
+  }
+}
+
+/* the room: one row per job (walk_rooms) */
+async function walkRoom(org: string, jobId: string): Promise<J> {
+  const rows = await rest("GET", "walk_rooms?select=*&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&limit=1");
+  return rows && rows[0] ? rows[0] : null;
+}
+async function walkRoomPut(org: string, jobId: string, row: J): Promise<void> {
+  await rest("POST", "walk_rooms?on_conflict=org_id,job_id", { org_id: org, job_id: jobId, ...row, updated_at: nowIso() }, "resolution=merge-duplicates");
+}
+async function walkRoomPatch(org: string, jobId: string, patch: J): Promise<void> {
+  await rest("PATCH", "walk_rooms?org_id=eq." + q(org) + "&job_id=eq." + q(jobId), { ...patch, updated_at: nowIso() });
+}
+
+/* the videos that are due to go, in one company or all of them: their files, then their place on the job. The files
+   no job has (a part saved but never put on its job, or a job deleted since) go after a day. */
+export async function walkSweep(org?: string, now = Date.now()): Promise<number> {
+  let removed = 0;
+  const rows: J[] = (await rest("GET", "docs?select=org_id,doc_id,data&collection=eq.jobs&data->walkVids=not.is.null" + (org ? "&org_id=eq." + q(org) : ""))) || [];
+  const known: Record<string, Record<string, boolean>> = {};
+  for (const r of rows) {
+    const job = r.data, vids = walkVidsOf(job);
+    const why = walkDue(job, now);
+    const k = r.org_id + "/" + r.doc_id;
+    known[k] = {};
+    vids.forEach((v: J) => { known[k][v.path] = true; });
+    if (!why || !vids.length) continue;
+    const paths = vids.map((v: J) => String(v.path)).filter((p: string) => p.indexOf(r.org_id + "/" + r.doc_id + "/") === 0);
+    if (paths.length) await walkRemoveFiles(paths);
+    const w = await jobWrite(r.org_id, r.doc_id, (j) => {
+      const left = { ...mapOf(j.walkVids) };
+      vids.forEach((v: J) => { delete left[v.id]; });
+      if (Object.keys(left).length) j.walkVids = left; else delete j.walkVids;
+      addLog(j, now, "Walk-through video removed: " + WALK_KEEP_DAYS + " days after the " + (why === "lost" ? "lead was lost" : "move was paid"));
+      return j;
+    });
+    if (w.ok) { removed += vids.length; known[k] = {}; }
+  }
+  // the files no job has
+  const orgs = org ? [org] : (await walkList("")).filter((e: J) => !e.id && e.name).map((e: J) => String(e.name));
+  for (const o of orgs) {
+    const jobs = (await walkList(o + "/")).filter((e: J) => !e.id && e.name).map((e: J) => String(e.name));
+    for (const jid of jobs) {
+      const k = o + "/" + jid, files = (await walkList(k + "/")).filter((e: J) => e.id && e.name);
+      let have = known[k];
+      if (!have) {
+        // not among the jobs with videos: gone, or a job that never got its part
+        have = {};
+        const doc = await getDoc(o, "jobs/" + jid);
+        walkVidsOf(doc).forEach((v: J) => { have[v.path] = true; });
+      }
+      const stray = files.filter((f: J) => !have[k + "/" + f.name] && now - (Date.parse(String(f.created_at || f.updated_at || "")) || now) > 864e5)
+        .map((f: J) => k + "/" + f.name);
+      if (stray.length) { await walkRemoveFiles(stray); removed += stray.length; }
+    }
+  }
+  return removed;
+}
+
+/* the host's side (the app's /app actions walk_…) */
+export async function walkApp(org: string, me: J, jobId: string, b: J): Promise<J> {
+  const act = String(b.action || "");
+  const office = me.role === "owner" || me.role === "dispatch";
+  if (act === "walk_sweep") {
+    if (!office) return { ok: false, message: "Only the owner and dispatch clear out videos.", status: 403 };
+    return { ok: true, removed: await walkSweep(org) };
+  }
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(jobId)) return { ok: false, message: "Missing job", status: 400 };
+  const [S, job] = await Promise.all([getDoc(org, "org/settings"), getDoc(org, "jobs/" + jobId)]);
+  if (!job) return { ok: false, message: "That job isn't here any more." };
+  const sales = await salesMay(org, me, S);
+  const name = String(me.staff || "") || (me.cc ? "the call center" : "the office");
+  if (act === "walk_watch" || act === "walk_remove") {
+    const v = mapOf(job.walkVids)[String(b.id || "")];
+    if (!v || typeof v.path !== "string") return { ok: false, message: "That video isn't here any more." };
+    if (act === "walk_remove") {
+      if (!office) return { ok: false, message: "Only the owner and dispatch delete walk-through videos.", status: 403 };
+      await walkRemoveFiles([v.path]);
+      const now = Date.now();
+      const w = await jobWrite(org, jobId, (j) => {
+        const left = { ...mapOf(j.walkVids) };
+        delete left[v.id];
+        if (Object.keys(left).length) j.walkVids = left; else delete j.walkVids;
+        addLog(j, now, "Walk-through video" + (Number(v.part) > 1 ? ", part " + v.part + "," : "") + " deleted by " + name);
+        return j;
+      });
+      return w.ok ? { ok: true } : w;
+    }
+    const onJob = ((job.assign && job.assign.crew) || []).indexOf(me.staff) >= 0;
+    const cc = sales && ["lead", "quoted", "booked", "active"].indexOf(job.status) >= 0;
+    if (!office && !onJob && !cc) return { ok: false, message: "You can watch the walk-through videos of your own jobs.", status: 403 };
+    return { ok: true, url: await walkWatchUrl(v.path, 3 * 3600), until: Date.now() + 3 * 3600e3 };
+  }
+  if (!sales) return { ok: false, message: "Only the office and the call center run walk-throughs.", status: 403 };
+  if (WALK_OPEN.indexOf(job.status) < 0 && act !== "walk_part" && act !== "walk_saved") return { ok: false, message: "Walk-throughs are for open quotes and booked moves." };
+  const room = String(b.room || "");
+  if (!WALK_ROOM_RE.test(room)) return { ok: false, message: "This walk-through has no room yet. Set it again.", status: 400 };
+  const h = await sha(room);
+  if (act === "walk_open") {
+    let row: J;
+    try { row = await walkRoom(org, jobId); } catch (e) { console.error("walk_rooms", e); return { ok: false, message: "Video calls aren't set up on the server yet (supabase-walk.sql)." }; }
+    const same0 = !!row && row.room === h;
+    // the same walk-through: the customer may be waiting already; a new one starts clean
+    await walkRoomPut(org, jobId, {
+      room: h, host_uid: me.uid || null, host_name: name, host_at: nowIso(), offer: null, offer_seq: same0 ? Number(row.offer_seq) || 0 : 0,
+      answer: null, answer_seq: same0 ? Number(row.answer_seq) || 0 : 0, ended_at: null,
+      ...(same0 ? {} : { cust_at: null, created_at: nowIso() }),
+    });
+    let space: J = { ok: false, mins: 0, why: "setup" };
+    try {
+      try { await walkSweep(org); } catch (e) { console.error("walk sweep", e); }
+      const sp = await walkSpace();
+      const mins = walkMinsLeft(sp.all);
+      space = { ok: mins >= 2, mins, why: mins >= 2 ? "" : "full" };
+    } catch (e) { console.error("walk space", e); }
+    return { ok: true, ice: await walkIce(), space, here: same0 && walkFresh(row.cust_at), seq: same0 ? Number(row.offer_seq) || 0 : 0 };
+  }
+  if (act === "walk_poll" || act === "walk_offer" || act === "walk_end") {
+    const row = await walkRoom(org, jobId);
+    if (!row || row.room !== h) return { ok: false, gone: true, message: "This walk-through was set again, so this call stopped." };
+    if (row.host_uid && me.uid && row.host_uid !== me.uid) return { ok: false, gone: true, message: (row.host_name || "Someone else") + " started this call on another device." };
+    if (act === "walk_poll") {
+      await walkRoomPatch(org, jobId, { host_at: nowIso() });
+      const seq = Number(row.offer_seq) || 0, aseq = Number(row.answer_seq) || 0;
+      return { ok: true, here: walkFresh(row.cust_at), seq, answer: row.answer && aseq === seq && seq > 0 ? { seq, type: "answer", sdp: row.answer.sdp } : null };
+    }
+    if (act === "walk_offer") {
+      const sdp = walkSdp(b, "offer"), seq = Math.floor(Number(b.seq));
+      if (!sdp) return { ok: false, message: "That call offer didn't come through.", status: 400 };
+      if (!(seq > (Number(row.offer_seq) || 0)) || seq > 1e6) return { ok: false, seq: Number(row.offer_seq) || 0, message: "That call offer is out of date." };
+      await walkRoomPatch(org, jobId, { offer: { sdp: sdp.sdp }, offer_seq: seq, answer: null, host_at: nowIso() });
+      return { ok: true, seq };
+    }
+    // walk_end: the call is over; when it happened ({done, secs}), the walk-through is done
+    await walkRoomPatch(org, jobId, { ended_at: nowIso(), offer: null, answer: null });
+    if (b.done) {
+      const now = Date.now(), secs = Math.max(0, Math.min(6 * 3600, Number(b.secs) || 0));
+      await jobWrite(org, jobId, (j) => {
+        const s = j.survey && typeof j.survey === "object" ? j.survey : null;
+        if (!s || s.room !== room || s.done) return j;
+        j.survey = { ...s, done: now };
+        addLog(j, now, "Walk-through done (video call, " + walkMins(secs) + "), by " + name);
+        return j;
+      });
+    }
+    return { ok: true };
+  }
+  if (act === "walk_part" || act === "walk_saved") {
+    const call = String(b.call || ""), part = Math.floor(Number(b.part)), ext = WALK_TYPES[String(b.type || "").split(";")[0]];
+    if (!WALK_CALL_RE.test(call) || !(part >= 1 && part <= 40) || !ext) return { ok: false, message: "That video part isn't right.", status: 400 };
+    const path = org + "/" + jobId + "/" + call + "-" + part + "." + ext, id = call + "-" + part;
+    if (act === "walk_part") {
+      const bytes = Number(b.bytes) || 0;
+      if (!(bytes > 0)) return { ok: false, message: "That video part is empty.", status: 400 };
+      if (bytes > WALK_PART_MAX) return { ok: false, message: "That video part is too big to save (50 MB at most)." };
+      let sp: { walk: number; all: number };
+      try { sp = await walkSpace(); } catch (e) { console.error("walk space", e); return { ok: false, message: "Video saving isn't set up on the server yet (supabase-walk.sql)." }; }
+      if (sp.all + bytes > walkCap()) {
+        try { await walkSweep(); } catch (e) { console.error("walk sweep", e); }
+        sp = await walkSpace();
+        if (sp.all + bytes > walkCap()) return { ok: false, full: true, message: "Video storage is full, so this part wasn't saved. Delete old walk-through videos, or move MoveCrew's Supabase to a plan with more room." };
+      }
+      return { ok: true, path, url: await walkUploadUrl(path) };
+    }
+    // walk_saved: the part is in storage; it goes on the job
+    const name0 = path.split("/").pop() || "";
+    const f = (await walkList(org + "/" + jobId + "/")).find((e: J) => e && e.name === name0 && e.id);
+    if (!f) return { ok: false, message: "That video part isn't in storage. Save it again." };
+    const at = Math.min(Date.now(), Math.max(0, Number(b.at) || Date.now())), secs = Math.max(1, Math.min(3600, Math.round(Number(b.secs) || 0)));
+    const v = { id, call, part, path, at, secs, bytes: Number(f.metadata && f.metadata.size) || 0, type: String(b.type).split(";")[0], by: name };
+    const now = Date.now();
+    const w = await jobWrite(org, jobId, (j) => {
+      const all = { ...mapOf(j.walkVids) };
+      if (all[id] && all[id].path === path) return j;   // saved already (a retry)
+      all[id] = v;
+      j.walkVids = all;
+      addLog(j, now, "Walk-through video" + (part > 1 ? ", part " + part + "," : "") + " saved (" + walkMins(secs) + "), by " + name);
+      return j;
+    });
+    return w.ok ? { ok: true, video: v } : w;
+  }
+  return { ok: false, message: "Unknown action", status: 400 };
+}
+
+/* the customer's side: POST /walk {action:'join'|'poll'|'answer'|'bye', w:<the link's code>}. No sign-in: the code is
+   the key, and it works only while the job's walk-through has that room and the job is open. */
+const walkTries: Record<string, { n: number; at: number }> = {};
+function walkLimited(code: string): boolean {
+  const now = Date.now(), t = walkTries[code];
+  if (!t || now - t.at > 60e3) {
+    if (Object.keys(walkTries).length > 500) Object.keys(walkTries).forEach((k) => { if (now - walkTries[k].at > 60e3) delete walkTries[k]; });
+    walkTries[code] = { n: 1, at: now };
+    return false;
+  }
+  t.n++;
+  return t.n > 150;
+}
+export async function handleWalk(req: Request): Promise<Response> {
+  let b: J = {};
+  try { b = await req.json(); } catch { return json({ ok: false, message: "Bad request" }, 400); }
+  const nope = { ok: false, message: "This walk-through link isn't working any more. Call or text your mover for a new one." };
+  const c = walkParse(b && b.w);
+  if (!c) return json(nope);
+  if (walkLimited(String(b.w))) return json({ ok: false, message: "Too many tries. Wait a minute, then try again." }, 429);
+  try {
+    const h = await sha(c.room);
+    const [job, row] = await Promise.all([getDoc(c.org, "jobs/" + c.jobId).catch(() => null), walkRoom(c.org, c.jobId).catch(() => null)]);
+    const s = job && job.survey && typeof job.survey === "object" ? job.survey : null;
+    const mine = !!s && typeof s.room === "string" && same(s.room, c.room), inRow = !!row && row.room === h;
+    if (!job || !(mine || inRow) || WALK_OPEN.indexOf(job.status) < 0) return json(nope);
+    const act = String(b.action || "");
+    const over = (mine && !!s.done) || (inRow && !!row.ended_at);
+    if (act === "join") {
+      const S = await getDoc(c.org, "org/settings");
+      if (inRow) await walkRoomPatch(c.org, c.jobId, { cust_at: nowIso() });
+      else await walkRoomPut(c.org, c.jobId, { room: h, cust_at: nowIso() });
+      const first = String((job.d && job.d.name) || "").trim().split(/\s+/)[0] || "";
+      const host = String((inRow && row.host_name) || (s && s.who) || "").trim();
+      return json({
+        ok: true, company: company(S), first: /&|\b(and|family|inc|llc|law|co|company|corp|group)\b/i.test(String((job.d && job.d.name) || "")) ? "" : first,
+        host: host.split(/\s+/)[0] || "", at: s && Number(s.at) > 0 ? Number(s.at) : 0, over, ice: await walkIce(),
+        live: inRow && walkFresh(row.host_at, 15000), seq: inRow ? Number(row.offer_seq) || 0 : 0,
+      });
+    }
+    if (act === "poll") {
+      if (!inRow) { await walkRoomPut(c.org, c.jobId, { room: h, cust_at: nowIso() }); return json({ ok: true, offer: null, over, live: false }); }
+      await walkRoomPatch(c.org, c.jobId, { cust_at: nowIso() });
+      const seq = Number(row.offer_seq) || 0, seen = Number(b.seen) || 0;
+      const offer = row.offer && seq > seen && !row.ended_at ? { seq, type: "offer", sdp: row.offer.sdp } : null;
+      return json({ ok: true, offer, over, ended: !!row.ended_at, live: walkFresh(row.host_at, 15000) });
+    }
+    if (act === "answer") {
+      const sdp = walkSdp(b, "answer"), seq = Math.floor(Number(b.seq));
+      if (!sdp || !inRow) return json({ ok: false, message: "That didn't come through. Try again." }, 400);
+      if (seq !== (Number(row.offer_seq) || 0)) return json({ ok: false, stale: true, message: "The call was started again. Hang on." });
+      await walkRoomPatch(c.org, c.jobId, { answer: { sdp: sdp.sdp }, answer_seq: seq, cust_at: nowIso() });
+      return json({ ok: true });
+    }
+    if (act === "bye") {
+      if (inRow) await walkRoomPatch(c.org, c.jobId, { cust_at: null });
+      return json({ ok: true });
+    }
+    return json({ ok: false, message: "Unknown action" }, 400);
+  } catch (e) {
+    console.error("walk", e);
+    return json({ ok: false, message: "Something went wrong on the server. Try again in a minute." }, 500);
+  }
+}
+
 export async function handle(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const url = new URL(req.url);
@@ -4568,18 +4980,22 @@ export async function handle(req: Request): Promise<Response> {
     try { b = await req.json(); } catch { /* not JSON: answered below */ }
     try { return json(await webLead(b && typeof b === "object" ? b : {})); } catch (e) { console.error("web lead", e); return json({ ok: false, message: "Something went wrong. Please call us instead." }, 500); }
   }
+  if (sub === "/walk" || sub === "/walk/") return handleWalk(req);
   if (sub === "/stripe" || sub === "/stripe/") return handleStripe(req);
   if (sub === "/stripe/connect" || sub === "/stripe/connect/") return handleStripe(req, "connect");
   if (sub === "/square" || sub === "/square/") return handleSquare(req);
   if (/^\/cron\/tomorrow\/?$/.test(sub)) {
     const secret = env("TALLY_CRON_SECRET");
     if (!secret || !same(secret, req.headers.get("x-tally-cron") || "")) return json({ ok: false, message: "Forbidden" }, 403);
+    // the walk-through videos that are due to go: on their own, so the texts going wrong doesn't keep them
+    let wv: J = null;
+    try { wv = { removed: await walkSweep() }; } catch (e) { console.error("walk sweep", e); wv = { ok: false }; }
     try {
       const t = await runTomorrow();
       let f: J = null;
       try { f = await runFollowUps(); } catch (e) { console.error("follow-ups", e); f = { ok: false }; }
-      return json({ ...t, follow: f });
-    } catch (e) { console.error(e); return json({ ok: false, message: "Something went wrong on the server." }, 500); }
+      return json({ ...t, follow: f, walk: wv });
+    } catch (e) { console.error(e); return json({ ok: false, message: "Something went wrong on the server.", walk: wv }, 500); }
   }
   const m = /^\/twilio\/([a-z]+)\/?$/.exec(sub);
   if (!m) return json({ ok: false, message: "Not found" }, 404);

@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- the office's phone buzzes when a truck-down alert comes in -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- a walk-through video call: the person running it talks over the microphone (never the camera, see MainActivity) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 

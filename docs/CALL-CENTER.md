@@ -77,7 +77,8 @@ the call center's phone looks the shop up itself and remembers it.
   long its price is good, and comes up in Due now two days before it runs out.
   **Walk-through** books a video or voice call walk-through with the customer for a day and time (the person
   working the lead takes it, and keeps it), texts them the time, and puts it under Walk-throughs, the list of what's
-  coming up.
+  coming up. Since Nov 19 a video walk-through is a call in MoveCrew: the text carries the customer's link, **Start
+  video call** runs it, and it's recorded to the job's notes for the crew (VIDEO-WALKTHROUGHS.md).
 - **New quote.** The same quote builder as the office (since Nov 17: the company's call script as a
   checklist at the top, from its Setup › Call script, and the 2, 3 and 4 mover prices side by side
   under the price), with three differences: the price step has

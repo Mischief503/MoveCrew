@@ -311,7 +311,8 @@ if (!SMOKE && !app.requestSingleInstanceLock()) {
     protocol.handle(rules.SCHEME, serve);
 
     const ses = require('electron').session.defaultSession;
-    const ALLOW = new Set(['notifications', 'geolocation', 'clipboard-sanitized-write', 'fullscreen']);
+    // 'media': the microphone and camera for a walk-through video call (Sales, batch 7), for MoveCrew's own pages only
+    const ALLOW = new Set(['notifications', 'geolocation', 'clipboard-sanitized-write', 'fullscreen', 'media']);
     ses.setPermissionRequestHandler((wc, perm, cb, d) => {
       if (perm === 'openExternal') { cb(false); goOutside(d && d.externalURL); return; }
       cb(ALLOW.has(perm) && rules.inside((d && (d.requestingUrl || d.requestingOrigin)) || ''));

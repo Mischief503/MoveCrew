@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Video walk-through</title>
+<link rel="icon" href="icons/icon-192.png">
+<style>
+/* The customer's side of a walk-through video call (MoveCrew, Sales batch 7, Nov 19): the link in the walk-through
+   text opens this page on their phone. No app and no sign-in: the link's code (?w=<company>.<job>.<room>) is the key.
+   They turn on their camera, MoveCrew's Edge Function (POST /walk) passes the call's offer and answer, and the phone
+   connects straight to the person at the moving company, who sees what the camera sees. The call is recorded on the
+   company's side for the crew; this page says so before they join, and while it's on. */
+:root{
+  --bg:#F4F5F8; --card:#FFFFFF; --text:#141B2D; --muted:#5E677A; --line:#E3E6ED; --accent:#F5B700; --accent-ink:#241A00;
+  --go:#16915C; --go-ink:#FFFFFF; --stop:#D0392B; --stop-ink:#FFFFFF; --stage:#0D121D; --stage-ink:#F2F4F8;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0E1320; --card:#161D2C; --text:#EEF1F6; --muted:#A3ACBD; --line:#283146; --go:#22B573; --go-ink:#03150C; --stop:#FF6B60; --stop-ink:#2A0603; color-scheme:dark}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:400 16px/1.45 var(--font);-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;touch-action:manipulation}
+.wrap{min-height:100%;display:flex;flex-direction:column;padding:calc(14px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+.co{font-weight:700;font-size:15px;letter-spacing:.2px;text-align:center;margin:0 0 12px}
+.co small{display:block;font-weight:400;color:var(--muted);font-size:12.5px;margin-top:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 18px;max-width:480px;width:100%;margin:0 auto}
+h1{font-size:23px;line-height:1.2;margin:0 0 8px;text-wrap:balance}
+p{margin:0 0 12px}
+.muted{color:var(--muted)}
+.big{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:54px;border:0;border-radius:14px;font-weight:700;font-size:17px;cursor:pointer;padding:12px 16px}
+.go{background:var(--go);color:var(--go-ink)}
+.stop{background:var(--stop);color:var(--stop-ink)}
+.plain{background:transparent;border:1px solid var(--line);color:var(--text)}
+.rec-note{display:flex;gap:10px;align-items:flex-start;background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:12px;padding:10px 12px;font-size:14px;margin:14px 0}
+.rec-note b{white-space:nowrap}
+.when{font-weight:600}
+.fine{font-size:13px;color:var(--muted);margin:12px 0 0;text-align:center}
+.foot{margin-top:auto;padding-top:18px;text-align:center;font-size:12px;color:var(--muted)}
+/* the call */
+.call{position:fixed;inset:0;background:var(--stage);color:var(--stage-ink);display:flex;flex-direction:column}
+.call[hidden]{display:none}
+.stage{position:relative;flex:1;min-height:0;overflow:hidden}
+#me{width:100%;height:100%;object-fit:cover;background:#000;display:block}
+#them{position:absolute;right:12px;top:calc(12px + env(safe-area-inset-top));width:96px;height:128px;object-fit:cover;border-radius:12px;border:2px solid rgba(255,255,255,.7);background:#000}
+#them[hidden]{display:none}
+.bar{position:absolute;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top)) 14px 26px;background:linear-gradient(rgba(0,0,0,.74),rgba(0,0,0,.4) 70%,transparent);font-size:15px;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.bar b{display:block;font-size:16px}
+.status{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(10,14,24,.78);border-radius:12px;padding:10px 12px;font-size:15px;text-align:center}
+.status:empty{display:none}
+.recdot{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#FFFFFF;background:#D93A2F;border-radius:99px;padding:2px 9px;margin-right:4px;text-shadow:none}
+.recdot::before{content:"";width:8px;height:8px;border-radius:50%;background:#FFFFFF}
+.ctl{display:flex;gap:10px;justify-content:center;align-items:center;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--stage)}
+.round{width:62px;height:62px;border-radius:50%;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;gap:2px;cursor:pointer;background:rgba(255,255,255,.14);color:var(--stage-ink)}
+.round svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.round.on{background:var(--stage-ink);color:var(--stage)}
+.round.end{background:#E5483B;color:#fff;width:74px}
+.tips{font-size:14px;line-height:1.4;margin:0;padding-left:18px}
+.tips li{margin:0 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap" id="page">
+  <div class="co" id="co"></div>
+  <div class="card" id="card" aria-live="polite"><p class="muted">Opening your walk-through…</p></div>
+  <div class="foot">Video calls by MoveCrew</div>
+</div>
+<div class="call" id="call" hidden>
+  <div class="stage">
+    <video id="me" playsinline autoplay muted></video>
+    <video id="them" playsinline autoplay hidden></video>
+    <div class="bar" id="callBar"></div>
+    <div class="status" id="callStatus" aria-live="polite"></div>
+  </div>
+  <div class="ctl">
+    <button class="round" id="flipB" aria-label="Switch camera"><svg viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3v12H4z"/><path d="M9 13a3 3 0 0 0 5.2 2"/><path d="M15 11a3 3 0 0 0-5.2-2"/></svg>Flip</button>
+    <button class="round end" id="endB" aria-label="Hang up"><svg viewBox="0 0 24 24"><path d="M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5c-2.3-.7-4.7-.7-7 0V16l-3 1.5z"/></svg>Hang up</button>
+    <button class="round" id="muteB" aria-label="Mute" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Mute</button>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+// the Edge Function (the website's copy has the project filled in)
+var FN='PASTE_YOUR_PROJECT_URL'.replace(/\/+$/,'')+'/functions/v1/tally-twilio/walk';
+var W=(function(){try{return new URLSearchParams(location.search).get('w')||''}catch(e){return ''}})();
+var $=function(id){return document.getElementById(id)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var info=null,cam=null,mic=null,pc=null,dc=null,seen=0,state='start',facing='environment',muted=false,timer=0,lock=null,camGone=false,dropT=0,waitT0=0;
+var MIC_ON='<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+var MIC_OFF='<svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M9 9v2a3 3 0 0 0 5 2.2M15 10V6a3 3 0 0 0-5.7-1.3"/><path d="M5 11a7 7 0 0 0 11.4 5.4M19 11a7 7 0 0 1-.6 2.8M12 18v3"/></svg>';
+function post(action,extra){
+  var body=JSON.stringify(Object.assign({action:action,w:W},extra||{}));
+  return fetch(FN,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:body,keepalive:action==='bye'})
+    .then(function(r){return r.json().catch(function(){return {ok:false,message:'The connection hiccuped. Try again.'}})},
+          function(){return {ok:false,net:true,message:'Your phone isn’t connected. Check the signal or Wi-Fi.'}});
+}
+function host(){return info&&info.host?info.host:'Your mover'}
+function first(){return info&&info.first?info.first:''}
+function when(ts){var d=new Date(ts);return d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' at '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+function card(html){$('card').innerHTML=html}
+function showCall(on){$('call').hidden=!on;$('page').hidden=!!on;if(on)keepAwake();else sleepOk()}
+function keepAwake(){try{if(navigator.wakeLock&&!lock)navigator.wakeLock.request('screen').then(function(l){lock=l;l.addEventListener('release',function(){lock=null})},function(){})}catch(e){}}
+function sleepOk(){try{if(lock)lock.release()}catch(e){}lock=null}
+function say(t){$('callStatus').innerHTML=t||''}
+function barDraw(){
+  var live=state==='live';
+  $('callBar').innerHTML='<b>'+esc(info&&info.company||'Video walk-through')+'</b>'+(live?'<span class="recdot">Recording</span> On the call with '+esc(host()):'Video walk-through with '+esc(host()));
+}
+
+/* 1. the link: who it's with, and when */
+function start(){
+  if(!W){card('<h1>This link isn’t complete</h1><p class="muted">Open the whole link from your text, or call or text your mover for a new one.</p>');return}
+  post('join').then(function(r){
+    if(!r||!r.ok){card('<h1>This walk-through link isn’t working</h1><p class="muted">'+esc((r&&r.message)||'Call or text your mover for a new one.')+'</p>');return}
+    info=r;seen=Number(r.seq)||0;
+    document.title=(r.company?r.company+': ':'')+'video walk-through';
+    $('co').innerHTML=esc(r.company||'')+'<small>Video walk-through</small>';
+    if(r.over){ended(true);return}
+    var soon=r.at>0&&r.at-Date.now()>15*60e3;
+    card('<h1>'+(first()?'Hi '+esc(first())+'! ':'')+'Your video walk-through'+(r.host?' with '+esc(r.host):'')+'</h1>'+
+      (soon?'<p class="when">Set for '+esc(when(r.at))+'</p>':'<p class="when">Starting now</p>')+
+      '<p>'+esc(host())+' sees what your phone’s camera sees, and you talk while you walk through your home. Show each room, the big pieces, the stairs, and the way out to the truck.</p>'+
+      '<div class="rec-note"><b>● Recorded</b><span>This call is recorded so your moving crew can see what’s moving before moving day.</span></div>'+
+      '<button class="big go" id="joinB">Turn on my camera and join</button>'+
+      '<p class="fine">Your phone asks to use the camera and microphone. Tap Allow.'+(soon?' You can join early: it connects when '+esc(host())+' starts the call.':'')+'</p>');
+    $('joinB').onclick=join;
+  });
+}
+
+/* 2. the camera and microphone, then wait for the call */
+function media(){
+  return navigator.mediaDevices.getUserMedia({
+    video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:24,max:30}},
+    audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+  });
+}
+function join(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||typeof RTCPeerConnection==='undefined'){
+    card('<h1>This browser can’t do video calls</h1><p class="muted">Open the link in Safari (iPhone) or Chrome (Android). If it opened inside another app, tap ⋯ and choose Open in browser.</p>');return}
+  var b=$('joinB');if(b){b.disabled=true;b.textContent='Turning on your camera…'}
+  media().then(function(st){
+    cam=st;mic=st.getAudioTracks()[0]||null;camGone=false;watchCam();
+    var v=$('me');v.srcObject=st;try{var p=v.play();if(p&&p.catch)p.catch(function(){})}catch(e){}
+    try{var t=$('them');var q=t.play();if(q&&q.catch)q.catch(function(){})}catch(e){}   // a tap now lets their voice play later
+    state='waiting';waitT0=Date.now();showCall(true);barDraw();
+    say('Waiting for '+esc(host())+' to start the call…');
+    poll();
+  },function(e){
+    var denied=e&&(e.name==='NotAllowedError'||e.name==='SecurityError');
+    card('<h1>'+(denied?'Your camera is blocked for this page':'Your camera didn’t turn on')+'</h1><p>'+(denied?'Allow the camera and microphone: on an iPhone, tap <b>aA</b> in the address bar, then <b>Website Settings</b>; on Android, tap the lock by the address. Then try again.':'Close other apps that use the camera, then try again.')+'</p><button class="big go" id="joinB">Try again</button>');
+    $('joinB').onclick=join;
+  });
+}
+function watchCam(){var t=cam&&cam.getVideoTracks()[0];if(t)t.onended=function(){camGone=true;if(!document.hidden)camBack()}}
+function camBack(){
+  if(!camGone||!cam||state==='ended'||state==='left')return;camGone=false;
+  media().then(function(st){
+    var old=cam;cam=st;mic=st.getAudioTracks()[0]||null;if(mic)mic.enabled=!muted;watchCam();
+    $('me').srcObject=st;
+    if(pc)pc.getSenders().forEach(function(s){var k=s.track?s.track.kind:'';var nt=k==='video'?st.getVideoTracks()[0]:k==='audio'?mic:null;if(nt)s.replaceTrack(nt).catch(function(){})});
+    old.getTracks().forEach(function(t){try{t.stop()}catch(e){}});
+  },function(){say('Your camera stopped. Tap Hang up, then open the link again.')});
+}
+document.addEventListener('visibilitychange',function(){if(!document.hidden){camBack();if(state==='live'||state==='waiting'||state==='connecting')keepAwake()}});
+
+/* 3. the call: the offer comes through the server; the answer goes back the same way */
+function poll(){
+  clearTimeout(timer);
+  if(state==='ended'||state==='left')return;
+  // three hours with nobody starting the call: stop asking (a link left open all day), and say how to come back
+  if(state==='waiting'&&Date.now()-waitT0>3*36e5){state='left';clearTimeout(timer);closePc();stopMedia();showCall(false);
+    card('<h1>Still waiting for '+esc(host())+'?</h1><p class="muted">Open the link again when it’s time for your walk-through.</p><button class="big go" id="joinB">Join again</button>');
+    $('joinB').onclick=function(){state='start';join()};return}
+  var lastR=null;
+  post('poll',{seen:seen}).then(function(r){
+    lastR=r;
+    if(state==='ended'||state==='left')return;
+    if(r&&r.ok){
+      if(r.offer&&r.offer.seq>seen)answer(r.offer);
+      else if(r.over&&state!=='live'&&state!=='connecting'){ended(false);return}
+      else if(state==='waiting')say(r.live?esc(host())+' is starting the call…':'Waiting for '+esc(host())+' to start the call. Keep this page open: it connects by itself.');
+    }else if(r&&r.net&&state==='waiting')say('Waiting for a signal…');
+    else if(r&&!r.ok&&!r.net&&state==='waiting'){say(esc(r.message||''))}
+  }).then(function(){if(state!=='ended'&&state!=='left')timer=setTimeout(poll,pollWait(lastR))});
+}
+// how soon to ask again: on the call every 4 seconds; while connecting, 1.5; waiting, 1.5 to 2 seconds at first,
+// then less often the longer nobody starts it, and every 10 seconds at least while the phone is on something else
+function pollWait(r){
+  if(state==='live')return 4000;
+  if(state==='connecting')return 1500;
+  var waited=Date.now()-(waitT0||Date.now()),d=r&&r.live?1500:waited<2*60e3?2000:waited<20*60e3?5000:15000;
+  return document.hidden?Math.max(d,10000):d;
+}
+function gather(p){return new Promise(function(res){if(p.iceGatheringState==='complete')return res();var t=setTimeout(res,3500);
+  p.addEventListener('icegatheringstatechange',function(){if(p.iceGatheringState==='complete'){clearTimeout(t);res()}})})}
+function closePc(){clearTimeout(dropT);if(pc){try{pc.close()}catch(e){}}pc=null;dc=null;var t=$('them');t.srcObject=null;t.hidden=true}
+function answer(offer){
+  closePc();seen=offer.seq;state='connecting';barDraw();say('Connecting to '+esc(host())+'…');
+  var p=new RTCPeerConnection({iceServers:(info&&info.ice)||[]});pc=p;
+  var them=new MediaStream();$('them').srcObject=them;
+  p.ontrack=function(e){if(pc!==p)return;them.addTrack(e.track);
+    if(e.track.kind==='video'){var showIt=function(){if(pc===p)$('them').hidden=false};var hideIt=function(){if(pc===p)$('them').hidden=true};e.track.onunmute=showIt;e.track.onmute=hideIt;if(!e.track.muted)showIt()}
+    try{var q=$('them').play();if(q&&q.catch)q.catch(function(){})}catch(err){}};
+  p.ondatachannel=function(e){if(pc!==p)return;dc=e.channel;dc.onmessage=function(m){if(pc===p&&String(m.data)==='bye')ended(false)}};
+  p.onconnectionstatechange=function(){
+    if(pc!==p)return;var c=p.connectionState;
+    if(c==='connected'){clearTimeout(dropT);state='live';barDraw();say('');}
+    else if(c==='failed')lost();
+    else if(c==='disconnected'){clearTimeout(dropT);dropT=setTimeout(function(){if(pc===p&&p.connectionState!=='connected')lost()},8000)}
+  };
+  p.setRemoteDescription({type:'offer',sdp:offer.sdp}).then(function(){
+    var vt=cam&&cam.getVideoTracks()[0];
+    p.getTransceivers().forEach(function(t){var k=t.receiver&&t.receiver.track&&t.receiver.track.kind;
+      var tr=k==='audio'?mic:k==='video'?vt:null;
+      if(tr){t.sender.replaceTrack(tr);try{t.direction='sendrecv'}catch(e){}}});
+    return p.createAnswer();
+  }).then(function(a){return p.setLocalDescription(a)}).then(function(){return gather(p)}).then(function(){
+    if(pc!==p)return;
+    return post('answer',{seq:offer.seq,sdp:p.localDescription.sdp}).then(function(r){
+      if(pc!==p)return;
+      if(!r||!r.ok){if(!(r&&r.stale))say(esc((r&&r.message)||'That didn’t go through. Hang on…'));closePc();state='waiting';barDraw()}
+    });
+  }).catch(function(){if(pc===p){closePc();state='waiting';barDraw();say('That didn’t connect. Hang on, '+esc(host())+' tries again…')}});
+}
+// the connection dropped (a weak signal, Wi-Fi to cell): the camera stays on, and the call starts again when the other side tries
+function lost(){closePc();if(state==='ended'||state==='left')return;state='waiting';waitT0=Date.now();barDraw();say('The connection dropped. Reconnecting…')}
+
+/* 4. the end: theirs, or the customer's */
+function stopMedia(){if(cam)cam.getTracks().forEach(function(t){try{t.stop()}catch(e){}});cam=null;mic=null;$('me').srcObject=null}
+function ended(before){
+  state='ended';clearTimeout(timer);closePc();stopMedia();showCall(false);
+  card('<h1>'+(before?'This walk-through is over':'Thanks'+(first()?', '+esc(first()):'')+'! The walk-through is over.')+'</h1><p>'+esc(info&&info.company||'Your mover')+' will send your price soon. Questions? Reply to the text you got.</p>');
+}
+function leave(){
+  try{if(dc&&dc.readyState==='open')dc.send('bye')}catch(e){}
+  state='left';clearTimeout(timer);closePc();stopMedia();showCall(false);post('bye');
+  card('<h1>You left the call</h1><p class="muted">Changed your mind? Join again: '+esc(host())+' sees you once you’re back.</p><button class="big go" id="joinB">Join again</button>');
+  $('joinB').onclick=function(){state='start';join()};
+}
+$('endB').onclick=leave;
+$('muteB').onclick=function(){muted=!muted;if(mic)mic.enabled=!muted;var b=$('muteB');b.classList.toggle('on',muted);b.setAttribute('aria-pressed',String(muted));b.innerHTML=(muted?MIC_OFF:MIC_ON)+(muted?'Unmute':'Mute')};
+$('flipB').onclick=function(){
+  facing=facing==='environment'?'user':'environment';
+  var old=cam&&cam.getVideoTracks()[0];if(old){old.onended=null;try{old.stop()}catch(e){}}   // phones open one camera at a time
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:24,max:30}},audio:false}).then(function(st){
+    var t=st.getVideoTracks()[0];if(!cam||!t){st.getTracks().forEach(function(x){x.stop()});return}
+    cam.getVideoTracks().forEach(function(x){cam.removeTrack(x)});cam.addTrack(t);watchCam();
+    $('me').srcObject=cam;$('me').style.transform=facing==='user'?'scaleX(-1)':'';
+    var vx=pc&&pc.getTransceivers().filter(function(x){return x.receiver&&x.receiver.track&&x.receiver.track.kind==='video'})[0];
+    if(vx)vx.sender.replaceTrack(t).catch(function(){});
+  },function(){facing=facing==='environment'?'user':'environment';say('The other camera didn’t turn on.')});
+};
+window.addEventListener('pagehide',function(){if(state==='live'||state==='waiting'||state==='connecting'){try{if(dc&&dc.readyState==='open')dc.send('bye')}catch(e){}post('bye')}});
+window.__walk={state:function(){return state},info:function(){return info},pc:function(){return pc}};   // the tests
+start();
+})();
+</script>
+</body>
+</html>

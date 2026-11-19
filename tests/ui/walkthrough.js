@@ -124,9 +124,10 @@ const clock = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2
   D.click('#ccList [data-act="sl:sv"][data-id="q1"]'); await sleep(400);
   const st1 = fnCalls.find((b) => b.action === 'sales_text');
   const tm1 = dayAt(1, 10), dd1 = tm1.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  ok(st1 && st1.jobId === 'q1' && st1.body === 'Hi Lena, your video walk-through is set for ' + dd1 + ' at 10:00 AM. Dispatch will video call you at (512) 555-0150 then, so have your phone ready to show us what’s moving. Reply here to change the time.',
-    L('hosted: the time goes from the company line: ' + (st1 && st1.body)));
   const qd = () => (db.docs.find((r) => r.path === 'jobs/q1') || {}).data || {};
+  // batch 7: a video walk-through carries the link Lena joins from (walk.html with the company, the job and its room)
+  ok(st1 && st1.jobId === 'q1' && qd().survey && /^[A-Za-z0-9_-]{16}$/.test(qd().survey.room) && st1.body === 'Hi Lena, your video walk-through is set for ' + dd1 + ' at 10:00 AM. At that time, open this link on your phone to join: https://tally.example.com/walk.html?w=org-1.q1.' + qd().survey.room + ' Dispatch will be on the call, so be ready to show us what’s moving. Reply here to change the time.',
+    L('hosted: the time goes from the company line, with the link: ' + (st1 && st1.body)));
   ok(qd().survey && qd().survey.kind === 'video' && qd().survey.who === 'Dispatch' && qd().survey.texted > 0 && D.$('#toast').textContent === 'Walk-through set, and Lena has the time by text.', L('hosted: saved, texted: ' + D.$('#toast').textContent));
   ok(D.errors.length === 0, L('hosted: no errors (' + D.errors.slice(0, 3).join(' | ') + ')'));
   process.exit(summary('walkthrough') ? 1 : 0);

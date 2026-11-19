@@ -92,7 +92,8 @@ The function's address is
 These are the texts that run on a clock instead of on a tap: every evening, each person on
 tomorrow's jobs gets "Tomorrow you're on…", with a link to confirm if they haven't, and the
 office gets who hasn't confirmed yet. With Options › Follow-up texts for quotes on, the same run
-sends each texted quote's follow-ups (about 1, 3 and 7 days after it went out).
+sends each texted quote's follow-ups (about 1, 3 and 7 days after it went out). It also deletes
+walk-through videos 30 days after their move was paid (VIDEO-WALKTHROUGHS.md).
 
 1. **Edge Functions › Secrets**, add `TALLY_CRON_SECRET` = any long random phrase you make up
    (e.g. three random words and a number). It stops strangers from triggering the run.
@@ -106,6 +107,12 @@ sends each texted quote's follow-ups (about 1, 3 and 7 days after it went out).
 3. Save. It never sends the same person two "tomorrow" texts in one evening, so a test run is safe.
 
 Turn it off any time in MoveCrew › Setup › Texts and calls.
+
+## 4b2. Video walk-throughs use the same keys
+
+With `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` in, video walk-throughs connect through Twilio's relay when a phone
+on cell data can't connect directly. It costs a few cents a call at most, and there's nothing else to set up
+(VIDEO-WALKTHROUGHS.md).
 
 ## 4c. Distance lookup on quotes (Google Maps)
 

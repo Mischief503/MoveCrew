@@ -24,6 +24,7 @@ import android.os.Build;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -75,6 +76,7 @@ public class MainActivity extends Activity {
     private static final String START = "https://" + HOST + "/assets/index.html";
     private static final int REQ_FILES = 41;
     private static final int REQ_LOCATION = 42;
+    private static final int REQ_MIC = 43;
     // photos: made smaller here before the page reads them, kept in the cache under picked/ (see readyPhoto)
     private static final String PICKED = "picked";
     private static final int PHOTO_MAX = 1600;
@@ -93,6 +95,8 @@ public class MainActivity extends Activity {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private String geoOrigin;
     private GeolocationPermissions.Callback geoCallback;
+    // a walk-through video call asking for the microphone, while Android asks the person (onRequestPermissionsResult)
+    private PermissionRequest micRequest;
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -198,6 +202,32 @@ public class MainActivity extends Activity {
                 geoOrigin = origin;
                 geoCallback = callback;
                 requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOCATION);
+            }
+
+            /* A walk-through video call (Sales, batch 7): the person running it talks over the microphone. Only
+               MoveCrew's own pages get it, and never the camera: the customer shows the house from their phone, and
+               asking for the camera here would change how photos are taken. */
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(() -> {
+                    Uri o = request.getOrigin();
+                    boolean ours = o != null && HOST.equals(o.getHost());
+                    boolean wantsMic = false;
+                    for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) wantsMic = true;
+                    if (!ours || !wantsMic) { request.deny(); return; }
+                    if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                        return;
+                    }
+                    if (micRequest != null) micRequest.deny();
+                    micRequest = request;
+                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+                });
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (micRequest == request) micRequest = null;
             }
 
             @Override
@@ -639,6 +669,12 @@ public class MainActivity extends Activity {
             geoCallback.invoke(geoOrigin, hasLocation(), false);
             geoCallback = null;
             geoOrigin = null;
+        }
+        if (request == REQ_MIC && micRequest != null) {
+            PermissionRequest r = micRequest;
+            micRequest = null;
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) r.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+            else r.deny();
         }
     }
 
