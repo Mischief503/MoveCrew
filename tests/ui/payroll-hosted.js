@@ -67,8 +67,7 @@ function seed(opts) {
   ok(/Luis is still clocked in, since/.test(txt($('#prCheck'))) && /The tip on Rosa Vega’s move isn’t split yet/.test(txt($('#prCheck'))) && /No payroll ID for Luis\./.test(txt($('#prCheck'))), L('to check: Luis still clocked in, the tip, his payroll ID'));
   // a tip split on a job he isn't on: through the database
   click('#prCheck [data-act="pr:tip"]'); await sleep(10);
-  ok(!$('#prTips .tiped'), L('Split in the check list goes to the tip'));
-  click('#prTips [data-act="tip:open"]'); await sleep(10);
+  ok(!!$('#prTips .tiped') && $('[data-tipn="Kim"]').value === '25' && $('[data-tipn="Luis"]').value === '25', L('Split in the check list opens the split under Tips, even to start'));
   fire('[data-tipn="Kim"]', '30'); fire('[data-tipn="Luis"]', '20'); click('#prTips [data-act="tip:save"]'); await sleep(30);
   const tipAsk = db.__asked.find((x) => x[0] === 'tip');
   ok(tipAsk && tipAsk[1] === 'kl' && tipAsk[2].Kim === 30 && tipAsk[2].Luis === 20 && /Tip split saved/.test(toast()), L('saved through hr_tip_split: Kim $30, Luis $20'));

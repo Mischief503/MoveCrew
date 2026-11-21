@@ -7601,6 +7601,7 @@ document.addEventListener('click',function(e){
     case 'pr:copy':{var R=P.R;if(!R)break;var sh=paySheets(R),rows=t.dataset.w==='days'?sh[1].rows:sh[0].rows.slice(3,4+R.people.length),tsv=tsvOf(rows);
       var box=function(){P.copy=tsv;renderPayroll();var b=$('#prCopy');if(b){try{b.focus();b.select()}catch(x){}}toast('Copy it from the box.')};
       try{navigator.clipboard.writeText(tsv).then(function(){P.copy='';toast('Copied. Paste it into a spreadsheet.')},box)}catch(x){box()}break}
+    case 'pr:tip':{var pj=tipJob(t.dataset.id);if(!pj)break;tipEdOpen(pj);renderPayroll();var te=$('#prTips');if(te&&te.scrollIntoView)try{te.scrollIntoView({block:'start'})}catch(x){}break}   // Split, in the check list
     case 'tip:open':{var j=tipJob(t.dataset.id);if(!j)break;tipEdOpen(j);tipRedraw();break}
     case 'tip:cancel':ui.tipEd=null;tipRedraw();break;
     case 'tip:fill':{var fj=tipJob(t.dataset.id),T=ui.tipEd;if(!fj||!T)break;var w={};crewOf(fj).forEach(function(n){w[n]=t.dataset.k==='hours'?tipQuarters(fj,n):1});

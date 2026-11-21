@@ -165,8 +165,12 @@ function unzip(bytes) {
   ok(!/Tips/.test(txt($('#prSum tr'))) && !$('#prTips'), L('tips left out: no tips column'));
   S().payroll = Object.assign({}, S().payroll, { tips: 'lead' }); await go();
   ok(/The tip on Ann Lee’s move isn’t split yet\. Until it is, it’s split evenly\./.test(txt($('#prCheck'))) && rowOf('Marcus').endsWith('$45'), L('the lead splits it: not yet, so evenly for now'));
+  click('#prCheck [data-act="pr:tip"]'); await sleep(10);
+  ok(!!$('#prTips .tiped') && $('[data-tipn="Marcus"]').value === '45' && /Adds up to the \$90 tip/.test(txt($('#tipSum'))), L('Split in the check list: each share, even to start'));
+  click('#prTips [data-act="tip:cancel"]'); await sleep(5);
+  ok(!$('#prTips .tiped'), L('Cancel closes it'));
   click('#prTips [data-act="tip:open"]'); await sleep(10);
-  ok(!!$('#prTips .tiped') && $('[data-tipn="Marcus"]').value === '45' && /Adds up to the \$90 tip/.test(txt($('#tipSum'))), L('Split: each share, even to start'));
+  ok(!!$('#prTips .tiped'), L('and Split under Tips opens it too'));
   fire('[data-tipn="Marcus"]', '70'); await sleep(5);
   ok(/Adds up to \$115: \$25 too much\./.test(txt($('#tipSum'))), L('it adds them up as you type'));
   click('#prTips [data-act="tip:save"]'); await sleep(10);
