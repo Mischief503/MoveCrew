@@ -7105,9 +7105,12 @@ function tipShares(j,c){
     if(a&&tot>0)return {w:a,how:'lead',by:String(sp.by||''),stale:Math.abs(num(sp.total)-tipsOf(j))>0.009};
     return {w:even,how:'even',need:true};
   }
-  if(c.tips==='hours'&&num(j.actualHours)>0){var w={},t=0;crew.forEach(function(n){w[n]=jobOwnMs(j,n);t+=w[n]});if(t>0)return {w:w,how:'hours'}}
+  if(c.tips==='hours'&&num(j.actualHours)>0){var w={},t=0;crew.forEach(function(n){w[n]=tipQuarters(j,n);t+=w[n]});if(t>0)return {w:w,how:'hours'}}
   return {w:even,how:'even'};
 }
+// a mover's time on the job for their tip share, in quarter hours: a few minutes either way (a clock-in just after
+// Start job) leaves the split even; someone added partway gets less
+function tipQuarters(j,n){return Math.round(jobOwnMs(j,n)/9e5)}
 // an amount split by weight to the cent, the cents left over going to the biggest remainders, so the shares add up
 function splitCents(amt,w){
   var names=Object.keys(w).filter(function(n){return num(w[n])>0}).sort(),tot=names.reduce(function(a,n){return a+num(w[n])},0),cents=Math.round(amt*100),out={},used=0;
@@ -7600,7 +7603,7 @@ document.addEventListener('click',function(e){
       try{navigator.clipboard.writeText(tsv).then(function(){P.copy='';toast('Copied. Paste it into a spreadsheet.')},box)}catch(x){box()}break}
     case 'tip:open':{var j=tipJob(t.dataset.id);if(!j)break;tipEdOpen(j);tipRedraw();break}
     case 'tip:cancel':ui.tipEd=null;tipRedraw();break;
-    case 'tip:fill':{var fj=tipJob(t.dataset.id),T=ui.tipEd;if(!fj||!T)break;var w={};crewOf(fj).forEach(function(n){w[n]=t.dataset.k==='hours'?jobOwnMs(fj,n):1});
+    case 'tip:fill':{var fj=tipJob(t.dataset.id),T=ui.tipEd;if(!fj||!T)break;var w={};crewOf(fj).forEach(function(n){w[n]=t.dataset.k==='hours'?tipQuarters(fj,n):1});
       var am=splitCents(tipsOf(fj),w);if(!Object.keys(am).length){crewOf(fj).forEach(function(n){w[n]=1});am=splitCents(tipsOf(fj),w)}
       crewOf(fj).forEach(function(n){T.amts[n]=String(am[n]||0)});T.err='';tipRedraw();break}
     case 'tip:save':{var sj=tipJob(t.dataset.id);if(sj)tipSave(sj);break}

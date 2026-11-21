@@ -154,6 +154,11 @@ function unzip(bytes) {
   /* ---------- tips ---------- */
   S().payroll = Object.assign({}, S().payroll, { tips: 'even' }); await go();
   ok(rowOf('Marcus').endsWith('$45') && rowOf('Andre').endsWith('$45'), L('tips evenly: $45 each'));
+  // by hours: a clock-in a few minutes after Start job leaves it even; someone added partway gets less
+  const near = { status: 'done', actualHours: 4, startedAt: at(dd(1), 8), finishedAt: at(dd(1), 12), assign: { crew: ['P', 'Q', 'R'] },
+    crewOn: { P: [{ in: at(dd(1), 8), out: at(dd(1), 12) }], Q: [{ in: at(dd(1), 8, 4), out: at(dd(1), 12) }], R: [{ in: at(dd(1), 10), out: at(dd(1), 12) }] } };
+  const ns = T.splitCents(100, T.tipShares(near, { tips: 'hours' }).w);
+  ok(ns.P === 40 && ns.Q === 40 && ns.R === 20, L('tips by hours: 4 minutes late is still an even share; 2 hours in is half: ' + JSON.stringify(ns)));
   const cents = T.splitCents(100, { A: 1, B: 1, C: 1 });
   ok(cents.A === 33.34 && cents.B === 33.33 && cents.C === 33.33, L('$100 three ways adds up to the cent: 33.34, 33.33, 33.33'));
   S().payroll = Object.assign({}, S().payroll, { tips: 'off' }); await go();

@@ -42,8 +42,8 @@ At the bottom of Payroll, open until they're saved the first time:
   to start), or both. With both on, a day's overtime hours don't count again toward the week. The payroll company pays
   overtime at time and a half.
 - **Tips:**
-  - **By hours on the job** (to start): each mover's share follows their time on the job, so it's even unless someone
-    joined late or left early.
+  - **By hours on the job** (to start): each mover's share follows their time on the job, to the quarter hour, so it's
+    even unless someone joined late or left early (a clock-in a few minutes after Start job still gets an even share).
   - **Evenly:** the same share for everyone on the job.
   - **The crew lead splits it:** the lead puts in each mover's share on the job card (**Split the tip**, by the tip on
     the bill). Until they do, it's split evenly, and Payroll says so. HR can split it in Payroll too.
