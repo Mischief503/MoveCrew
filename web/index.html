@@ -1075,6 +1075,49 @@ body.wkon .toast{z-index:77}
 .wkp-msg{min-height:200px;display:flex;align-items:center;justify-content:center;color:#C9D2E0;border-radius:10px;background:#000;padding:20px;text-align:center}
 .wkp-nav{justify-content:space-between}
 @media (max-width:520px){.wk-self{width:84px;height:112px}.wk-btns{flex-wrap:nowrap;width:100%}.wk-btns .btn{min-width:0;flex:1 1 0;padding:8px 6px;font-size:14px}}
+/* Payroll (batch 8) */
+.prper{padding:10px 12px}
+.prnav{display:flex;align-items:center;gap:10px}
+.prnav .btn{min-width:44px;font-size:18px;line-height:1}
+.prt{flex:1;min-width:0;text-align:center}
+.prprow{display:flex;align-items:center;gap:10px}.prprow>span{flex:1;min-width:0}.prprow>.btn{flex:none}
+.prgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.prgrid>*{min-width:0}.prgrid input,.prgrid select{width:100%}
+@media (max-width:560px){.prgrid{grid-template-columns:1fr}}
+.prwarn{color:var(--due)}
+.prgo{margin:-2px 0 10px;flex-wrap:nowrap}.prgo .sub{margin:0;font-size:13px}.prgo .btn{flex:none}
+#prSet .acc-body>label.f{margin-top:12px}
+.prtbl{font-size:13.5px}.prtbl th{white-space:nowrap}.prtbl td small{font-size:12px}.prt b{display:block;font:700 17px/1.2 var(--display)}.prt small{color:var(--muted);font-size:12.5px}
+.prchk{display:flex;flex-direction:column}
+.prit{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line2)}.prit:first-child{border-top:0}
+.prit .ic{width:24px;height:24px;border-radius:7px;flex:none;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:var(--warnSoft);color:var(--text)}
+.prit.info .ic{background:var(--accSoft)}
+.prit .tx{flex:1;min-width:0;font-size:14px}
+.prok{color:var(--paid)}
+.prname{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--text);text-align:left;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;min-height:32px}
+table.tbl .prtot td{font-weight:700;border-top:2px solid var(--line)}
+table.tbl .prdays>td{padding:0 0 10px;border-top:0}
+table.prday{font-size:13px;background:var(--bg);border-radius:8px}
+table.prday td,table.prday th{padding-left:8px}
+.prexp{margin-top:12px}
+.prcopy{width:100%;margin-top:8px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--field);color:var(--text)}
+.prtip{padding:8px 0;border-top:1px solid var(--line2)}.prtip:first-of-type{border-top:0}
+.prtip small{color:var(--muted)}
+.prpunch{padding:8px 0;border-top:1px solid var(--line2)}.prpunch:first-child{border-top:0}
+.prpunch small{color:var(--muted)}
+.pred{margin-top:8px;padding:10px 12px;border:var(--bw) solid var(--line);border-radius:var(--r2);background:var(--bg)}
+.prsub{display:block;font-weight:400;color:var(--muted);margin-top:1px}
+.prseg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-radius:12px;margin-bottom:8px;width:100%}
+.prseg label span{height:100%;display:flex;align-items:center;justify-content:center}
+@media (max-width:560px){.prseg{grid-template-columns:1fr 1fr}.prseg label:nth-child(3) span{border-left:0}.prseg label:nth-child(n+3) span{border-top:var(--bw) solid var(--line)}}
+.prot input[type=number]{width:72px;min-height:36px;margin:0 4px;border:1px solid var(--line);border-radius:8px;padding:4px 6px;background:var(--field);color:var(--text);font-size:16px;text-align:right}
+.prtips .check{align-items:flex-start;padding:4px 0}.prtips .check input{margin-top:3px;flex:none}
+.prtips .check span{display:flex;flex-direction:column}.prtips .check small{color:var(--muted);font-size:12.5px}
+.tiped{margin-top:6px;padding:8px 10px;border:var(--bw) solid var(--line);border-radius:var(--r2);background:var(--card)}
+.tipln{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0}
+.tipln span{min-width:0;color:var(--text)}
+.tipln input{width:110px;min-height:40px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--field);color:var(--text);font-size:16px;text-align:right;font-variant-numeric:tabular-nums}
+.tipln small{color:var(--muted);text-align:right}
+@media (max-width:420px){.prseg label span{padding:8px 6px;font-size:13.5px}}
 </style>
 <style id="splashCss">
 /* the loading screen: a hand truck with boxes, rolling (Richie, Nov 6), in the new icon's colours */
@@ -1726,6 +1769,17 @@ window.tallyPeople={
   removeDoc:function(path){return sb.storage.from(DOCS).remove([path]).then(function(r){if(r.error)throw r.error})},
   uid:function(){return me.id}
 };
+/* ---------- payroll (batch 8): HR who aren't the office read a pay period's jobs, and HR who aren't the owner the
+   profiles' payroll details, and save the payroll settings, a tip split or a payroll ID, through these; the database
+   checks they have HR (supabase-payroll.sql) ---------- */
+function rpcRows(r){if(r.error)throw r.error;return r.data||[]}
+window.tallyPayroll={
+  jobs:function(from,to){return sb.rpc('payroll_jobs',{o:ORG,f:from,t:to}).then(rpcRows)},
+  people:function(){return sb.rpc('payroll_people',{o:ORG}).then(rpcRows)},
+  settings:function(p){return sb.rpc('hr_payroll_set',{o:ORG,p:p}).then(empRow)},
+  tipSplit:function(id,amts){return sb.rpc('hr_tip_split',{o:ORG,jid:id,split:amts}).then(empRow)},
+  payrollId:function(name,pid){return sb.rpc('hr_payroll_id',{o:ORG,emp:name,pid:pid}).then(empRow)}
+};
 // a crew lead's new quote, signed by the customer on site: the server works it out again and saves it
 window.tallyQuote={sign:function(id,rq){return commsPost({action:'requote',jobId:id,rq:rq})},
   refresh:function(){Object.keys(watchers).forEach(function(k){if(k.indexOf('jobs|')===0)bump(k)})}};
@@ -1987,7 +2041,7 @@ function defaultSettings(){return {
   rates:{r2:140,r3:195,r4:250},
   minHours:3,prod:45,mph:30,shopAddress:'',shopTravel:true,lateMins:30,activities:['Job day','Warehouse','Dump run','Truck and shop upkeep','Other'],truckFee:45,includedMiles:20,mileRate:1.5,stairFee:25,packPerBox:8,taxPct:0,depositPct:25,ntePct:15,quoteDays:30,commPct:0,crewCost:24,
   trucks:[{id:'t26',name:'Box 1 (26 ft)',cf:1700},{id:'t20',name:'Box 2 (20 ft)',cf:1000},{id:'t16',name:'Van (16 ft)',cf:800}],
-  crew:['Marcus','Dee','Luis','Tanya','Andre','Kim'],ccStaff:[],
+  crew:['Marcus','Dee','Luis','Tanya','Andre','Kim'],ccStaff:[],hr:[],
   sources:['Google','Referral','Yelp','Facebook','Repeat customer','Other'],
   customFields:[{id:'cf1',label:'Elevator reserved',type:'yesno'},{id:'cf2',label:'Parking notes',type:'text'}],
   forms:[{id:'f_deliv',title:'Delivery receipt and release',kind:'text',required:true,pages:[],text:'I confirm that my belongings were delivered to the address on this job.\n\nI walked through and inspected the delivery. Any damage or missing items I noticed were pointed out to the crew before they left.\n\nBy signing, I accept delivery and agree to the final bill for this move.'}],perms:{},office:[{name:'Owner',kind:'owner'},{name:'Dispatch',kind:'dispatch'}],contacts:{Owner:'512-555-0100',Dispatch:'512-555-0199',Marcus:'512-555-0101',Dee:'512-555-0102',Luis:'512-555-0103',Tanya:'512-555-0104',Andre:'512-555-0105',Kim:'512-555-0106'},dirTs:0,leads:['Marcus','Tanya'],drivers:['Marcus','Tanya','Luis','Andre'],bidTol:10,materials:[
@@ -2082,7 +2136,7 @@ var OPTS=[
   {g:'pay',k:'payVault',t:'Cards on file',h:'Keep a customer’s card to charge later.'},
   {g:'pay',k:'payCash',t:'Cash, checks and Zelle',h:'Record payments taken outside the app. With every other way off, this stays on.'},
   {g:'cust',k:'custBook',t:'Customers book their own quote',h:'In the customer app they accept the quote and book it. It shows in Needs scheduling for dispatch to add the truck and crew.'},
-  {g:'cust',k:'custTips',t:'Tips for the crew',h:'When the bill is paid after the move, the customer sees the subtotal, picks a tip (or No tip), then the final total: in the customer app, and on the crew’s or the office’s Collect payment. The tip goes to the movers on the job, split evenly, apart from the bill.'},
+  {g:'cust',k:'custTips',t:'Tips for the crew',h:'When the bill is paid after the move, the customer sees the subtotal, picks a tip (or No tip), then the final total: in the customer app, and on the crew’s or the office’s Collect payment. The tip goes to the movers on the job, apart from the bill, split the way Payroll settings say.'},
   {g:'texts',p:'comms.alerts.assigned',t:'Text crew when they’re put on a job',h:'And when they’re taken off one.'},
   {g:'texts',p:'comms.alerts.moved',t:'Text the crew when a job moves',h:'To a new day or time.'},
   {g:'texts',p:'comms.alerts.tomorrow',t:'Texts the evening before',h:'Everyone gets their jobs for tomorrow, and the office gets who hasn’t confirmed.'},
@@ -2124,17 +2178,17 @@ function savedOf(j){if(['active','done','paid'].indexOf(j.status)<0)return 0;var
 function balOf(j){return Math.max(0,round2(totalOf(j)-paidOf(j)))}
 function logEv(j,ev){j.log.push({ts:Date.now(),ev:ev})}
 /* time clock (separate from the job timer) */
-function openShift(who){return state.shifts.find(function(x){return x.who===who&&!x.outAt})}
+function openShift(who){return state.shifts.find(function(x){return x.who===who&&!x.outAt&&!x.void})}
 /* breaks are unpaid: a shift keeps them as {s,e} (e 0 while the break is on) */
 function lastBreak(x){var b=(x&&x.breaks)||[];return b[b.length-1]||null}
 function onBreak(x){var b=lastBreak(x);return !!(b&&!b.e)}
 function brkMs(x,from,to){return ((x&&x.breaks)||[]).reduce(function(a,b){var bs=Math.max(b.s,from),be=Math.min(b.e||to,to);return a+Math.max(0,be-bs)},0)}
 // worked time of a shift (breaks taken out), up to `upTo` for one still open
-function shiftMs(x,upTo){var en=x.outAt||upTo||Date.now();return Math.max(0,en-x.inAt-brkMs(x,x.inAt,en))}
+function shiftMs(x,upTo){if(x.void)return 0;var en=x.outAt||upTo||Date.now();return Math.max(0,en-x.inAt-brkMs(x,x.inAt,en))}
 // today's paid time for one person, across their shifts, breaks not counted
 function paidToday(who){
   var d0=new Date();d0.setHours(0,0,0,0);var a=d0.getTime(),now=Date.now();
-  return state.shifts.filter(function(x){return x.who===who&&(x.outAt||now)>a}).reduce(function(sum,x){
+  return state.shifts.filter(function(x){return x.who===who&&!x.void&&(x.outAt||now)>a}).reduce(function(sum,x){
     var st=Math.max(x.inAt,a),en=x.outAt||now;return en<=st?sum:sum+(en-st-brkMs(x,st,en))},0);
 }
 function fmtHM(ms){var m=Math.max(0,Math.floor(ms/60000));return Math.floor(m/60)+'h '+(m%60)+'m'}
@@ -2704,17 +2758,20 @@ var ICON={
   settings:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>',
   sos:'<svg viewBox="0 0 24 24"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4.5M12 17.2v.1"/></svg>',
   admin:'<svg viewBox="0 0 24 24"><path d="M12 3l8 3v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
-  history:'<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.7h3.7"/><path d="M12 8v4.3l2.8 1.7"/></svg>'
+  history:'<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.7h3.7"/><path d="M12 8v4.3l2.8 1.7"/></svg>',
+  payroll:'<svg viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.8v4.4M17.5 9.8v4.4"/></svg>'
 };
-var TABS=[{id:'desk',label:'Companies'},{id:'sched',label:'Schedule'},{id:'today',label:'Today'},{id:'quote',label:'Quote'},{id:'quotes',label:'Sales'},{id:'jobs',label:'Jobs'},{id:'dispatch',label:'Board'},{id:'crew',label:'Field'},{id:'history',label:'Job history'},{id:'chat',label:'Chat'},{id:'reports',label:'Reports'},{id:'settings',label:'Setup'},{id:'admin',label:'MoveCrew admin'},{id:'mymove',label:'My move'},{id:'mypay',label:'Pay'},{id:'myprofile',label:'Profile'}];
+var TABS=[{id:'desk',label:'Companies'},{id:'sched',label:'Schedule'},{id:'today',label:'Today'},{id:'quote',label:'Quote'},{id:'quotes',label:'Sales'},{id:'jobs',label:'Jobs'},{id:'dispatch',label:'Board'},{id:'crew',label:'Field'},{id:'history',label:'Job history'},{id:'chat',label:'Chat'},{id:'reports',label:'Reports'},{id:'payroll',label:'Payroll'},{id:'settings',label:'Setup'},{id:'admin',label:'MoveCrew admin'},{id:'mymove',label:'My move'},{id:'mypay',label:'Pay'},{id:'myprofile',label:'Profile'}];
 var NAV={owner:['today','jobs','quotes','dispatch','chat'],dispatch:['today','jobs','quotes','dispatch','chat'],lead:['crew','chat'],crew:['crew','chat'],callcenter:['desk','sched','quotes'],customer:['mymove','mypay','myprofile']};
-function navTabs(){var r=state.ui.role,ids=ccToo()?['crew','sched','quotes','chat']:r==='callcenter'&&ccHouse()?['sched','quotes','chat']:(NAV[r]||NAV.owner);return ids.map(function(id){return TABS.filter(function(t){return t.id===id})[0]})}
+function navTabs(){var r=state.ui.role,ids=hrOnly()?['payroll','chat']:ccToo()?['crew','sched','quotes','chat']:r==='callcenter'&&ccHouse()?['sched','quotes','chat']:(NAV[r]||NAV.owner);return ids.map(function(id){return TABS.filter(function(t){return t.id===id})[0]})}
 function allowedTabs(role){
   var ids=role==='customer'?['mymove','mypay','myprofile']:role==='crew'||role==='lead'?['crew','chat'].concat(ccToo()?['sched','quote','quotes']:[]):role==='callcenter'?(ccHouse()?['sched','quote','quotes','chat']:['desk','sched','quote','quotes']):role==='dispatch'?['today','quote','quotes','jobs','dispatch','crew','history','chat'].concat(opt('dispatchMoney')?['reports']:[]):
     ['today','quote','quotes','jobs','dispatch','crew','history','chat','reports','settings'];
+  if(role!=='customer'&&canHR())ids=hrOnly()?['payroll','chat']:ids.concat(['payroll']);   // HR (batch 8): the owner, and anyone with the HR switch
   if(role!=='customer'&&typeof isTallyAdmin==='function'&&isTallyAdmin())ids=ids.concat(['admin']);   // MoveCrew's own admins, in any company
   var out=TABS.filter(function(t){return ids.indexOf(t.id)>=0});
   if(ccToo())out.sort(function(a,b){return (b.id==='crew')-(a.id==='crew')});   // their jobs first, then the call center's
+  else if(hrOnly())out.sort(function(a,b){return (b.id==='payroll')-(a.id==='payroll')});   // HR alone: Payroll first
   return out;
 }
 function fieldRoster(){
@@ -2749,16 +2806,16 @@ function whoTag(n){var o=officeRec(n);if(o)return o.kind==='owner'?' (owner)':' 
 function ccStaffHas(n){return !!n&&(state.settings.ccStaff||[]).indexOf(n)>=0}
 function sidesOf(n,rec){
   var S=state.settings,a=rec&&rec.info&&rec.info.access,o=officeRec(n),role=rec?rec.role:'';
-  if(a&&typeof a==='object'){var ow=!!a.owner;return {owner:ow,field:!ow&&(a.field==='lead'||a.field==='crew')?a.field:'off',dispatch:!ow&&!!a.dispatch,cc:!ow&&!!a.cc}}
-  if((o&&o.kind==='owner')||(!o&&role==='owner'))return {owner:true,field:'off',dispatch:false,cc:false};
-  var inCrew=S.crew.indexOf(n)>=0,cc=ccStaffHas(n);
-  return {owner:false,field:inCrew?(isLead(n)?'lead':'crew'):(!o&&!cc&&(role==='lead'||role==='crew')?role:'off'),dispatch:(o&&o.kind==='dispatch')||(!o&&role==='dispatch'),cc:cc};
+  if(a&&typeof a==='object'){var ow=!!a.owner;return {owner:ow,field:!ow&&(a.field==='lead'||a.field==='crew')?a.field:'off',dispatch:!ow&&!!a.dispatch,cc:!ow&&!!a.cc,hr:!ow&&!!a.hr}}
+  if((o&&o.kind==='owner')||(!o&&role==='owner'))return {owner:true,field:'off',dispatch:false,cc:false,hr:false};
+  var inCrew=S.crew.indexOf(n)>=0,cc=ccStaffHas(n),hr=(S.hr||[]).indexOf(n)>=0;
+  return {owner:false,field:inCrew?(isLead(n)?'lead':'crew'):(!o&&!cc&&!hr&&(role==='lead'||role==='crew')?role:'off'),dispatch:(o&&o.kind==='dispatch')||(!o&&role==='dispatch'),cc:cc,hr:hr};
 }
 // the role the database goes by (members.role): the office's when they have it, else the field's
 function roleOfSides(a){return a.owner?'owner':a.dispatch?'dispatch':a.field==='lead'?'lead':'crew'}
 // the side a person's app opens on: the office's, else the field's, else the call center's
-function primaryRoleOf(n){var a=sidesOf(n,typeof empByName==='function'?empByName(n):null);return a.owner?'owner':a.dispatch?'dispatch':a.field!=='off'?a.field:a.cc?'callcenter':''}
-function sidesList(a){if(a.owner)return ['Owner'];var w=[];if(a.field!=='off')w.push(a.field==='lead'?'Crew lead':'Crew');if(a.dispatch)w.push('Dispatch');if(a.cc)w.push('Call center');return w}
+function primaryRoleOf(n){var a=sidesOf(n,typeof empByName==='function'?empByName(n):null);return a.owner?'owner':a.dispatch?'dispatch':a.field!=='off'?a.field:a.cc?'callcenter':a.hr?'crew':''}   // HR alone: crew to the database, Payroll in the app
+function sidesList(a){if(a.owner)return ['Owner'];var w=[];if(a.field!=='off')w.push(a.field==='lead'?'Crew lead':'Crew');if(a.dispatch)w.push('Dispatch');if(a.cc)w.push('Call center');if(a.hr)w.push('HR');return w}
 // whose view this is: the person previewed, the person signed in, or the one picked on this device
 function viewerName(){
   if(previewing())return ui.preview.staff||'';
@@ -2854,7 +2911,7 @@ function custDueNow(m){var s=custStage(m);return s==='booked'&&m.bill.deposit>0?
 function custTipOk(m){return !!m.tips&&(m.status==='done'||m.status==='paid')&&m.crew.n>0}
 function custTipped(m){return (m.pays||[]).some(function(p){return p.tip>0})}
 function custAhead(m){return (m.forms||[]).filter(function(f){return f.ahead&&!f.signed&&(m.status!=='active'||f.kind==='crew')})}
-function custTipWho(m){var n=m.crew.n;return n>1?'It goes to the '+n+' movers on your move'+(m.crew.lead?' ('+m.crew.lead+'’s crew)':'')+', split evenly.':m.crew.lead?'It goes to '+m.crew.lead+', who moved you.':'It goes to your crew.'}
+function custTipWho(m){var n=m.crew.n;return n>1?'It goes to the '+n+' movers on your move'+(m.crew.lead?' ('+m.crew.lead+'’s crew)':'')+'.':m.crew.lead?'It goes to '+m.crew.lead+', who moved you.':'It goes to your crew.'}
 function custSizeWords(m){var q=m.quote,w=[];if(q.crew)w.push(q.crew+' movers');if(q.trucks)w.push(q.trucks+' truck'+(q.trucks===1?'':'s'));if(q.hours)w.push('about '+q.hours+' hours');return w.join(' · ')}
 function custRouteHtml(m){return '<div class="cm-route"><div><small>From</small><b>'+esc(m.d.from||'Not set yet')+'</b></div><div><small>To</small><b>'+esc(m.d.to||'Not set yet')+'</b></div></div>'}
 // how long the customer's quote is good (Sales, batch 5)
@@ -3394,14 +3451,14 @@ document.addEventListener('input',function(e){
 // Add to home screen: Chrome offers it once the page qualifies; the Profile tab's button asks for it
 window.addEventListener('beforeinstallprompt',function(e){if(!window.TALLY_SUPABASE)return;try{e.preventDefault()}catch(x){}window.__tallyInstall=e;if(isCust()&&ui.tab==='myprofile')renderTab()});
 var SAMPLE_AGREE='I have checked my quote: what is moving, the addresses, the day and the arrival time.\n\nI understand the bill follows the crew’s time (or the flat price on my quote), plus any charges I agree to on the day, and that my deposit holds my date.\n\nSomeone will be there to let the crew in and to sign at the end of the move.\n\nI will tell the company before move day about anything fragile, valuable or hard to move.';
-// the customer's tips on a job, kept apart from the bill: the crew's, split evenly
+// the customer's tips on a job, kept apart from the bill: the crew's, split the company's way (Payroll settings › Tips)
 function tipsOf(j){return round2((j.payments||[]).reduce(function(a,p){return a+(num(p.tip)>0&&(!p.stripe||payCounts(p))?num(p.tip):0)},0))}
 /* The tip comes before the final total, wherever the bill is paid (Richie, Nov 7: "the tip should come before the final
    bill . give a sub total then ask for a tip then give the final total", and everywhere the bill is paid): the customer
    app's Pay, and the crew's or the office's Collect payment, where the customer picks on their phone. One payment: the
    bill's part and the tip, which is the crew's, kept apart from the bill. */
 var TIP_OPTS=[[0,'No tip'],[10,'10%'],[15,'15%'],[20,'20%'],['other','Other']];
-function tipWho(n,lead){return n>1?'It goes to the '+n+' movers on the move'+(lead?' ('+lead+'’s crew)':'')+', split evenly.':lead?'It goes to '+lead+', who did the move.':'It goes to the crew.'}
+function tipWho(n,lead){return n>1?'It goes to the '+n+' movers on the move'+(lead?' ('+lead+'’s crew)':'')+'.':lead?'It goes to '+lead+', who did the move.':'It goes to the crew.'}
 // a tip is asked for: the move is done (the bill is final), there's a crew to tip, tips are on, and no tip yet
 function tipAskJ(j){return opt('custTips')&&(j.status==='done'||j.status==='paid')&&((j.assign&&j.assign.crew)||[]).length>0&&!(tipsOf(j)>0)}
 function flowTipAsk(j){var f=ui.flow;return !!f&&!f.tipDone&&tipAskJ(j)}
@@ -3431,7 +3488,16 @@ function flowTotUpd(){
   var amt=flowAmt(),o=$('#flowTotal');if(o)o.textContent=money(round2(amt+flowTipAmt(j)));
   $$('#flow [data-tipword]').forEach(function(b){if(!pay.busy){b.textContent=flowPayLabel(j,b.dataset.tipword,amt);b.disabled=!flowTipPicked(j)}});
 }
-function tipLine(j){var t=tipsOf(j);if(!(t>0))return '';var n=((j.assign&&j.assign.crew)||[]).length;return '<p class="hint money-paid" style="margin:6px 0 0">Tip from the customer: '+money(t)+(n>1?', '+money(Math.floor(t*100/n)/100)+' each':'')+'</p>'}
+// the tip on the job card, split the company's way; with The crew lead splits it, the lead (or the office) splits it here
+function tipLine(j,canSplit){
+  var t=tipsOf(j);if(!(t>0))return '';
+  var c=payCfg(),sh=tipShares(j,c),amts=splitCents(t,sh.w),names=Object.keys(amts).sort(),vals=names.map(function(k){return amts[k]});
+  var same=vals.every(function(x){return Math.abs(x-vals[0])<0.005}),lead=c.tips==='lead'&&names.length>1;
+  var line='Tip from the customer: '+money(t)+(c.tips==='off'||names.length<2?'':same&&!lead?', '+money(vals[0])+' each':': '+names.map(function(k){return k+' '+money(amts[k])}).join(', '));
+  var how=lead?(sh.need?'. Not split yet, so evenly for now.':'. Split by '+(sh.by||'the lead')+(sh.stale?', before the last tip came in.':'.')):c.tips==='hours'&&!same?', by time on the job.':'';
+  var mine=lead&&canSplit,ed=mine&&ui.tipEd&&ui.tipEd.id===j.id;
+  return '<p class="hint money-paid" style="margin:6px 0 0">'+esc(line+how)+(mine&&!ed?' <button class="btn sm" data-act="tip:open" data-id="'+esc(j.id)+'">'+(sh.need||sh.stale?'Split the tip':'Change the split')+'</button>':'')+'</p>'+(ed?tipEdHtml(j):'');
+}
 /* ---------- trucks and drivers on a job ----------
    A job's trucks are assign.truckId (the first one, which older copies of the app read too) and
    assign.more (any others). assign.drivers says who drives each truck, by the truck's id. Who can
@@ -3595,7 +3661,7 @@ function renderToday(){
   if(!office){ui.tab='crew';renderTabs();return renderCrew()}   // the crew's day is on Jobs
   var today=state.jobs.filter(function(j){return j.d.moveDate===t&&['booked','active','done','paid'].indexOf(j.status)>=0}).sort(function(a,b){return startMin(a)-startMin(b)});
   var live=state.jobs.filter(function(j){return j.status==='active'});
-  var onClock=state.shifts.filter(function(x){return !x.outAt});
+  var onClock=state.shifts.filter(function(x){return !x.outAt&&!x.void});
   // what customers owe now: finished jobs not paid yet (a booked job's balance comes due when the move is done)
   var dueToday=state.jobs.filter(function(j){return j.status==='done'}).reduce(function(a,j){return a+balOf(j)},0);
   var pulse='<div class="pulse">'+
@@ -3705,6 +3771,7 @@ function renderMore(){
   var work=office?[go('quote','New quote','Build and book a move'),go('crew','Field view','Work a job like the crew'),go('history','Job history','Paid and lost jobs'),
       tabs.indexOf('reports')>=0?go('reports',role==='dispatch'?'Revenue':'Reports','Money, hours and accuracy'):'']
     :[];   // the crew's past jobs are in Jobs › History
+  if(tabs.indexOf('payroll')>=0&&!hrOnly())work.push(go('payroll','Payroll','Hours, overtime and tips for the payroll company'));
   var company=role==='owner'?[go('settings','Setup','Rates, crew, forms, payments'),
       row('more:go',' data-tab="settings" data-sec="options"',SICON.options,'Options',optsOnCount()+' of '+OPTS.length+' switches on')]:[];
   if(isTallyAdmin())company.push(go('admin','MoveCrew admin','Every company, fees and trials'));
@@ -3717,7 +3784,7 @@ function renderMore(){
     window.tallyCust&&window.tallyCust.has&&!previewing()?row('cust:mine','',SICON.profile,'My moves','Your own moves, as a customer'):'',
     window.TALLY_SUPABASE&&window.tallySignOut&&!appInstalled()?row('more:getapp','',SICON.get,'Get the app',{iphone:'Add MoveCrew to your Home Screen',ipad:'Add MoveCrew to your Home Screen',android:'The Android app'}[phoneKind()]||'MoveCrew for Windows, or your phone'):'',
     window.tallySignOut?row('more:signout','',SICON.signout,'Sign out',sync.meName||''):''];
-  var sosRow=role!=='callcenter'&&(opt('truckDown')||sosActive().length)?'<div class="navlist" style="margin-top:16px">'+row('sos:open','',ICON.sos,'Truck down','Tell the office a truck broke down, and where','sosrow')+'</div>':'';
+  var sosRow=role!=='callcenter'&&!hrOnly()&&(opt('truckDown')||sosActive().length)?'<div class="navlist" style="margin-top:16px">'+row('sos:open','',ICON.sos,'Truck down','Tell the office a truck broke down, and where','sosrow')+'</div>':'';
   el.innerHTML='<div class="scrim" data-act="more:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="More"><div class="row between"><h2>More</h2><button class="btn sm" data-act="more:close">Done</button></div>'+
     grp('Work',work)+grp('Company',company)+grp('You',you)+sosRow+'</div>';
   el.hidden=!ui.more;syncLock();
@@ -6395,7 +6462,7 @@ function crewKit(me){
       '<tr class="sub"><td>Bill'+(bb.it?'':' <small>('+(Math.abs(diff)>=0.01?(diff>0?'+':'−')+money(Math.abs(diff))+' on the quote':'the same as the quote')+')</small>')+'</td><td>'+money(totalOf(j))+'</td></tr><tr><td>Paid so far</td><td class="money-paid">'+money(paidOf(j))+'</td></tr><tr class="total"><td>Balance</td><td class="'+(bal>0?'money-due':'money-paid')+'">'+money(bal)+'</td></tr></table>'+bk+charge+
       (req.length?'<p class="hint">Forms signed: '+(req.length-pend.length)+' of '+req.length+'</p>':'')+
       (savedOf(j)?'<p class="hint money-paid saved" style="margin:6px 0 0">The customer saved '+money(savedOf(j))+' off the quote.</p>':bb.it&&diff>=0.01?'<p class="hint" style="margin:6px 0 0">'+money(diff)+' more than the quote.</p>':'')+
-      (bal>0?'<p class="hint money-due" style="margin:6px 0 0">'+money(bal)+' still to collect</p>':'<p class="hint money-paid" style="margin:6px 0 0">Paid in full</p>')+tipLine(j)+act+'</div>';
+      (bal>0?'<p class="hint money-due" style="margin:6px 0 0">'+money(bal)+' still to collect</p>':'<p class="hint money-paid" style="margin:6px 0 0">Paid in full</p>')+tipLine(j,asLead)+act+'</div>';
   }
   // The quote and what made it up, always on a lead's card (Richie, Oct 21: "the lead should always be able
   // to see the quote and what made up the quote. that way he can explain any differences on the bill").
@@ -6657,20 +6724,20 @@ function renderReports(){
       '<h3 style="margin:14px 0 4px">Job hours</h3><table class="tbl"><tr><th>Job</th><th class="n">Bid</th><th class="n">Actual</th><th class="n">Miss</th></tr>'+recent+'</table>'+
       (Math.abs(all.avg)>=5&&meas.length>=3?'<p class="hint">Setting crew speed to about '+sug+' cu ft per mover-hour (now '+S.prod+') would bring new bids in line with your real jobs.</p><button class="btn sm" data-act="applyprod" data-v="'+sug+'">Set to '+sug+'</button>':'');
   }
-  var shifts=state.shifts.filter(function(x){return inR(iso(new Date(x.inAt)))});
+  var shifts=state.shifts.filter(function(x){return !x.void&&inR(iso(new Date(x.inAt)))});
   var byWho={};
   shifts.forEach(function(x){var h=shiftMs(x)/36e5,r=byWho[x.who]||(byWho[x.who]={tot:0,act:{},late:0});r.tot+=h;r.act[x.activity]=(r.act[x.activity]||0)+h;if(x.late)r.late++});
   var jobHrs={},topHrs={},dayClock={},dayJob={},dayTop={};
   shifts.forEach(function(x){var k=x.who+'|'+iso(new Date(x.inAt));dayClock[k]=(dayClock[k]||0)+shiftMs(x)/36e5});
-  finished.forEach(function(j){if(!(j.actualHours>0))return;var dy=j.d.moveDate||iso(new Date(j.finishedAt||j.createdAt)),tu=topUpFor(j);
-    j.assign.crew.forEach(function(n){var k=n+'|'+dy,jh=crewSegs(j,n).length?Math.round(crewMs(j,n,j.finishedAt)/36e5*10)/10:j.actualHours;jobHrs[n]=(jobHrs[n]||0)+jh;topHrs[n]=(topHrs[n]||0)+tu;dayJob[k]=(dayJob[k]||0)+jh;dayTop[k]=(dayTop[k]||0)+tu})});
+  finished.forEach(function(j){if(!(j.actualHours>0)||j.test)return;var dy=payJobDay(j),min=jobMinPaid(j);
+    crewOf(j).forEach(function(n){var k=n+'|'+dy,jh=hr2(jobOwnMs(j,n)/36e5),tu=Math.max(0,hr2(min-jh));jobHrs[n]=(jobHrs[n]||0)+jh;topHrs[n]=(topHrs[n]||0)+tu;dayJob[k]=(dayJob[k]||0)+jh;dayTop[k]=(dayTop[k]||0)+tu})});
   /* pay hours: clock time for the day (or job time if they didn't use the clock), plus any minimum top-ups */
   var payHrs={};Object.keys(dayClock).concat(Object.keys(dayJob)).forEach(function(k){if(payHrs['~'+k])return;payHrs['~'+k]=1;var who=k.split('|')[0];payHrs[who]=(payHrs[who]||0)+((dayClock[k]||0)>0?dayClock[k]:(dayJob[k]||0))+(dayTop[k]||0)});
   var names={};Object.keys(byWho).forEach(function(k){names[k]=1});Object.keys(jobHrs).forEach(function(k){names[k]=1});
   var tsRows=Object.keys(names).sort().map(function(n){var r=byWho[n]||{tot:0,act:{},late:0};return '<tr><td>'+esc(n)+(isLead(n)?' <small>(lead)</small>':'')+'<br><small>'+(Object.keys(r.act).map(function(a){return esc(a)+' '+r.act[a].toFixed(1)}).join(' · ')||'No clock time')+'</small></td><td class="n">'+r.tot.toFixed(1)+'</td><td class="n">'+(jobHrs[n]||0).toFixed(1)+'</td><td class="n">'+((topHrs[n]||0)>0?'+'+topHrs[n].toFixed(1):'—')+'</td><td class="n"><b>'+(payHrs[n]||0).toFixed(1)+'</b></td><td class="n">'+r.late+'</td></tr>'}).join('');
-  var live=state.shifts.filter(function(x){return !x.outAt}).map(function(x){var jn=jobNow(x.who);return '<div class="who"><span><b>'+esc(x.who)+'</b> · '+esc(x.activity)+(onBreak(x)?' · <span style="color:var(--warn)">on break</span>':'')+(jn?' · on '+esc(jn.d.name||'a job'):'')+'<br><small>Since '+fmtClock(x.inAt)+', '+fmtHM(shiftMs(x))+' paid</small></span><button class="btn sm" data-act="clk:mgr" data-id="'+x.id+'">Clock out</button></div>'}).join('');
+  var live=state.shifts.filter(function(x){return !x.outAt&&!x.void}).map(function(x){var jn=jobNow(x.who);return '<div class="who"><span><b>'+esc(x.who)+'</b> · '+esc(x.activity)+(onBreak(x)?' · <span style="color:var(--warn)">on break</span>':'')+(jn?' · on '+esc(jn.d.name||'a job'):'')+'<br><small>Since '+fmtClock(x.inAt)+', '+fmtHM(shiftMs(x))+' paid</small></span><button class="btn sm" data-act="clk:mgr" data-id="'+x.id+'">Clock out</button></div>'}).join('');
   var lates=shifts.filter(function(x){return x.late}).sort(function(a,b){return b.inAt-a.inAt}).slice(0,15).map(function(x){return '<div class="who" style="display:block"><b>'+esc(x.who)+'</b> · '+esc(fmtDate(iso(new Date(x.inAt))))+' · '+x.late+' min after last job<br><small>'+esc(x.note||'No note')+'</small></div>'}).join('');
-  var hoursHtml='<section class="card" id="hoursCard"><h2>Employee hours</h2>'+(live?'<h3 style="margin-bottom:4px">On the clock now</h3>'+live:'<p class="hint">Nobody is clocked in.</p>')+
+  var hoursHtml='<section class="card" id="hoursCard"><h2>Employee hours</h2>'+(canHR()?'<div class="row between prgo"><span class="sub">For a pay period, with overtime, tips and the file for your payroll company:</span><button class="btn sm" data-act="tab" data-tab="payroll">Payroll ›</button></div>':'')+(live?'<h3 style="margin-bottom:4px">On the clock now</h3>'+live:'<p class="hint">Nobody is clocked in.</p>')+
     '<h3 style="margin:14px 0 4px">Clock, job and pay hours</h3>'+(tsRows?'<div class="tblwrap" tabindex="0" role="region" aria-label="Clock, job and pay hours"><table class="tbl"><tr><th>Employee</th><th class="n">Clock</th><th class="n">On jobs</th><th class="n">Min. top-up</th><th class="n">Pay hours</th><th class="n">Late notes</th></tr>'+tsRows+'</table></div><p class="hint">Clock is the time clock, breaks not counted. On jobs is each person’s time on the jobs they worked (from Start job, or their clock-in after it, to the finish or their clock-out). '+(S.payMin===false?'Short jobs are paid as worked (Setup › Time clock).':'When a job runs shorter than the minimum, the top-up pays the rest, so a 1-hour job on a '+S.minHours+'-hour minimum pays '+S.minHours+'. Pay hours is the day’s clock time (or job time, on days they didn’t use the clock) plus top-ups.')+'</p>':'<p class="hint">No shifts or timed jobs in this range.</p>')+
     (lates?'<h3 style="margin:14px 0 4px">Late clock-outs</h3>'+lates:'')+'</section>';
   var rev=meas.reduce(function(a,j){return a+paidOf(j)},0),lab=meas.reduce(function(a,j){return a+j.quote.crew*payHoursFor(j)*S.crewCost},0);
@@ -6840,15 +6907,16 @@ function setupSecs(){
   add('employees','people','Employees',nIn+' '+(nIn===1?'person':'people'),employeesCard(),'crew staff people hiring documents phone');
   add('access','people','App access',sync.mode==='shared'?'Who can sign in, and as what':'Sign-in for your team',accessCard(),'sign in login users approve revoke');
   add('roles','people','Roles','What crew, crew leads and dispatch can do, and the call center',
-    '<section class="card"><h2>Roles</h2><p class="sub">Each person’s profile (Employees) has switches for the sides of the app they see when they sign in: Field view (off, crew or lead), Dispatch and Call center. Someone with more than one sees them all together. Use “See it their way” in More to try each person.</p>'+
+    '<section class="card"><h2>Roles</h2><p class="sub">Each person’s profile (Employees) has switches for the sides of the app they see when they sign in: Field view (off, crew or lead), Dispatch, Call center and HR. Someone with more than one sees them all together. Use “See it their way” in More to try each person.</p>'+
     '<div class="who" style="display:block"><b>Crew</b><br><small>Sees the jobs they are on, adds photos, reads job notes, leaves crew notes'+(opt('tally')?', ticks off the load tally':'')+(opt('clock')?', and uses the time clock':'')+'.</small></div>'+
     '<div class="who" style="display:block"><b>Crew lead</b><br><small>Everything crew can do, plus the job timer, prices, and billing out'+(opt('leadCharges')?' with extra charges':'')+(opt('leadPay')?' and payments':' (the office collects the payment)')+'.</small></div>'+
     '<div class="who" style="display:block"><b>Dispatch</b><br><small>Books quotes and schedules crews and trucks'+(opt('dispatchMoney')?', and sees company revenue and revenue by crew':'')+'. Can also work in the field with lead-level access'+(opt('dispatchPay')?', including billing':'')+'.</small></div>'+
     '<div class="who" style="display:block"><b>Owner</b><br><small>Everything, plus employee hours, job hours, and bid accuracy for the company and each crew. Can also work in the field and waive a form for a job.</small></div>'+
-    '<div class="who" style="display:block"><b>Call center</b><br><small>Your own call center people (the Call center switch): the schedule, your open quotes and New quote, with the day’s slots to line a move up in. They book it in a slot; dispatch picks the truck and crew. No money, no discounts, no payments. MoveCrew’s call center team, when MoveCrew switches the service on for your company, sees the same for you: your rate card, your open quotes and your schedule without the money.</small></div></section>'+
+    '<div class="who" style="display:block"><b>Call center</b><br><small>Your own call center people (the Call center switch): the schedule, your open quotes and New quote, with the day’s slots to line a move up in. They book it in a slot; dispatch picks the truck and crew. No money, no discounts, no payments. MoveCrew’s call center team, when MoveCrew switches the service on for your company, sees the same for you: your rate card, your open quotes and your schedule without the money.</small></div>'+
+    '<div class="who" style="display:block"><b>HR</b><br><small>Payroll (the HR switch): everyone’s clock punches, hours, overtime, tips and commission for each pay period, fixing a punch, and the Excel or CSV file for your payroll company. Sets how often you pay, what counts as overtime and how tips are split. The owner always has it.</small></div></section>'+
     optGroup('field','Crew and field')+optGroup('bill','Billing out')+optGroup('office','Office'),'permissions crew lead dispatch owner can');
   add('clock','people','Time clock',opt('clock')?'On · '+S.activities.length+' work types'+(opt('lateNote')?' · note after '+num(S.lateMins)+' min':''):'Off',
-    '<section class="card"><h2>Time clock</h2><p class="sub">Separate from the job clock: job days, warehouse work, dump runs and the rest.</p><div class="f" style="margin-top:4px"><span>Work types</span></div>'+chips(S.activities,'st:rmact')+'<div class="row"><input id="nAct" placeholder="Work type" aria-label="New work type" style="flex:1;min-height:44px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--field)"><button class="btn" data-act="st:addact">Add</button></div></section>'+
+    '<section class="card"><h2>Time clock</h2><p class="sub">Separate from the job clock: job days, warehouse work, dump runs and the rest.</p><div class="f" style="margin-top:4px"><span>Work types</span></div>'+chips(S.activities,'st:rmact')+'<div class="row"><input id="nAct" placeholder="Work type" aria-label="New work type" style="flex:1;min-height:44px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--field)"><button class="btn" data-act="st:addact">Add</button></div><p class="hint">Pay periods, overtime and how tips are split are in Payroll (More › Payroll), with the file for your payroll company.</p></section>'+
     optGroup('clock','Switches'),'clock in out hours late note location minimum pay work types');
   add('forms','jobs','Forms to sign',(S.forms||[]).length+' form'+((S.forms||[]).length===1?'':'s')+', '+nReq+' required'+(opt('forms')?'':' · signatures off'),
     '<section class="card"><h2>Forms to sign</h2><div style="margin:2px 0 8px">'+optRow(formsOpt)+'</div><p class="sub">When a job is finished, the lead is walked through every required form for the customer to sign, then straight to payment. Payment stays locked until they are signed. Sample wording only: have your attorney review anything you rely on.</p>'+formsList+
@@ -6905,9 +6973,663 @@ function setListHtml(secs){
     SET_GROUPS.map(function(g){var list=secs.filter(function(s){return s.g===g[0]});return list.length?'<div class="glabel">'+esc(g[1])+'</div><div class="navlist">'+list.map(row).join('')+'</div>':''}).join('');
 }
 
+/* ---------- Payroll (batch 8, Nov 20). Richie: "How does employee hours get logged and can we make it so it is a fast
+   export in spreadsheets to send to the payroll company"; then, on pay periods and overtime: "Give the company choices for
+   payroll how often they pay employees. What classifys as overtime, over 8 in a day, over 40 in a week. This should be
+   under hr responsibility. So employees should have a place in their profile to switch on hr responsibility just like
+   lead or sales responsibility."; and on tips: "Give the companys coices on how they handle tips. They may ask the crew
+   lead what the split should be. Or they may have a standard policy of by the hours worked on the job for jobs where
+   someone is added."
+   HR: the owner, and anyone with the HR switch on their profile (the settings' hr list). Payroll opens on the last pay
+   period: what to check first (still clocked in, long shifts, tips to split, payroll IDs), the hours by person (regular,
+   overtime, the minimum's top-up), tips and commission, then the Excel file (summary, by day, clock punches, tips) or a
+   CSV, to send. A person's hours for a day are their clock time, or their time on the day's jobs when they didn't use the
+   clock (as Reports › Employee hours has them), plus the top-up when a job ran shorter than its minimum. Overtime is
+   worked out workweek by workweek (its first day is a setting): the hours over the day's limit first, then the regular
+   hours past the week's limit. The top-up is paid at the regular rate and isn't time worked, so it never makes overtime.
+   HR who aren't the office read a period's jobs and the profiles' payroll details through payroll_jobs and
+   payroll_people, and save through hr_payroll_set, hr_tip_split and hr_payroll_id (supabase-payroll.sql), which check
+   they have HR. Clock punches are fixed in place (each fix keeps who and what it was); a wrong one is voided, not
+   deleted, so the record stays. ---------- */
+var PAY_FREQ=[['weekly','Weekly'],['biweekly','Every 2 weeks'],['semimonthly','Twice a month'],['monthly','Monthly']];
+var PAY_TIPS=[
+  ['hours','By hours on the job','Each mover’s share follows their time on the job: even, unless someone joined late or left early.'],
+  ['even','Evenly','The same share for everyone on the job.'],
+  ['lead','The crew lead splits it','The lead on the job puts in each mover’s share. Until they do, it’s split evenly.'],
+  ['off','Leave tips out','Tips are paid some other way, so they’re not in the payroll file.']];
+var WDAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function payPick(list,v,d){return list.some(function(x){return x[0]===v})?v:d}
+function payCfg(S){
+  var p=((S||state.settings).payroll)||{};
+  return {freq:payPick(PAY_FREQ,p.freq,'biweekly'),anchor:/^\d{4}-\d\d-\d\d$/.test(p.anchor||'')?p.anchor:'',weekStart:typeof p.weekStart==='number'&&p.weekStart>=0&&p.weekStart<=6?Math.floor(p.weekStart):1,
+    otWeekOn:p.otWeekOn!==false,otWeek:num(p.otWeek)>0?num(p.otWeek):40,otDayOn:!!p.otDayOn,otDay:num(p.otDay)>0?num(p.otDay):8,
+    tips:payPick(PAY_TIPS,p.tips,'hours'),set:!!p.set,by:String(p.by||''),at:num(p.at)};
+}
+function payFreqW(c){return PAY_FREQ.filter(function(f){return f[0]===c.freq})[0][1]}
+function payTipW(c){return PAY_TIPS.filter(function(t){return t[0]===c.tips})[0]}
+function otWords(c){var w=[];if(c.otDayOn)w.push('over '+c.otDay+' h a day');if(c.otWeekOn)w.push('over '+c.otWeek+' h a week');return w.length?'overtime '+w.join(' or '):'no overtime'}
+function paySetLine(c){return payFreqW(c)+' · '+otWords(c)+' · tips: '+payTipW(c)[1].toLowerCase()}
+var hr2=function(x){return Math.round((+x||0)*100)/100};
+function dayGap(a,b){return Math.round((parseISO(b)-parseISO(a))/864e5)}
+function wkStartOf(s,c){return addDays(s,-((parseISO(s).getDay()-c.weekStart+7)%7))}
+// the pay periods: weekly and every 2 weeks from any first day of one (until it's set, this workweek's first day),
+// twice a month the 1st to the 15th and the 16th to the end, monthly the whole month
+function payAnchor(c){return c.anchor||wkStartOf(todayISO(),c)}
+function periodOf(s,c){
+  c=c||payCfg();var y=+s.slice(0,4),m=+s.slice(5,7),d=+s.slice(8,10),ym=s.slice(0,8),last=String(new Date(y,m,0).getDate()).padStart(2,'0');
+  if(c.freq==='semimonthly')return d<=15?{from:ym+'01',to:ym+'15'}:{from:ym+'16',to:ym+last};
+  if(c.freq==='monthly')return {from:ym+'01',to:ym+last};
+  var len=c.freq==='weekly'?7:14,a=payAnchor(c),f=addDays(a,Math.floor(dayGap(a,s)/len)*len);
+  return {from:f,to:addDays(f,len-1)};
+}
+function periodStep(p,dir,c){return periodOf(dir<0?addDays(p.from,-1):addDays(p.to,1),c)}
+function lastPeriod(c){return periodStep(periodOf(todayISO(),c),-1,c)}
+function periodWords(p){
+  var a=parseISO(p.from),b=parseISO(p.to),o={month:'short',day:'numeric'},y=Object.assign({year:'numeric'},o);
+  return a.toLocaleDateString('en-US',a.getFullYear()===b.getFullYear()?o:y)+' – '+b.toLocaleDateString('en-US',y);
+}
+// who has HR: the owner always; anyone else with the HR switch on their profile
+function hrHas(n){var o=officeRec(n);return !!n&&((o&&o.kind==='owner')||(state.settings.hr||[]).indexOf(n)>=0)}
+function canHR(){
+  var r=state.ui.role;if(r==='customer')return false;
+  if(previewing())return ui.preview.staff?hrHas(ui.preview.staff):ui.preview.role==='owner';
+  return r==='owner'||hrHas(viewerName());
+}
+// someone whose only side is HR (a bookkeeper, say): Payroll and Chat
+function hrOnly(){var r=state.ui.role,n=viewerName();return (r==='crew'||r==='lead')&&!!n&&hrHas(n)&&state.settings.crew.indexOf(n)<0&&!isOfficeName(n)&&!ccStaffHas(n)}
+// where the numbers come from: the office reads every job and the owner every profile; other HR ask the database
+function payAllJobs(){return sync.mode!=='shared'||['owner','dispatch'].indexOf(sync.identity.role)>=0}
+function payAllPeople(){return sync.mode!=='shared'||!!sync.isOwner}
+function payUi(){return ui.pay||(ui.pay={per:null,ck:'',jobs:null,jl:'',jerr:'',ppl:null,pl:false,perr:'',edit:'',fix:null,add:null,ids:null,cd:null,busy:'',err:'',cfgErr:'',idErr:'',armed:'',copy:'',open:{},R:null})}
+function payRange(p,c){return {lo:wkStartOf(p.from,c),hi:p.to}}
+function payErrW(e){
+  var m=String((e&&(e.message||e.details||e.hint||e.code))||'');
+  if(/PGRST202|could not find the function|does not exist/i.test(m))return 'The database needs the payroll update first (supabase-payroll.sql). Ask the owner.';
+  if(/Only HR/i.test(m))return 'Only HR can see payroll. The owner turns on HR on your profile.';
+  return 'Could not load payroll. Check your connection and try again.';
+}
+var payRT=0,payRTries=0;
+function payRefresh(){
+  if(ui.tab!=='payroll')return;
+  var a=document.activeElement;clearTimeout(payRT);
+  if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.closest&&a.closest('#view')&&payRTries<8){payRTries++;payRT=setTimeout(payRefresh,700);return}
+  payRTries=0;renderPayroll();
+}
+// what has to load first, for HR who don't read it already: the period's jobs (with the workweek before it) and the
+// profiles' payroll details. '' when it's all here.
+function prLoad(){
+  var P=payUi(),c=payCfg(),r=payRange(P.per,c),k=r.lo+'|'+r.hi,st='';
+  if(!payAllJobs()){
+    if(!window.tallyPayroll)return 'error';
+    if(!P.jobs||P.jobs.k!==k){
+      if(P.jl!==k&&!P.jerr){P.jl=k;
+        window.tallyPayroll.jobs(r.lo,addDays(r.hi,1)).then(function(rows){if(P.jl!==k)return;P.jl='';P.jobs={k:k,list:(rows||[]).filter(function(x){return x&&x.id}).map(docToJob)};payRefresh()},
+          function(e){if(P.jl!==k)return;P.jl='';P.jerr=payErrW(e);payRefresh()})}
+      st=P.jerr?'error':'loading';
+    }
+  }
+  if(!payAllPeople()){
+    if(!P.ppl&&!P.pl&&!P.perr&&window.tallyPayroll){P.pl=true;
+      window.tallyPayroll.people().then(function(rows){P.pl=false;P.ppl=rows||[];payRefresh()},function(e){P.pl=false;P.perr=payErrW(e);payRefresh()})}
+  }else if(!people.loaded&&!people.loading)loadPeople().then(payRefresh);
+  return st;
+}
+function payJobs(){
+  var P=payUi();if(payAllJobs())return state.jobs;
+  return ((P.jobs&&P.jobs.list)||[]).map(function(j){return byId(j.id)||j});   // a job they're on: their own, newest copy
+}
+// name → {pid: payroll ID, wt: worker type, pt: pay type}, from the profiles
+function payPeople(){
+  var P=payUi(),m={},add=function(n,i,on){if(!n)return;i=i||{};m[n]={pid:String(i.payrollId||''),wt:String(i.workerType||''),pt:String(i.payType||''),on:on!==false,rec:true}};
+  if(!payAllPeople())(P.ppl||[]).forEach(function(r){add(r.name,{payrollId:r.payroll_id,workerType:r.worker_type,payType:r.pay_type},r.active)});
+  else people.list.forEach(function(e){add(e.name,e.info,e.active)});
+  return m;
+}
+function payJobDay(j){return (j.d&&j.d.moveDate)||iso(new Date(j.finishedAt||j.createdAt||Date.now()))}
+// a person's time on a finished job: their own from the time clock (crewOn), else the times the lead put in when they
+// joined or left (crewAdj), else the job's
+function jobOwnMs(j,n){
+  if(crewSegs(j,n).length)return crewMs(j,n,j.finishedAt||Date.now());
+  var A=crewAdjs(j).filter(function(e){return e.who===n});
+  if(A.length&&j.finishedAt){var to=j.finishedAt,from=j.startedAt||(to-num(j.actualHours)*36e5);A.forEach(function(e){if(e.d>0&&e.ts>from)from=e.ts;if(e.d<0&&e.ts<to)to=e.ts});return Math.max(0,to-from)}
+  return num(j.actualHours)*36e5;
+}
+// how a tip on this job is split, by the company's choice: {w: weight by name, how, need: the lead hasn't split it,
+// stale: a tip came in after they did, by}
+function tipShares(j,c){
+  var crew=crewOf(j),even={};crew.forEach(function(n){even[n]=1});
+  if(!crew.length)return {w:{},how:'none'};
+  if(c.tips==='lead'){
+    var sp=j.tipSplit,a=sp&&sp.amts&&typeof sp.amts==='object'?sp.amts:null,tot=0;
+    if(a)Object.keys(a).forEach(function(n){tot+=Math.max(0,num(a[n]))});
+    if(a&&tot>0)return {w:a,how:'lead',by:String(sp.by||''),stale:Math.abs(num(sp.total)-tipsOf(j))>0.009};
+    return {w:even,how:'even',need:true};
+  }
+  if(c.tips==='hours'&&num(j.actualHours)>0){var w={},t=0;crew.forEach(function(n){w[n]=jobOwnMs(j,n);t+=w[n]});if(t>0)return {w:w,how:'hours'}}
+  return {w:even,how:'even'};
+}
+// an amount split by weight to the cent, the cents left over going to the biggest remainders, so the shares add up
+function splitCents(amt,w){
+  var names=Object.keys(w).filter(function(n){return num(w[n])>0}).sort(),tot=names.reduce(function(a,n){return a+num(w[n])},0),cents=Math.round(amt*100),out={},used=0;
+  if(!names.length||!(tot>0)||!(cents>0))return out;
+  var rem=names.map(function(n){var x=cents*num(w[n])/tot,f=Math.floor(x+1e-9);out[n]=f;used+=f;return [n,x-f]});
+  rem.sort(function(a,b){return b[1]-a[1]||(a[0]<b[0]?-1:a[0]>b[0]?1:0)});
+  for(var i=0;used<cents;i++,used++)out[rem[i%rem.length][0]]++;
+  names.forEach(function(n){out[n]=out[n]/100});
+  return out;
+}
+// The pay period's hours, tips and commission, by person, and what to check before sending it.
+// o: {jobs, shifts, now}
+function payrollData(per,o){
+  o=o||{};var S=state.settings,c=payCfg(S),now=o.now||Date.now(),from=per.from,to=per.to,lo=wkStartOf(from,c),today=todayISO();
+  var all=o.shifts||state.shifts,jobs=(o.jobs||payJobs()).filter(function(j){return j&&!j.test}),shifts=all.filter(function(x){return x&&!x.void&&x.who});
+  var P={},get=function(n){return P[n]||(P[n]={name:n,days:{},reg:0,ot:0,top:0,worked:0,total:0,tips:0,comm:0})};
+  var dayOf=function(n,d){var p=get(n);return p.days[d]||(p.days[d]={day:d,clock:0,job:0,top:0,worked:0,reg:0,ot:0,jobs:[],shifts:[]})};
+  var R={per:per,cfg:c,lo:lo,people:[],shifts:[],tips:[],comm:[],open:[],long:[],overlap:[],unfinished:[],noCrew:[],noId:[],tot:{}};
+  shifts.forEach(function(x){var d=iso(new Date(x.inAt));if(d<lo||d>to)return;var D=dayOf(x.who,d);D.clock+=punchMs(x,now)/36e5;D.shifts.push(x);if(!x.outAt&&d<today){D.openPast=true;get(x.who).openPast=true}if(d>=from)R.shifts.push(x)});
+  jobs.forEach(function(j){
+    var d=payJobDay(j);if(d<lo||d>to)return;
+    if(j.status==='active'){if(d>=from)R.unfinished.push(j);return}
+    if(!(j.status==='done'||j.status==='paid')||!(num(j.actualHours)>0))return;
+    var min=jobMinPaid(j);
+    crewOf(j).forEach(function(n){var h=hr2(jobOwnMs(j,n)/36e5),D=dayOf(n,d);D.job+=h;D.top+=Math.max(0,hr2(min-h));D.jobs.push({j:j,h:h})});
+  });
+  // overtime, workweek by workweek: a week the period starts in the middle of counts its earlier days too
+  Object.keys(P).forEach(function(n){
+    var p=P[n],wreg=0;
+    for(var d=lo;d<=to;d=addDays(d,1)){
+      if(d!==lo&&parseISO(d).getDay()===c.weekStart)wreg=0;
+      var D=p.days[d];if(!D)continue;
+      D.clock=hr2(D.clock);D.job=hr2(D.job);D.top=hr2(D.top);D.worked=D.clock>0?D.clock:D.job;
+      var dot=c.otDayOn?Math.max(0,D.worked-c.otDay):0,reg=D.worked-dot,wot=0;
+      if(c.otWeekOn){wot=Math.max(0,reg-Math.max(0,c.otWeek-wreg));reg-=wot}
+      wreg+=reg;D.reg=hr2(reg);D.ot=hr2(dot+wot);
+      if(d>=from){p.reg+=D.reg;p.ot+=D.ot;p.top+=D.top;p.worked+=D.worked}
+    }
+    p.reg=hr2(p.reg);p.ot=hr2(p.ot);p.top=hr2(p.top);p.worked=hr2(p.worked);p.total=hr2(p.reg+p.ot+p.top);
+  });
+  // tips, on the day they were paid, split the company's way
+  if(c.tips!=='off')jobs.forEach(function(j){(j.payments||[]).forEach(function(pm){
+    var t=round2(num(pm.tip));if(!(t>0)||(pm.stripe&&!payCounts(pm))||!pm.date||pm.date<from||pm.date>to)return;
+    var sh=tipShares(j,c),amts=splitCents(t,sh.w);
+    if(!Object.keys(amts).length){R.noCrew.push({j:j,amt:t,date:pm.date});return}
+    Object.keys(amts).forEach(function(n){var p=get(n);p.tips=round2(p.tips+amts[n])});
+    R.tips.push({j:j,date:pm.date,amt:t,how:sh.how,need:!!sh.need,stale:!!sh.stale,by:sh.by||'',amts:amts});
+  })});
+  // commission (Setup › Sales commission): the moves paid in full in these days
+  if(commPctOf(S)>0)jobs.forEach(function(j){var cm=commOf(j,S);if(!cm||!cm.paid||cm.team||!(cm.amt>0)||!cm.day||cm.day<from||cm.day>to)return;
+    var p=get(cm.who);p.comm=round2(p.comm+cm.amt);R.comm.push({j:j,who:cm.who,amt:cm.amt,day:cm.day,base:cm.base,pct:cm.pct})});
+  // what to check
+  all.forEach(function(x){if(!x||x.void||x.outAt||!x.who)return;var d=iso(new Date(x.inAt));if(d<=to&&(d<today||to<today))R.open.push(x)});
+  R.shifts.forEach(function(x){if(x.outAt&&shiftMs(x)>=14*36e5)R.long.push(x)});
+  var byWho={};R.shifts.forEach(function(x){(byWho[x.who]=byWho[x.who]||[]).push(x)});
+  Object.keys(byWho).forEach(function(n){var l=byWho[n].slice().sort(function(a,b){return a.inAt-b.inAt});for(var i=1;i<l.length;i++)if(l[i].inAt<(l[i-1].outAt||now))R.overlap.push([l[i-1],l[i]])});
+  var info=payPeople();
+  R.people=Object.keys(P).sort(function(a,b){return a.localeCompare(b)}).map(function(n){var p=P[n],i=info[n]||{};p.pid=i.pid||'';p.wt=i.wt||'';p.pt=i.pt||'';p.rec=!!i.rec;return p})
+    .filter(function(p){return p.total>0||p.tips>0||p.comm>0||p.openPast});
+  if(R.people.some(function(p){return p.pid}))R.noId=R.people.filter(function(p){return !p.pid}).map(function(p){return p.name});
+  ['reg','ot','top','total','worked'].forEach(function(k){R.tot[k]=hr2(R.people.reduce(function(a,p){return a+p[k]},0))});
+  ['tips','comm'].forEach(function(k){R.tot[k]=round2(R.people.reduce(function(a,p){return a+p[k]},0))});
+  return R;
+}
+
+/* ---- the screen ---- */
+function renderPayroll(){
+  var v=$('#view');if(!v)return;
+  if(!canHR()){v.innerHTML='<div class="card empty"><h3>Payroll is for HR</h3><p>The owner turns on HR on a person’s profile, under Setup › Employees.</p></div>';return}
+  var P=payUi(),c=payCfg(),ck=c.freq+'|'+c.anchor+'|'+c.weekStart;
+  if(!P.per||P.ck!==ck){P.per=lastPeriod(c);P.ck=ck}
+  var per=P.per,cur=periodOf(todayISO(),c),lastP=lastPeriod(c);
+  var when=per.from===cur.from?'This pay period, so far':per.from===lastP.from?'The last pay period':'';
+  var head='<section class="card prper"><div class="prnav"><button class="btn sm" data-act="pr:per" data-d="-1" aria-label="The pay period before">‹</button>'+
+    '<div class="prt"><b>'+esc(periodWords(per))+'</b><small>'+esc(payFreqW(c)+(when?' · '+when:''))+'</small></div>'+
+    '<button class="btn sm" data-act="pr:per" data-d="1" aria-label="The next pay period"'+(per.from>=cur.from?' disabled':'')+'>›</button></div>'+
+    (c.set?'':'<p class="hint">Set how often you pay in Payroll settings, below. Until then this is every 2 weeks.</p>')+'</section>';
+  var st=prLoad();
+  if(st){P.R=null;v.innerHTML=head+(st==='loading'?'<div class="card"><p class="hint">Loading the jobs for these days…</p></div>'
+      :'<div class="card"><div class="note">'+esc(P.jerr||'Payroll can’t load here.')+'</div><button class="btn sm" data-act="pr:retry">Try again</button></div>')+paySetCard(c);return}
+  var R=P.R=payrollData(per);
+  v.innerHTML=head+payCheckCard(R)+paySumCard(R)+payTipsCard(R)+payPunchCard(R)+payIdCard(R)+paySetCard(c);
+}
+function payItem(k,html,btn){return '<div class="prit '+k+'"><span class="ic">'+(k==='warn'?'!':'i')+'</span><span class="tx">'+html+'</span>'+(btn||'')+'</div>'}
+function dayOfTs(ts){return fmtDate(iso(new Date(ts)))}
+function payCheckCard(R){
+  var it=[],btn=function(act,id,w){return '<button class="btn sm" data-act="'+act+'"'+(id?' data-id="'+esc(id)+'"':'')+'>'+w+'</button>'};
+  R.open.forEach(function(x){it.push(payItem('warn',esc(x.who)+' is still clocked in, since '+esc(dayOfTs(x.inAt))+' at '+esc(fmtClock(x.inAt))+'.'+(punchStale(x)?' That shift isn’t counted until it’s fixed.':''),btn('pr:fix',x.id,'Fix')))});
+  R.long.forEach(function(x){it.push(payItem('warn',esc(x.who)+' was on the clock '+esc(fmtHM(shiftMs(x)))+' on '+esc(dayOfTs(x.inAt))+'. Is that right?',btn('pr:fix',x.id,'Check')))});
+  R.overlap.forEach(function(pr){it.push(payItem('warn',esc(pr[1].who)+' has two clock-ins at once on '+esc(dayOfTs(pr[1].inAt))+'.',btn('pr:fix',pr[1].id,'Fix')))});
+  var seen={};R.tips.forEach(function(t){if(seen[t.j.id]||!(t.need||t.stale))return;seen[t.j.id]=1;
+    it.push(payItem('warn',t.need?'The tip on '+esc(jobName(t.j))+'’s move isn’t split yet. Until it is, it’s split evenly.':'A tip came in on '+esc(jobName(t.j))+'’s move after '+esc(t.by||'the lead')+' split it.',btn('pr:tip',t.j.id,'Split')))});
+  R.noCrew.forEach(function(t){it.push(payItem('warn','A '+esc(money(t.amt))+' tip on '+esc(jobName(t.j))+'’s move has nobody on the crew to go to.',''))});
+  if(R.noId.length)it.push(payItem('warn','No payroll ID for '+esc(andList(R.noId))+'.',btn('pr:ids','','Add')));
+  R.unfinished.forEach(function(j){it.push(payItem('info',esc(jobName(j))+'’s move ('+esc(fmtDate(payJobDay(j)))+') isn’t finished, so its hours aren’t in yet for anyone who didn’t clock in.',''))});
+  if(!it.length)return '<section class="card" id="prCheck"><h2>Check before you send</h2><p class="hint prok">All set: nobody is still clocked in, no shift is unusually long'+(R.cfg.tips==='lead'?', and every tip is split':'')+'.</p></section>';
+  return '<section class="card" id="prCheck"><h2>Check before you send</h2><div class="prchk">'+it.join('')+'</div></section>';
+}
+function h2w(x){return x?x.toFixed(2):'—'}
+function paySumCard(R){
+  var c=R.cfg,P=payUi(),tipsOn=c.tips!=='off',comm=R.people.some(function(p){return p.comm>0}),ncol=4+(tipsOn?1:0)+(comm?1:0);
+  if(!R.people.length)return '<section class="card" id="prSum"><h2>Hours</h2><p class="hint">No hours'+(tipsOn?', tips':'')+' or commission in these days.</p></section>';
+  var rows=R.people.map(function(p){var op=!!P.open[p.name];
+    return '<tr class="prrow"><td><button class="prname" data-act="pr:who" data-n="'+esc(p.name)+'" aria-expanded="'+op+'">'+esc(p.name)+'</button>'+(p.pid?'<br><small>ID '+esc(p.pid)+'</small>':'')+(/1099/.test(p.wt)?'<br><small>1099</small>':'')+(p.openPast?'<br><small class="prwarn">still clocked in</small>':'')+'</td>'+
+      '<td class="n">'+h2w(p.reg)+'</td><td class="n">'+h2w(p.ot)+'</td><td class="n"><b>'+h2w(p.total)+'</b>'+(p.top?'<br><small>+'+p.top.toFixed(2)+' top-up</small>':'')+'</td>'+
+      (tipsOn?'<td class="n">'+(p.tips?money(p.tips):'—')+'</td>':'')+(comm?'<td class="n">'+(p.comm?money(p.comm):'—')+'</td>':'')+'</tr>'+
+      (op?'<tr class="prdays"><td colspan="'+ncol+'">'+payDaysHtml(p,R)+'</td></tr>':'')}).join('');
+  var t=R.tot,tot='<tr class="prtot"><td>Total</td><td class="n">'+h2w(t.reg)+'</td><td class="n">'+h2w(t.ot)+'</td><td class="n">'+h2w(t.total)+(t.top?'<br><small>+'+t.top.toFixed(2)+' top-up</small>':'')+'</td>'+(tipsOn?'<td class="n">'+(t.tips?money(t.tips):'—')+'</td>':'')+(comm?'<td class="n">'+money(t.comm)+'</td>':'')+'</tr>';
+  var kp='<div class="kpis k3"><div class="kpi"><b>'+R.people.length+'</b><span>'+(R.people.length===1?'Person':'People')+'</span></div><div class="kpi"><b>'+h2w(t.total)+'</b><span>Hours in all</span></div><div class="kpi"><b>'+h2w(t.ot)+'</b><span>Overtime</span></div></div>';
+  var phone=['iphone','ipad','android'].indexOf(phoneKind())>=0||!!window.TallyNative;
+  var exp=window.TALLY_ARTIFACT
+    ?'<div class="row prexp"><button class="btn primary" data-act="pr:copy" data-w="sum">Copy the summary</button><button class="btn" data-act="pr:copy" data-w="days">Copy each day</button></div><p class="hint">Paste it into a spreadsheet. The MoveCrew app and website make these as an Excel file or a CSV, to send.</p>'+
+      (P.copy?'<textarea class="prcopy" id="prCopy" rows="5" readonly aria-label="Copy this into a spreadsheet">'+esc(P.copy)+'</textarea>':'')
+    :'<div class="row prexp"><button class="btn primary" data-act="pr:file" data-k="xlsx">'+(phone?'Send the Excel file':'Download the Excel file')+'</button><button class="btn" data-act="pr:file" data-k="csv">'+(phone?'Send a CSV':'Download a CSV')+'</button></div>'+
+      '<p class="hint">The Excel file has a sheet for this summary, each day, every clock punch'+(tipsOn?' and the tips':'')+(comm?', and commission':'')+'. The CSV is the summary alone, one row a person, for a payroll company that imports a file.</p>';
+  return '<section class="card" id="prSum"><h2>'+(tipsOn&&comm?'Hours, tips and commission':tipsOn?'Hours and tips':comm?'Hours and commission':'Hours')+'</h2>'+kp+
+    '<div class="tblwrap" tabindex="0" role="region" aria-label="Hours by person"><table class="tbl prtbl"><tr><th>Employee</th><th class="n">Reg.</th><th class="n">OT</th><th class="n">Total</th>'+(tipsOn?'<th class="n">Tips</th>':'')+(comm?'<th class="n">Comm.</th>':'')+'</tr>'+rows+tot+'</table></div>'+
+    '<p class="hint">Tap a name for each day. Regular and overtime ('+esc(otWords(c))+') are hours worked: the time clock, or the time on jobs on days someone didn’t use it. A top-up is the rest of a job’s minimum when it ran short: in the total, paid at the regular rate, never overtime.</p>'+exp+'</section>';
+}
+function payDaysHtml(p,R){
+  var ds=Object.keys(p.days).filter(function(d){return d>=R.per.from&&d<=R.per.to}).sort();
+  if(!ds.length)return '<p class="hint">No hours, just '+(p.tips?'tips':'')+(p.tips&&p.comm?' and ':'')+(p.comm?'commission':'')+'.</p>';
+  return '<table class="tbl prday"><tr><th>Day</th><th class="n">Worked</th><th class="n">Reg.</th><th class="n">OT</th></tr>'+ds.map(function(d){var D=p.days[d];
+    var src=D.clock>0?'Time clock'+(D.jobs.length?' · '+D.jobs.map(function(x){return jobName(x.j)}).join(', '):''):D.jobs.length?D.jobs.map(function(x){return jobName(x.j)+' '+x.h.toFixed(2)+' h'}).join(', '):D.openPast?'Still clocked in: not counted':'';
+    return '<tr><td>'+esc(fmtDate(d))+'<br><small>'+esc(src)+(D.top?' · +'+D.top.toFixed(2)+' h top-up':'')+'</small></td><td class="n">'+D.worked.toFixed(2)+'</td><td class="n">'+D.reg.toFixed(2)+'</td><td class="n">'+h2w(D.ot)+'</td></tr>'}).join('')+'</table>';
+}
+function tipHowW(t){return t.how==='lead'?'Split by '+(t.by||'the lead'):t.how==='hours'?'By hours on the job':'Evenly'+(t.need?' (not split yet)':'')}
+function payTipsCard(R){
+  if(R.cfg.tips==='off'||!R.tips.length)return '';
+  var seen={},rows=R.tips.map(function(t){var j=t.j,first=!seen[j.id];seen[j.id]=1;
+    var who=Object.keys(t.amts).sort().map(function(n){return esc(n)+' '+money(t.amts[n])}).join(' · ');
+    return '<div class="prtip"><div class="row between"><span><b>'+esc(jobName(j))+'</b> · '+esc(fmtDate(t.date))+' · '+money(t.amt)+'</span>'+
+      (R.cfg.tips==='lead'&&first&&!(ui.tipEd&&ui.tipEd.id===j.id)?'<button class="btn sm" data-act="tip:open" data-id="'+esc(j.id)+'">'+(t.need?'Split':'Change')+'</button>':'')+'</div>'+
+      '<small>'+esc(tipHowW(t))+': '+who+'</small>'+(first&&ui.tipEd&&ui.tipEd.id===j.id?tipEdHtml(j):'')+'</div>'}).join('');
+  return '<section class="card" id="prTips"><h2>Tips</h2><p class="sub">'+esc(payTipW(R.cfg)[1]+'. '+payTipW(R.cfg)[2])+'</p>'+rows+'</section>';
+}
+function shiftById(id){return state.shifts.find(function(x){return x.id===id})||null}
+// a clock-in left on from an earlier day: not counted until someone fixes it (else every hour since would count)
+function punchStale(x){return !!x&&!x.outAt&&!x.void&&iso(new Date(x.inAt))<todayISO()}
+function punchMs(x,now){return punchStale(x)?0:shiftMs(x,now)}
+function punchLine(x){
+  var bk=brkMs(x,x.inAt,x.outAt||Date.now()),nx=x.outAt&&iso(new Date(x.outAt))!==iso(new Date(x.inAt));
+  return fmtClock(x.inAt)+' – '+(x.outAt?fmtClock(x.outAt)+(nx?' the next day':''):'still on')+' · '+(punchStale(x)?'not counted until it’s fixed':fmtHM(shiftMs(x))+(bk>0?' (break '+fmtDur(bk)+')':''))+(x.activity?' · '+x.activity:'');
+}
+function payPunchCard(R){
+  var P=payUi(),list=R.shifts.concat(R.open.filter(function(x){return R.shifts.indexOf(x)<0})).sort(function(a,b){return a.who.localeCompare(b.who)||a.inAt-b.inAt});
+  var open=ui.open['pr:punch'];if(open===undefined||P.edit||P.add)open=!!(open||P.edit||P.add);
+  var rows=list.map(function(x){var ed=P.edit===x.id,fx=(x.fixes||[]).slice(-1)[0];
+    return '<div class="prpunch'+(ed?' on':'')+'" id="pp_'+esc(x.id)+'"><div class="prprow"><span><b>'+esc(x.who)+'</b> · '+esc(dayOfTs(x.inAt))+'<br><small>'+esc(punchLine(x))+'</small>'+
+      (fx?'<br><small>Fixed by '+esc(fx.by||'HR')+', '+esc(fmtStamp(fx.at))+'</small>':'')+(x.added?'<br><small>Added by '+esc(x.added.by||'HR')+'</small>':'')+(x.late?'<br><small>Late clock-out: '+esc(x.note||'no note')+'</small>':'')+'</span>'+
+      (ed?'':'<button class="btn sm" data-act="pr:fix" data-id="'+esc(x.id)+'">Fix</button>')+'</div>'+(ed?payFixHtml(x):'')+'</div>'}).join('');
+  return '<details class="card acc" data-k="pr:punch" id="prPunch"'+(open?' open':'')+'><summary><span>Clock punches<small class="prsub">'+list.length+' in these days'+(R.open.length?', '+R.open.length+' still on':'')+'</small></span></summary><div class="acc-body">'+
+    (rows||'<p class="hint">No one used the time clock in these days.</p>')+(P.add?payAddHtml():'<button class="btn sm" data-act="pr:add" style="margin-top:10px">Add a missed shift</button>')+'</div></details>';
+}
+function dtl(ts){var d=new Date(ts);return iso(d)+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+function dtlParse(s){var m=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(s||'');return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime():0}
+function payErrP(id,m){return '<p class="hint err" id="'+id+'" role="alert"'+(m?'':' hidden')+'>'+esc(m||'')+'</p>'}
+function actOpts(cur){var a=(state.settings.activities||[]).slice();if(cur&&a.indexOf(cur)<0)a.unshift(cur);return a.map(function(x){return '<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>'}).join('')}
+function payFixHtml(x){
+  var P=payUi(),f=P.fix&&P.fix.id===x.id?P.fix:(P.fix={id:x.id,inS:dtl(x.inAt),outS:x.outAt?dtl(x.outAt):'',act:x.activity||''}),arm=P.armed==='void:'+x.id;
+  return '<div class="pred"><div class="prgrid">'+fld('Clock in','<input type="datetime-local" data-prf="inS" value="'+esc(f.inS)+'">')+fld('Clock out','<input type="datetime-local" data-prf="outS" value="'+esc(f.outS)+'">')+
+    ((state.settings.activities||[]).length>1?fld('For','<select data-prf="act">'+actOpts(f.act)+'</select>'):'')+'</div>'+
+    ((x.breaks||[]).length?'<p class="hint">Breaks inside these times stay unpaid.</p>':'')+
+    '<div class="row" style="margin-top:8px"><button class="btn primary sm" data-act="pr:fixsave" data-id="'+esc(x.id)+'">Save</button><button class="btn sm" data-act="pr:fixno">Cancel</button>'+
+    '<button class="btn sm '+(arm?'danger':'ghost')+'" data-act="pr:void" data-id="'+esc(x.id)+'">'+(arm?'Tap again to take it out':'Take this shift out')+'</button></div>'+payErrP('prErr',P.err)+'</div>';
+}
+function payNames(){var S=state.settings,out=[];directory().forEach(function(d){out.push(d.name)});(S.hr||[]).forEach(function(n){if(out.indexOf(n)<0)out.push(n)});return out.sort(function(a,b){return a.localeCompare(b)})}
+function payAddHtml(){
+  var P=payUi(),A=P.add;
+  return '<div class="pred" style="margin-top:10px"><h3 class="cm-h3" style="margin-top:4px">Add a missed shift</h3><div class="prgrid">'+
+    fld('Who','<select data-pra="who"><option value="">Pick someone</option>'+payNames().map(function(n){return '<option'+(n===A.who?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select>')+
+    fld('Day','<input type="date" data-pra="day" max="'+todayISO()+'" value="'+esc(A.day||'')+'">')+
+    fld('Clock in','<input type="time" data-pra="tin" value="'+esc(A.tin||'')+'">')+fld('Clock out','<input type="time" data-pra="tout" value="'+esc(A.tout||'')+'">')+
+    ((state.settings.activities||[]).length>1?fld('For','<select data-pra="act">'+actOpts(A.act||(state.settings.activities||[])[0])+'</select>'):'')+'</div>'+
+    '<p class="hint">A clock out earlier than the clock in is the next morning.</p>'+
+    '<div class="row" style="margin-top:8px"><button class="btn primary sm" data-act="pr:addsave">Add it</button><button class="btn sm" data-act="pr:addno">Cancel</button></div>'+payErrP('prErr2',P.err)+'</div>';
+}
+function payIdCard(R){
+  if(!R.people.length)return '';
+  var P=payUi(),info=payPeople(),d=P.ids||{},open=ui.open['pr:ids'];if(open===undefined)open=!!R.noId.length&&P.idsOpen;
+  if(!R.people.some(function(p){return info[p.name]}))return '<details class="card acc" data-k="pr:ids" id="prIds"'+(open?' open':'')+'><summary><span>Payroll IDs<small class="prsub">No profiles yet</small></span></summary><div class="acc-body"><p class="hint" style="margin-top:0">Each person’s ID at your payroll company goes on their profile (Setup › Employees › Job and pay). Nobody paid in these days has a profile yet, so the file matches by name.</p></div></details>';
+  var rows=R.people.map(function(p){var i=info[p.name],v=d[p.name]!=null?d[p.name]:(i?i.pid:'');
+    return '<label class="tipln"><span>'+esc(p.name)+'</span>'+(i?'<input data-prid="'+esc(p.name)+'" autocomplete="off" maxlength="40" value="'+esc(v)+'">':'<small>No profile yet: the owner adds one under Setup › Employees.</small>')+'</label>'}).join('');
+  return '<details class="card acc" data-k="pr:ids" id="prIds"'+(open?' open':'')+'><summary><span>Payroll IDs<small class="prsub">'+(R.noId.length?R.noId.length+' missing':R.people.some(function(p){return p.pid})?'All set':'None yet')+'</small></span></summary><div class="acc-body">'+
+    '<p class="hint" style="margin-top:0">Each person’s ID at your payroll company, so the file matches their records. It’s on their profile too (Job and pay).</p>'+rows+
+    '<button class="btn primary sm" data-act="pr:idsave" style="margin-top:10px"'+(P.busy==='ids'?' disabled':'')+'>'+(P.busy==='ids'?'Saving…':'Save payroll IDs')+'</button>'+payErrP('prIdErr',P.idErr)+'</div></details>';
+}
+function paySetCard(c){
+  var P=payUi(),d=P.cd||(P.cd={freq:c.freq,anchor:c.anchor||payAnchor(c),weekStart:c.weekStart,otWeekOn:c.otWeekOn,otWeek:c.otWeek,otDayOn:c.otDayOn,otDay:c.otDay,tips:c.tips});
+  var open=ui.open['pr:set'];if(open===undefined)open=!c.set;
+  var wk=d.freq==='weekly'||d.freq==='biweekly';
+  return '<details class="card acc" data-k="pr:set" id="prSet"'+(open?' open':'')+'><summary><span>Payroll settings<small class="prsub">'+esc(c.set?paySetLine(c):'Not set yet')+'</small></span></summary><div class="acc-body">'+
+    '<h3 class="cm-h3" style="margin-top:4px">How often you pay</h3><div class="seg prseg" role="radiogroup" aria-label="How often you pay">'+PAY_FREQ.map(function(f){return '<label><input type="radio" name="prFreq" data-prc="freq" value="'+f[0]+'"'+(d.freq===f[0]?' checked':'')+'><span>'+f[1]+'</span></label>'}).join('')+'</div>'+
+    '<div id="prAnchorBox"'+(wk?'':' hidden')+'>'+fld('The first day of a pay period','<input type="date" data-prc="anchor" value="'+esc(d.anchor||'')+'">')+'<p class="hint">Any pay period’s first day. The others follow from it.</p></div>'+
+    '<p class="hint" id="prSemiNote"'+(d.freq==='semimonthly'?'':' hidden')+'>The 1st to the 15th, and the 16th to the end of the month.</p>'+
+    '<p class="hint" id="prMonthNote"'+(d.freq==='monthly'?'':' hidden')+'>The 1st to the end of the month.</p>'+
+    fld('The workweek starts on','<select data-prc="weekStart">'+WDAY.map(function(w,i){return '<option value="'+i+'"'+(i===+d.weekStart?' selected':'')+'>'+w+'</option>'}).join('')+'</select>')+
+    '<h3 class="cm-h3">What counts as overtime</h3>'+
+    '<label class="check prot"><input type="checkbox" data-prc="otWeekOn"'+(d.otWeekOn?' checked':'')+'><span>Over <input type="number" inputmode="decimal" min="1" max="168" step="0.5" data-prc="otWeek" value="'+esc(String(d.otWeek))+'" aria-label="Hours in a week"> hours in a week</span></label>'+
+    '<label class="check prot"><input type="checkbox" data-prc="otDayOn"'+(d.otDayOn?' checked':'')+'><span>Over <input type="number" inputmode="decimal" min="1" max="24" step="0.5" data-prc="otDay" value="'+esc(String(d.otDay))+'" aria-label="Hours in a day"> hours in a day</span></label>'+
+    '<p class="hint">Your payroll company pays overtime at time and a half. With both on, a day’s overtime hours don’t count again toward the week.</p>'+
+    '<h3 class="cm-h3">Tips</h3><div class="prtips">'+PAY_TIPS.map(function(t){return '<label class="check"><input type="radio" name="prTips" data-prc="tips" value="'+t[0]+'"'+(d.tips===t[0]?' checked':'')+'><span><b>'+t[1]+'</b><small>'+t[2]+'</small></span></label>'}).join('')+'</div>'+
+    '<button class="btn primary" data-act="pr:cfgsave" style="margin-top:10px"'+(P.busy==='cfg'?' disabled':'')+'>'+(P.busy==='cfg'?'Saving…':'Save payroll settings')+'</button>'+
+    (c.set&&c.by?'<p class="hint">Last saved by '+esc(c.by)+(c.at?', '+esc(fmtStamp(c.at)):'')+'.</p>':'')+payErrP('prCfgErr',P.cfgErr)+'</div></details>';
+}
+
+/* ---- splitting a tip by hand (The crew lead splits it): the lead on the job card, or HR in Payroll ---- */
+function tipEdOpen(j){
+  var sp=j.tipSplit,t=tipsOf(j),amts={},a=sp&&sp.amts&&typeof sp.amts==='object'?sp.amts:null;
+  if(a&&Math.abs(num(sp.total)-t)<0.01)crewOf(j).forEach(function(n){amts[n]=a[n]!=null?String(num(a[n])):'0'});
+  else{var w={};crewOf(j).forEach(function(n){w[n]=1});var e=splitCents(t,w);crewOf(j).forEach(function(n){amts[n]=String(e[n]||0)})}
+  ui.tipEd={id:j.id,amts:amts,err:'',busy:false};
+}
+function tipSumW(j){
+  var T=ui.tipEd,sum=0;crewOf(j).forEach(function(n){sum+=num(String((T&&T.amts[n])||'').replace(/[$,\s]/g,''))});sum=round2(sum);
+  var t=tipsOf(j),d=round2(t-sum);
+  return Math.abs(d)<0.005?'Adds up to the '+money(t)+' tip.':'Adds up to '+money(sum)+': '+money(Math.abs(d))+(d>0?' still to give out.':' too much.');
+}
+function tipEdHtml(j){
+  var T=ui.tipEd,id=esc(j.id);
+  return '<div class="tiped"><p class="hint" style="margin:8px 0 4px">Each mover’s share of the '+money(tipsOf(j))+' tip:</p>'+
+    crewOf(j).map(function(n){return '<label class="tipln"><span>'+esc(n)+'</span><input data-tipn="'+esc(n)+'" type="text" inputmode="decimal" autocomplete="off" value="'+esc(T.amts[n]==null?'':T.amts[n])+'" aria-label="'+esc(n)+'’s share"></label>'}).join('')+
+    '<p class="hint" id="tipSum" aria-live="polite">'+esc(tipSumW(j))+'</p>'+
+    '<div class="row" style="margin-top:6px"><button class="btn sm" data-act="tip:fill" data-k="even" data-id="'+id+'">Evenly</button><button class="btn sm" data-act="tip:fill" data-k="hours" data-id="'+id+'">By hours</button>'+
+    '<button class="btn primary sm" data-act="tip:save" data-id="'+id+'"'+(T.busy?' disabled':'')+'>'+(T.busy?'Saving…':'Save the split')+'</button><button class="btn sm ghost" data-act="tip:cancel">Cancel</button></div>'+payErrP('tipErr',T.err)+'</div>';
+}
+function tipRedraw(){if(ui.tab==='payroll')renderPayroll();else if(ui.tab==='crew')renderCrew();else renderTab()}
+function tipJob(id){var P=payUi();return byId(id)||((P.jobs&&P.jobs.list)||[]).filter(function(j){return j.id===id})[0]||null}
+function tipSave(j){
+  var T=ui.tipEd,tot=tipsOf(j),amts={},sum=0,bad=false;if(!T||T.busy)return;
+  crewOf(j).forEach(function(n){var raw=String(T.amts[n]==null?'':T.amts[n]).replace(/[$,\s]/g,'');if(raw!==''&&!/^\d*\.?\d*$/.test(raw)){bad=true;return}var v=round2(num(raw));if(v>0)amts[n]=v;sum+=v});
+  sum=round2(sum);
+  var fail=function(m){T.err=m;T.busy=false;tipRedraw()};
+  if(bad)return fail('Use amounts like 25 or 25.50.');
+  if(Math.abs(sum-tot)>0.005)return fail('The shares add up to '+money(sum)+', not the '+money(tot)+' tip.');
+  var by=viewerName()||(state.ui.role==='owner'?'Owner':'HR'),rec={amts:amts,total:tot,by:by,at:Date.now()};
+  var words=Object.keys(amts).sort().map(function(n){return n+' '+money(amts[n])}).join(', ');
+  var mine=state.jobs.indexOf(j)>=0&&(sync.mode!=='shared'||canEditJobs()||crewOf(j).indexOf(viewerName())>=0);
+  if(mine){j.tipSplit=rec;logEv(j,'Tip split by '+by+': '+words);ui.tipEd=null;save();tipRedraw();toast('Tip split saved.');return}
+  if(!window.tallyPayroll)return fail('The split can’t be saved here.');
+  T.busy=true;T.err='';tipRedraw();
+  window.tallyPayroll.tipSplit(j.id,amts).then(function(r){j.tipSplit=r&&r.amts?r:rec;ui.tipEd=null;tipRedraw();toast('Tip split saved.')},
+    function(e){fail(/Only HR/i.test(String(e&&e.message))?'Only HR can split this tip.':'Could not save the split. Check your connection and try again.')});
+}
+
+/* ---- the files: an Excel workbook (written here: a zip of the sheets, stored, no compression) and a CSV ---- */
+var CRC_T=null;
+function crc32(b){
+  if(!CRC_T){CRC_T=new Uint32Array(256);for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;CRC_T[n]=c>>>0}}
+  var x=0xFFFFFFFF;for(var i=0;i<b.length;i++)x=CRC_T[(x^b[i])&255]^(x>>>8);return (x^0xFFFFFFFF)>>>0;
+}
+function zipStore(files){
+  var enc=new TextEncoder(),parts=[],cd=[],off=0,now=new Date();
+  var tm=((now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1))&0xFFFF,dt=(((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate())&0xFFFF;
+  files.forEach(function(f){
+    var nm=enc.encode(f.name),d=f.data,crc=crc32(d),h=new DataView(new ArrayBuffer(30)),c=new DataView(new ArrayBuffer(46));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);h.setUint32(14,crc,true);h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,nm.length,true);
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    parts.push(new Uint8Array(h.buffer),nm,d);cd.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+d.length;
+  });
+  var cdLen=cd.reduce(function(a,x){return a+x.length},0),e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cdLen,true);e.setUint32(16,off,true);
+  var all=parts.concat(cd,[new Uint8Array(e.buffer)]),out=new Uint8Array(all.reduce(function(a,x){return a+x.length},0)),p=0;
+  all.forEach(function(x){out.set(x,p);p+=x.length});
+  return out;
+}
+function xEsc(s){return String(s==null?'':s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function xCol(i){var s='';i++;while(i>0){var m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s}
+// the cells' looks: s text, H a column's name, h hours (0.00), m money, d a date, t a date and time, T the title, hb mb sb
+// the totals row, i a whole number
+var X_KIND={s:0,H:1,h:2,m:3,d:4,t:5,T:6,hb:7,mb:8,sb:9,i:10};
+var X_STYLES='<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="3"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/><numFmt numFmtId="165" formatCode="yyyy-mm-dd h:mm AM/PM"/><numFmt numFmtId="166" formatCode="&quot;$&quot;#,##0.00"/></numFmts>'+
+  '<fonts count="3"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="14"/><name val="Calibri"/><family val="2"/></font></fonts>'+
+  '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE6ECF5"/><bgColor indexed="64"/></patternFill></fill></fills>'+
+  '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top style="thin"><color rgb="FF7A8899"/></top><bottom/><diagonal/></border></borders>'+
+  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="11">'+
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+  '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'+
+  '<xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
+  '<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
+  '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
+  '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
+  '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+  '<xf numFmtId="2" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>'+
+  '<xf numFmtId="166" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>'+
+  '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>'+
+  '<xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
+  '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+var XL0=Date.UTC(1899,11,30);
+function xSerialDay(s){var p=String(s).split('-');return (Date.UTC(+p[0],+p[1]-1,+p[2])-XL0)/864e5}
+function xSerialTs(ms){var d=new Date(ms);return (Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours(),d.getMinutes(),d.getSeconds())-XL0)/864e5}
+function cellV(c){return c&&typeof c==='object'?c.v:c}
+function xSheet(sh){
+  var rows=sh.rows.map(function(r,ri){
+    var cells=r.map(function(c,ci){
+      var k=c&&typeof c==='object'?c.k:(typeof c==='number'?'h':'s'),v=cellV(c),ref=xCol(ci)+(ri+1),s=X_KIND[k]||0;
+      if(v==null||v==='')return k==='H'||k==='sb'||k==='hb'||k==='mb'?'<c r="'+ref+'" s="'+s+'"/>':'';
+      if(k==='d')v=xSerialDay(v);else if(k==='t')v=xSerialTs(v);
+      if(typeof v==='number')return isFinite(v)?'<c r="'+ref+'" s="'+s+'"><v>'+String(k==='t'?v:Math.round(v*1e6)/1e6)+'</v></c>':'';
+      var tx=xEsc(v);return '<c r="'+ref+'" s="'+s+'" t="inlineStr"><is><t'+(/^\s|\s$/.test(tx)?' xml:space="preserve"':'')+'>'+tx+'</t></is></c>';
+    }).join('');
+    return '<row r="'+(ri+1)+'">'+cells+'</row>';
+  }).join('');
+  var cols=(sh.cols||[]).map(function(w,i){return '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>'}).join('');
+  var view=sh.freeze?'<sheetViews><sheetView workbookViewId="0"><pane ySplit="'+sh.freeze+'" topLeftCell="A'+(sh.freeze+1)+'" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft"/></sheetView></sheetViews>':'<sheetViews><sheetView workbookViewId="0"/></sheetViews>';
+  // printed: landscape, one page wide
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'+view+'<sheetFormatPr defaultRowHeight="15"/>'+(cols?'<cols>'+cols+'</cols>':'')+'<sheetData>'+rows+'</sheetData>'+
+    '<pageMargins left="0.5" right="0.5" top="0.75" bottom="0.75" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+}
+function xlsxBook(sheets,title){
+  var enc=new TextEncoder(),u=function(s){return enc.encode(s)},X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n',n=sheets.length;
+  var R='http://schemas.openxmlformats.org/officeDocument/2006/relationships',PK='http://schemas.openxmlformats.org/package/2006/relationships';
+  var nm=function(s,i){var t=String(s||'').replace(/[\[\]:*?\/\\]/g,' ').slice(0,31).trim();return t||'Sheet'+(i+1)};
+  return zipStore([
+    {name:'[Content_Types].xml',data:u(X+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'+
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+
+      sheets.map(function(s,i){return '<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'}).join('')+
+      '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>')},
+    {name:'_rels/.rels',data:u(X+'<Relationships xmlns="'+PK+'"><Relationship Id="rId1" Type="'+R+'/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="'+PK+'/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="'+R+'/extended-properties" Target="docProps/app.xml"/></Relationships>')},
+    {name:'docProps/core.xml',data:u(X+'<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>'+xEsc(title)+'</dc:title><dc:creator>MoveCrew</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">'+new Date().toISOString().replace(/\.\d+Z$/,'Z')+'</dcterms:created></cp:coreProperties>')},
+    {name:'docProps/app.xml',data:u(X+'<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>MoveCrew</Application></Properties>')},
+    {name:'xl/workbook.xml',data:u(X+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="'+R+'"><bookViews><workbookView/></bookViews><sheets>'+sheets.map(function(s,i){return '<sheet name="'+xEsc(nm(s.name,i))+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>'}).join('')+'</sheets></workbook>')},
+    {name:'xl/_rels/workbook.xml.rels',data:u(X+'<Relationships xmlns="'+PK+'">'+sheets.map(function(s,i){return '<Relationship Id="rId'+(i+1)+'" Type="'+R+'/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>'}).join('')+'<Relationship Id="rId'+(n+1)+'" Type="'+R+'/styles" Target="styles.xml"/></Relationships>')},
+    {name:'xl/styles.xml',data:u(X+X_STYLES)}
+  ].concat(sheets.map(function(s,i){return {name:'xl/worksheets/sheet'+(i+1)+'.xml',data:u(xSheet(s))}})));
+}
+function csvOf(rows){
+  return '\uFEFF'+rows.map(function(r){return r.map(function(c){var v=cellV(c);if(typeof v==='number')return String(Math.round(v*100)/100);
+    v=String(v==null?'':v);if(/^[=+\-@\t\r]/.test(v))v="'"+v;return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')}).join('\r\n')+'\r\n';
+}
+function tsvOf(rows){return rows.map(function(r){return r.map(function(c){var v=cellV(c);return typeof v==='number'?String(Math.round(v*100)/100):String(v==null?'':v).replace(/[\t\r\n]+/g,' ')}).join('\t')}).join('\n')}
+// the sheets: the summary, each day, every clock punch, the tips, and commission when there is some
+function paySheets(R){
+  var c=R.cfg,tipsOn=c.tips!=='off',comm=R.comm.length>0,co=String(state.settings.company||'').trim(),by=viewerName();
+  var H=function(list){return list.map(function(x){return {k:'H',v:x}})},hv=function(x){return {k:'h',v:x}},mv=function(x){return {k:'m',v:x}};
+  var head=H(['Employee','Payroll ID','Worker type','Pay type','Regular hours','Overtime hours','Min. top-up hours','Total hours'].concat(tipsOn?['Tips']:[]).concat(comm?['Commission']:[]));
+  var body=R.people.map(function(p){return [p.name,p.pid,p.wt,p.pt,hv(p.reg),hv(p.ot),hv(p.top),hv(p.total)].concat(tipsOn?[mv(p.tips)]:[]).concat(comm?[mv(p.comm)]:[])});
+  var t=R.tot,totals=[{k:'sb',v:'Total'},{k:'sb',v:''},{k:'sb',v:''},{k:'sb',v:''},{k:'hb',v:t.reg},{k:'hb',v:t.ot},{k:'hb',v:t.top},{k:'hb',v:t.total}].concat(tipsOn?[{k:'mb',v:t.tips}]:[]).concat(comm?[{k:'mb',v:t.comm}]:[]);
+  var notes=[['Regular and overtime are hours worked. Min. top-up is the rest of a job’s minimum when it ran short: paid at the regular rate, not overtime.']];
+  if(tipsOn)notes.push(['Tips: '+payTipW(c)[1].toLowerCase()+'. '+payTipW(c)[2]]);
+  var sum={name:'Payroll summary',freeze:4,cols:[24,14,16,11,14,15,17,12].concat(tipsOn?[12]:[]).concat(comm?[13]:[]),
+    rows:[[{k:'T',v:(co?co+': ':'')+'payroll for '+periodWords(R.per)}],[payFreqW(c)+' · '+otWords(c)+' (the workweek starts '+WDAY[c.weekStart]+') · made '+fmtStamp(Date.now())+(by?' by '+by:'')],[],head].concat(body,[totals,[]],notes)};
+  var dayRows=[];R.people.forEach(function(p){Object.keys(p.days).filter(function(d){return d>=R.per.from&&d<=R.per.to}).sort().forEach(function(d){var D=p.days[d];
+    dayRows.push([p.name,{k:'d',v:d},WDAY[parseISO(d).getDay()].slice(0,3),hv(D.clock),hv(D.job),hv(D.worked),hv(D.reg),hv(D.ot),hv(D.top),D.jobs.map(function(x){return jobName(x.j)+' ('+x.h.toFixed(2)+' h)'}).join(', ')+(D.openPast?(D.jobs.length?'; ':'')+'still clocked in: not counted until fixed':'')])})});
+  var days={name:'By day',freeze:1,cols:[22,12,6,12,11,13,10,11,16,44],rows:[H(['Employee','Date','Day','Clock hours','Job hours','Hours worked','Regular','Overtime','Min. top-up','Jobs'])].concat(dayRows)};
+  var pr=R.shifts.slice().sort(function(a,b){return a.who.localeCompare(b.who)||a.inAt-b.inAt}).map(function(x){var fx=(x.fixes||[]).slice(-1)[0],nt=[];
+    if(!x.outAt)nt.push(punchStale(x)?'still clocked in: not counted until fixed':'still clocked in');if(x.late)nt.push('late clock-out: '+(x.note||'no note'));if(fx)nt.push('fixed by '+(fx.by||'HR')+' '+fmtStamp(fx.at));if(x.added)nt.push('added by '+(x.added.by||'HR'));if(x.mgr)nt.push('clocked out by a manager');
+    return [x.who,x.activity||'',{k:'t',v:x.inAt},x.outAt?{k:'t',v:x.outAt}:'',{k:'i',v:Math.round(brkMs(x,x.inAt,x.outAt||Date.now())/60000)},hv(hr2(punchMs(x)/36e5)),nt.join('; ')]});
+  var punches={name:'Clock punches',freeze:1,cols:[22,18,21,21,13,12,40],rows:[H(['Employee','For','Clock in','Clock out','Break minutes','Paid hours','Notes'])].concat(pr)};
+  var out=[sum,days,punches];
+  if(tipsOn){var tr=[];R.tips.forEach(function(x){Object.keys(x.amts).sort().forEach(function(n){tr.push([{k:'d',v:x.date},jobName(x.j),mv(x.amt),tipHowW(x),n,mv(x.amts[n])])})});
+    out.push({name:'Tips',freeze:1,cols:[12,26,10,26,22,10],rows:[H(['Date','Move','Tip','How it’s split','Employee','Share'])].concat(tr)})}
+  if(comm)out.push({name:'Commission',freeze:1,cols:[22,26,12,13,8,13],rows:[H(['Employee','Move','Paid in full','Final bill','%','Commission'])].concat(R.comm.map(function(x){return [x.who,jobName(x.j),{k:'d',v:x.day},mv(x.base),{k:'h',v:x.pct},mv(x.amt)]}))});
+  return out;
+}
+function payFileBase(per){var co=String(state.settings.company||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30);return (co?co+'-':'')+'payroll-'+per.from+'-to-'+per.to}
+function payB64(bytes){var s='';for(var i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s)}
+function payDownload(name,mime,bytes){
+  var url=URL.createObjectURL(new Blob([bytes],{type:mime})),a=document.createElement('a');
+  a.href=url;a.download=name;a.rel='noopener';a.style.display='none';document.body.appendChild(a);a.click();
+  setTimeout(function(){try{URL.revokeObjectURL(url)}catch(e){}a.remove()},5000);return 'saved';
+}
+// the file, out of the app: Android's share sheet in the Android app, the phone's share sheet on the website on a phone,
+// a download on a computer and in the Windows app
+function payDeliver(name,mime,bytes){
+  if(window.__TALLY_TEST&&typeof window.__tallyFile==='function')return Promise.resolve(window.__tallyFile(name,mime,bytes));
+  var N=window.TallyNative;
+  if(N&&typeof N.shareFile==='function'){var ok=false;try{ok=N.shareFile(name,mime,payB64(bytes))}catch(e){}return ok?Promise.resolve('native'):Promise.reject(new Error('share'))}
+  if(N)return Promise.reject(new Error('old'));   // the Android app from before payroll can't hand a file over
+  var f=null;try{f=new File([bytes],name,{type:mime})}catch(e){}
+  if(['iphone','ipad','android'].indexOf(phoneKind())>=0&&f&&navigator.share&&navigator.canShare){
+    try{if(navigator.canShare({files:[f]}))return navigator.share({files:[f],title:name}).then(function(){return 'shared'},function(e){return e&&e.name==='AbortError'?'cancel':payDownload(name,mime,bytes)})}catch(e){}
+  }
+  return Promise.resolve(payDownload(name,mime,bytes));
+}
+function payFile(kind){
+  var P=payUi(),R=P.R;if(!R)return;
+  var base=payFileBase(R.per),name,mime,bytes;
+  try{
+    if(kind==='csv'){var s0=paySheets(R)[0];bytes=new TextEncoder().encode(csvOf(s0.rows.slice(3,4+R.people.length)));mime='text/csv';name=base+'.csv'}
+    else{bytes=xlsxBook(paySheets(R),'Payroll '+periodWords(R.per));mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';name=base+'.xlsx'}
+  }catch(e){toast('Could not make the file: '+String(e&&e.message||e).slice(0,80));return}
+  payDeliver(name,mime,bytes).then(function(r){if(r==='shared')toast('Sent.');else if(r==='saved')toast('Saved '+name+' to your downloads.')},
+    function(e){toast(e&&e.message==='old'?'Update the MoveCrew app to send files from your phone (More › Get the app).':'Could not send the file. Try again.')});
+}
+
+/* ---- saving ---- */
+function payCfgSave(){
+  var P=payUi(),c=payCfg(),d=P.cd||{};
+  var fail=function(m){P.cfgErr=m;P.busy='';renderPayroll()};
+  var wk=d.freq==='weekly'||d.freq==='biweekly',ow=num(d.otWeek),od=num(d.otDay);
+  if(wk&&!/^\d{4}-\d\d-\d\d$/.test(d.anchor||''))return fail('Pick the first day of a pay period.');
+  if(d.otWeekOn&&!(ow>=1&&ow<=168))return fail('Weekly overtime: a number of hours from 1 to 168.');
+  if(d.otDayOn&&!(od>=1&&od<=24))return fail('Daily overtime: a number of hours from 1 to 24.');
+  var next={freq:payPick(PAY_FREQ,d.freq,'biweekly'),anchor:wk?d.anchor:(c.anchor||''),weekStart:Math.max(0,Math.min(6,Math.floor(num(d.weekStart)))),otWeekOn:!!d.otWeekOn,otWeek:ow>0?ow:c.otWeek,otDayOn:!!d.otDayOn,otDay:od>0?od:c.otDay,
+    tips:payPick(PAY_TIPS,d.tips,'hours'),set:true,by:viewerName()||(state.ui.role==='owner'?'Owner':''),at:Date.now()};
+  var done=function(saved){state.settings.payroll=saved;P.cd=null;P.cfgErr='';P.busy='';P.per=null;ui.open['pr:set']=false;renderPayroll();toast('Payroll settings saved.')};
+  if(sync.mode==='shared'&&!sync.isAdmin){   // HR who aren't the owner: through the database, which checks
+    if(!window.tallyPayroll)return fail('Payroll settings can’t be saved here.');
+    var was=canon(settingsDoc())===sync.lastSettings;P.busy='cfg';P.cfgErr='';renderPayroll();
+    window.tallyPayroll.settings(next).then(function(r){done(r&&r.freq?r:next);if(was)sync.lastSettings=canon(settingsDoc());cacheSave()},
+      function(e){fail(/Only HR/i.test(String(e&&e.message))?'Only HR can change payroll settings.':/PGRST202|does not exist|could not find/i.test(String(e&&(e.message||e.code)))?payErrW(e):'Could not save. Check your connection and try again.')});
+    return;
+  }
+  done(next);save();
+}
+function payFixSave(id){
+  var P=payUi(),x=shiftById(id),f=P.fix;if(!x||!f)return;
+  var fail=function(m){P.err=m;renderPayroll()};
+  var a=dtlParse(f.inS),b=f.outS?dtlParse(f.outS):0,now=Date.now();
+  if(!a)return fail('Put in when they clocked in.');
+  if(!b&&(x.outAt||!f.outS&&iso(new Date(a))!==todayISO()))return fail('Put in when they clocked out.');
+  if(b&&b<=a)return fail('Clock out has to be after clock in.');
+  if(b&&b-a>24*36e5)return fail('That’s more than 24 hours. Check the days.');
+  if(a>now+6e4||b>now+6e4)return fail('That’s later than now.');
+  var ov=state.shifts.filter(function(y){return y!==x&&!y.void&&y.who===x.who&&y.inAt<(b||now)&&(y.outAt||now)>a})[0];
+  if(ov)return fail('That overlaps '+x.who+'’s shift on '+dayOfTs(ov.inAt)+', '+punchLine(ov)+'.');
+  var wasOpen=!x.outAt;
+  x.fixes=(x.fixes||[]).concat([{by:viewerName()||(state.ui.role==='owner'?'Owner':'HR'),at:now,inAt:x.inAt,outAt:x.outAt||0}]);
+  x.inAt=a;x.outAt=b||0;if(f.act)x.activity=f.act;
+  if(wasOpen&&b){var lb=lastBreak(x);if(lb&&!lb.e)lb.e=b;crewClockOut(x.who,b);geoStop(x.who)}
+  P.edit='';P.fix=null;P.err='';save();renderPayroll();toast('Clock punch fixed.');
+}
+function payVoid(id){
+  var P=payUi(),x=shiftById(id);if(!x)return;
+  if(P.armed!=='void:'+id){P.armed='void:'+id;renderPayroll();setTimeout(function(){if(P.armed==='void:'+id){P.armed='';if(ui.tab==='payroll')renderPayroll()}},4000);return}
+  var now=Date.now();P.armed='';
+  x.void={by:viewerName()||(state.ui.role==='owner'?'Owner':'HR'),at:now};
+  if(!x.outAt){x.outAt=now;var lb=lastBreak(x);if(lb&&!lb.e)lb.e=now;crewClockOut(x.who,now);geoStop(x.who)}
+  P.edit='';P.fix=null;P.err='';save();renderPayroll();toast('That shift is out of the hours.');
+}
+function payAddSave(){
+  var P=payUi(),A=P.add||{},now=Date.now();
+  var fail=function(m){P.err=m;renderPayroll()};
+  if(!A.who)return fail('Pick who it’s for.');
+  if(!/^\d{4}-\d\d-\d\d$/.test(A.day||''))return fail('Pick the day.');
+  if(!/^\d\d:\d\d$/.test(A.tin||'')||!/^\d\d:\d\d$/.test(A.tout||''))return fail('Put in when they clocked in and out.');
+  var a=dtlParse(A.day+'T'+A.tin),b=dtlParse(A.day+'T'+A.tout);if(b<=a)b=dtlParse(addDays(A.day,1)+'T'+A.tout);
+  if(b>now+6e4)return fail('That’s later than now.');
+  var ov=state.shifts.filter(function(y){return !y.void&&y.who===A.who&&y.inAt<b&&(y.outAt||now)>a})[0];
+  if(ov)return fail('That overlaps '+A.who+'’s shift on '+dayOfTs(ov.inAt)+', '+punchLine(ov)+'.');
+  var acts=state.settings.activities||[];
+  state.shifts.push({id:uid(),who:A.who,inAt:a,outAt:b,activity:A.act||acts[0]||'',breaks:[],late:0,note:'',added:{by:viewerName()||(state.ui.role==='owner'?'Owner':'HR'),at:now}});
+  state.shifts.sort(function(x,y){return x.inAt-y.inAt});
+  P.add=null;P.err='';save();renderPayroll();toast('Shift added.');
+}
+function payIdSave(){
+  var P=payUi(),info=payPeople(),d=P.ids||{},ch=Object.keys(d).filter(function(n){return info[n]&&String(d[n]).trim()!==info[n].pid});
+  var fail=function(m){P.idErr=m;P.busy='';renderPayroll()};
+  if(ch.some(function(n){var v=String(d[n]).trim();return v.length>40||!/^[A-Za-z0-9 ._#\/-]*$/.test(v)}))return fail('A payroll ID is up to 40 letters, numbers, spaces and . _ # / -');
+  if(!ch.length){P.ids=null;ui.open['pr:ids']=false;renderPayroll();return}
+  var finish=function(){P.ids=null;P.idErr='';P.busy='';renderPayroll();toast('Payroll IDs saved.')};
+  P.busy='ids';P.idErr='';renderPayroll();
+  var step=function(i){
+    if(i>=ch.length)return finish();
+    var n=ch[i],v=String(d[n]).trim();
+    if(!payAllPeople()){window.tallyPayroll.payrollId(n,v).then(function(){(P.ppl||[]).forEach(function(r){if(r.name===n)r.payroll_id=v});step(i+1)},function(e){fail(/No profile/i.test(String(e&&e.message))?'No profile for '+n+' yet.':'Could not save '+n+'’s ID. Check your connection and try again.')});return}
+    var rec=empByName(n);if(!rec){step(i+1);return}
+    var info2=clone(rec.info||{});if(v)info2.payrollId=v;else delete info2.payrollId;
+    var out=Object.assign({},rec,{info:info2});
+    if(!peopleHosted()){var list=empLocal(),ix=list.findIndex(function(x){return x.id===rec.id});if(ix>=0)list[ix]=out;empLocalSave(list);upsertPerson(out);step(i+1);return}
+    window.tallyPeople.save(out).then(function(saved){upsertPerson(saved||out);step(i+1)},function(){fail('Could not save '+n+'’s ID. Check your connection and try again.')});
+  };
+  step(0);
+}
+
+/* ---- taps and typing on Payroll (and the tip split on a job card) ---- */
+document.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('[data-act]');if(!t)return;
+  var a=t.dataset.act;if(!/^(pr|tip):/.test(a))return;
+  var P=payUi();
+  switch(a){
+    case 'pr:per':{var c=payCfg();P.per=periodStep(P.per||lastPeriod(c),+t.dataset.d,c);P.jerr='';P.edit='';P.fix=null;P.add=null;P.copy='';renderPayroll();break}
+    case 'pr:retry':P.jerr='';P.perr='';P.jobs=null;renderPayroll();break;
+    case 'pr:who':{var n=t.dataset.n;P.open[n]=!P.open[n];renderPayroll();break}
+    case 'pr:fix':{P.edit=t.dataset.id;P.fix=null;P.err='';P.add=null;ui.open['pr:punch']=true;renderPayroll();var el=$('#pp_'+t.dataset.id);if(el&&el.scrollIntoView)try{el.scrollIntoView({block:'center'})}catch(x){}break}
+    case 'pr:fixno':P.edit='';P.fix=null;P.err='';renderPayroll();break;
+    case 'pr:fixsave':payFixSave(t.dataset.id);break;
+    case 'pr:void':payVoid(t.dataset.id);break;
+    case 'pr:add':P.add={who:'',day:'',tin:'',tout:'',act:''};P.edit='';P.err='';ui.open['pr:punch']=true;renderPayroll();break;
+    case 'pr:addno':P.add=null;P.err='';renderPayroll();break;
+    case 'pr:addsave':payAddSave();break;
+    case 'pr:ids':{P.idsOpen=true;ui.open['pr:ids']=true;renderPayroll();var ie=$('#prIds');if(ie&&ie.scrollIntoView)try{ie.scrollIntoView({block:'start'})}catch(x){}break}
+    case 'pr:idsave':payIdSave();break;
+    case 'pr:cfgsave':payCfgSave();break;
+    case 'pr:file':payFile(t.dataset.k);break;
+    case 'pr:copy':{var R=P.R;if(!R)break;var sh=paySheets(R),rows=t.dataset.w==='days'?sh[1].rows:sh[0].rows.slice(3,4+R.people.length),tsv=tsvOf(rows);
+      var box=function(){P.copy=tsv;renderPayroll();var b=$('#prCopy');if(b){try{b.focus();b.select()}catch(x){}}toast('Copy it from the box.')};
+      try{navigator.clipboard.writeText(tsv).then(function(){P.copy='';toast('Copied. Paste it into a spreadsheet.')},box)}catch(x){box()}break}
+    case 'tip:open':{var j=tipJob(t.dataset.id);if(!j)break;tipEdOpen(j);tipRedraw();break}
+    case 'tip:cancel':ui.tipEd=null;tipRedraw();break;
+    case 'tip:fill':{var fj=tipJob(t.dataset.id),T=ui.tipEd;if(!fj||!T)break;var w={};crewOf(fj).forEach(function(n){w[n]=t.dataset.k==='hours'?jobOwnMs(fj,n):1});
+      var am=splitCents(tipsOf(fj),w);if(!Object.keys(am).length){crewOf(fj).forEach(function(n){w[n]=1});am=splitCents(tipsOf(fj),w)}
+      crewOf(fj).forEach(function(n){T.amts[n]=String(am[n]||0)});T.err='';tipRedraw();break}
+    case 'tip:save':{var sj=tipJob(t.dataset.id);if(sj)tipSave(sj);break}
+  }
+});
+document.addEventListener('input',function(e){
+  var t=e.target;if(!t||!t.dataset)return;var P=ui.pay;
+  if(t.dataset.tipn!=null&&ui.tipEd){ui.tipEd.amts[t.dataset.tipn]=t.value;var j=tipJob(ui.tipEd.id),s=$('#tipSum');if(j&&s)s.textContent=tipSumW(j);return}
+  if(!P)return;
+  if(t.dataset.prf&&P.fix){P.fix[t.dataset.prf]=t.value;return}
+  if(t.dataset.pra&&P.add){P.add[t.dataset.pra]=t.value;return}
+  if(t.dataset.prid!=null){P.ids=P.ids||{};P.ids[t.dataset.prid]=t.value;return}
+  if(t.dataset.prc){var d=P.cd=P.cd||{},k=t.dataset.prc;
+    if(t.type==='checkbox')d[k]=t.checked;else if(t.type==='radio'){if(t.checked)d[k]=t.value}else d[k]=t.value;
+    if(k==='freq')payFreqShow(d.freq);
+  }
+});
+document.addEventListener('change',function(e){
+  var t=e.target;if(!t||!t.dataset||!ui.pay)return;
+  // date and time pickers and selects that only send change
+  if(t.dataset.prf&&ui.pay.fix)ui.pay.fix[t.dataset.prf]=t.value;
+  else if(t.dataset.pra&&ui.pay.add)ui.pay.add[t.dataset.pra]=t.value;
+  else if(t.dataset.prc){var d=ui.pay.cd=ui.pay.cd||{};if(t.type==='checkbox')d[t.dataset.prc]=t.checked;else if(t.type!=='radio'||t.checked)d[t.dataset.prc]=t.value;if(t.dataset.prc==='freq')payFreqShow(d.freq)}
+});
+function payFreqShow(f){var wk=f==='weekly'||f==='biweekly',ab=$('#prAnchorBox'),sn=$('#prSemiNote'),mn=$('#prMonthNote');if(ab)ab.hidden=!wk;if(sn)sn.hidden=f!=='semimonthly';if(mn)mn.hidden=f!=='monthly'}
+
 /* ---------- render core ---------- */
 function renderTab(){
-  var fn={desk:renderDesk,sched:renderSched,quotes:renderQuotes,today:renderToday,quote:renderQuote,jobs:renderJobs,dispatch:renderDispatch,crew:renderCrew,history:renderHistory,chat:renderChat,reports:renderReports,settings:renderSettings,admin:renderAdmin,mymove:renderMyMove,mypay:renderMyPay,myprofile:renderMyProfile}[ui.tab];
+  var fn={desk:renderDesk,sched:renderSched,quotes:renderQuotes,today:renderToday,quote:renderQuote,jobs:renderJobs,dispatch:renderDispatch,crew:renderCrew,history:renderHistory,chat:renderChat,reports:renderReports,payroll:renderPayroll,settings:renderSettings,admin:renderAdmin,mymove:renderMyMove,mypay:renderMyPay,myprofile:renderMyProfile}[ui.tab];
   if(fn)fn();
 }
 function render(){
@@ -7664,7 +8386,7 @@ function jobDoc(j){
   var dd=Object.assign({},j.d);
   dd.items=Object.keys(j.d.items||{}).map(function(k){return {id:k,q:j.d.items[k]}});
   var o={id:j.id,status:j.status,createdAt:j.createdAt,d:dd,quote:j.quote,items:j.items||[],assign:j.assign||{truckId:'',crew:[]},tally:j.tally||{}};
-  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales','quotedBy','quotedTeam','survey'].forEach(function(k){if(j[k]!=null)o[k]=j[k]});
+  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales','quotedBy','quotedTeam','survey','tipSplit'].forEach(function(k){if(j[k]!=null)o[k]=j[k]});
   o.payments=toMap(j.payments,function(x){return x.id});
   o.signed=toMap(j.signed,function(x){return x.id});
   o.extras=toMap(j.extras,function(x){return x.id});
@@ -7692,7 +8414,7 @@ function docToJob(v){
     crewOn:(v.crewOn&&typeof v.crewOn==='object')?v.crewOn:undefined,crewAdj:mapArr(v.crewAdj,'ts'),
     log:mapArr(v.log,'ts').slice(-60)};
   if(v.walkVids&&typeof v.walkVids==='object')j.walkVids=mapArr(v.walkVids,'at');
-  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales','quotedBy','quotedTeam','survey'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
+  ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales','quotedBy','quotedTeam','survey','tipSplit'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
   return j;
 }
 /* A change to a document as a merge patch, the way the database's doc_patch applies it (RFC 7386): only what changed,
@@ -7815,7 +8537,7 @@ function softRefresh(){
     if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&(a.closest('#view')||a.closest('#sheet'))&&a.id!=='hSearch'&&rfTries<6){rfTries++;softRefresh();return}
     rfTries=0;renderTabs();
     if(ui.jobId)renderSheet();
-    if(['jobs','dispatch','crew','history','reports','today','sched','quotes','desk'].indexOf(ui.tab)>=0||(ui.tab==='chat'&&ui.chatThread==='jobs'))renderTab();
+    if(['jobs','dispatch','crew','history','reports','payroll','today','sched','quotes','desk'].indexOf(ui.tab)>=0||(ui.tab==='chat'&&ui.chatThread==='jobs'))renderTab();
   },300);
 }
 function softSettings(){var a=document.activeElement;if(ui.tab==='settings'&&!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))renderSettings()}
@@ -8046,7 +8768,7 @@ var EMP_ROLES=[['crew','Crew'],['lead','Crew lead'],['dispatch','Dispatch'],['ow
 var EMP_SELF=['phone','address','city','state','zip','emergencyName','emergencyRelation','emergencyPhone','shirtSize'];
 var SHIRTS=['','S','M','L','XL','2XL','3XL'];
 var EMP_SECS=[
-  {t:'Job and pay',open:true,f:[['title','Job title','text','Mover, driver, crew lead'],['hireDate','Hire date','date'],['payType','Pay type','sel',['','Hourly','Salary','Per job']],['payRate','Pay rate ($)','money'],['workerType','Worker type','sel',['','W-2 employee','1099 contractor']]]},
+  {t:'Job and pay',open:true,f:[['title','Job title','text','Mover, driver, crew lead'],['hireDate','Hire date','date'],['payType','Pay type','sel',['','Hourly','Salary','Per job']],['payRate','Pay rate ($)','money'],['workerType','Worker type','sel',['','W-2 employee','1099 contractor']],['payrollId','Payroll ID','text','Their ID at your payroll company']]},
   {t:'Contact',open:true,f:[['phone','Phone','tel'],['address','Street address','text'],['city','City','text'],['state','State','text'],['zip','ZIP','text']]},
   {t:'Personal',f:[['dob','Date of birth','date'],['ssnLast4','Social Security number: last 4 only','last4'],['shirtSize','Shirt size','sel',SHIRTS]]},
   {t:'Emergency contact',f:[['emergencyName','Name','text'],['emergencyRelation','Relationship','text'],['emergencyPhone','Phone','tel']]},
@@ -8093,8 +8815,9 @@ function empStatus(e){
 // The crew and office lists the rest of the app uses follow each profile's role and access.
 function dirApply(e){
   var S=state.settings,n=e.name,a=sidesOf(n,e),ci=S.crew.indexOf(n),oi=(S.office||[]).findIndex(function(o){return o.name===n});
-  S.crew=S.crew.filter(function(x){return x!==n});S.leads=S.leads.filter(function(x){return x!==n});S.office=(S.office||[]).filter(function(o){return o.name!==n});S.ccStaff=(S.ccStaff||[]).filter(function(x){return x!==n});
+  S.crew=S.crew.filter(function(x){return x!==n});S.leads=S.leads.filter(function(x){return x!==n});S.office=(S.office||[]).filter(function(o){return o.name!==n});S.ccStaff=(S.ccStaff||[]).filter(function(x){return x!==n});S.hr=(S.hr||[]).filter(function(x){return x!==n});
   if(e.active!==false){
+    if(a.hr&&!a.owner)S.hr.push(n);   // HR (batch 8): Payroll; the database reads this list too (hr_of)
     if(a.field!=='off'){if(ci>=0)S.crew.splice(ci,0,n);else S.crew.push(n);if(a.field==='lead')S.leads.push(n)}
     if(a.owner||a.dispatch){var ob={name:n,kind:a.owner?'owner':'dispatch'};if(oi>=0)S.office.splice(oi,0,ob);else S.office.push(ob)}
     if(a.cc&&!a.owner&&!a.dispatch)S.ccStaff.push(n);
@@ -8121,7 +8844,7 @@ function openEmp(o){
   var S=state.settings;
   var d=rec?{name:rec.name,role:rec.role,email:rec.email||'',active:rec.active!==false,info:clone(rec.info||{}),notes:rec.notes||''}
            :{name:o.name||'',role:o.name?dirRole(o.name):'crew',email:'',active:true,info:{phone:o.name?(S.contacts[o.name]||''):''},notes:''};
-  d.access=o.name||rec?sidesOf(d.name,rec):{owner:false,field:'crew',dispatch:false,cc:false};delete d.info.access;
+  d.access=o.name||rec?sidesOf(d.name,rec):{owner:false,field:'crew',dispatch:false,cc:false,hr:false};delete d.info.access;
   ui.emp={mode:'edit',id:rec?rec.id:'',fixedName:!!(rec||o.name),draft:d,err:'',busy:false,docType:'i9',armed:''};
   renderEmp();
   if(rec&&peopleHosted())loadDocs(rec.id);
@@ -8170,12 +8893,12 @@ function inviteHtml(rec){
 function empEditBody(){
   var E=ui.emp,d=E.draft,rec=E.id?empById(E.id):null,host=peopleHosted(),i=d.info||{};
   var self=!!(rec&&rec.user_id&&host&&rec.user_id===window.tallyPeople.uid()),st=empStatus(rec);
-  var A=d.access||{owner:false,field:'crew',dispatch:false,cc:false},dis=self?' disabled':'',fn=esc((d.name||'They').split(' ')[0]);
+  var A=d.access||{owner:false,field:'crew',dispatch:false,cc:false,hr:false},dis=self?' disabled':'',fn=esc((d.name||'They').split(' ')[0]);
   var sw=function(k,label,sub){return '<label class="sidesw"><span><b>'+label+'</b><small>'+sub+'</small></span><span class="sw"><input type="checkbox" role="switch" data-ak="'+k+'" aria-label="'+esc(label)+'"'+(A[k]?' checked':'')+dis+'><span aria-hidden="true"></span></span></label>'};
-  var sees=sidesList(A),tabsW=A.owner?['everything, Setup and the money included']:[A.field!=='off'?'the jobs they’re on'+(A.field==='lead'?' (running them and billing out)':'')+' and the time clock':'',A.dispatch?'Today, Jobs, Sales, the Board and quotes':'',A.cc&&!A.dispatch?'the schedule, Sales and New quote, with no money or discounts':''].filter(Boolean);
+  var sees=sidesList(A),tabsW=A.owner?['everything, Setup and the money included']:[A.field!=='off'?'the jobs they’re on'+(A.field==='lead'?' (running them and billing out)':'')+' and the time clock':'',A.dispatch?'Today, Jobs, Sales, the Board and quotes':'',A.cc&&!A.dispatch?'the schedule, Sales and New quote, with no money or discounts':'',A.hr?'Payroll: everyone’s hours, overtime and tips, to send to the payroll company':''].filter(Boolean);
   var sides='<h3 class="empsec">What they see</h3><div class="sides">'+sw('owner','Owner','Everything, Setup included')+
     (A.owner?'':'<div class="sidesw"><span><b>Field view</b><small>Their jobs in the field</small></span><span class="seg" role="radiogroup" aria-label="Field view">'+[['off','Off'],['crew','Crew'],['lead','Lead']].map(function(f){return '<label><input type="radio" name="empField" data-ak="field" value="'+f[0]+'"'+(A.field===f[0]?' checked':'')+dis+'><span>'+f[1]+'</span></label>'}).join('')+'</span></div>'+
-      sw('dispatch','Dispatch','Today, Jobs, the Board and quotes')+sw('cc','Call center','The schedule, quotes and booking, no money'))+'</div>'+
+      sw('dispatch','Dispatch','Today, Jobs, the Board and quotes')+sw('cc','Call center','The schedule, quotes and booking, no money')+sw('hr','HR','Payroll: hours, overtime and tips'))+'</div>'+
     '<p class="hint sidesnote">'+(sees.length?esc(fn)+' sees: '+esc(tabsW.join('; '))+'.'+(tabsW.length>1?' All in one app.':''):'With every side off, '+esc(fn)+' sees nothing. Turn one on, or turn off “Can use MoveCrew”.')+'</p>';
   var nameCtl='<input data-ek="name" autocomplete="off" value="'+esc(d.name)+'"'+(E.fixedName?' readonly aria-readonly="true"':' placeholder="The name the crew uses"')+'>';
   var head='<div class="sheet-head"><div><h2>'+esc(E.fixedName?d.name:'New employee')+'</h2><small>'+esc(sidesList(A).join(' · ')||'No access')+'</small></div><button class="btn sm" data-act="emp:close">Close</button></div>';
@@ -8206,7 +8929,7 @@ function empSelfBody(){
   var i=(ui.emp.draft&&ui.emp.draft.info)||p.info||{},fx=p.info||{};
   var ro=function(label,val){return val?'<dt>'+esc(label)+'</dt><dd>'+esc(val)+'</dd>':''};
   var pay=[fx.payType,fx.payRate?money(num(fx.payRate))+(fx.payType==='Hourly'?' an hour':''):''].filter(Boolean).join(' · ');
-  var facts='<dl class="empro">'+ro('Name',p.name)+ro('Role',KIND[p.role]||p.role)+ro('Signs in with',p.email)+ro('Job title',fx.title)+ro('Hired',fx.hireDate&&fmtDate(fx.hireDate))+ro('Pay',pay)+ro('Worker type',fx.workerType)+
+  var facts='<dl class="empro">'+ro('Name',p.name)+ro('Role',KIND[p.role]||p.role)+ro('Signs in with',p.email)+ro('Job title',fx.title)+ro('Hired',fx.hireDate&&fmtDate(fx.hireDate))+ro('Pay',pay)+ro('Worker type',fx.workerType)+ro('Payroll ID',fx.payrollId)+
     ro('Social Security',fx.ssnLast4&&'•••-••-'+fx.ssnLast4)+ro('Date of birth',fx.dob&&fmtDate(fx.dob))+ro("Driver's license",[fx.dlNumber,fx.dlState,fx.dlClass].filter(Boolean).join(' · '))+
     ro('License expires',fx.dlExpires&&fmtDate(fx.dlExpires))+ro('DOT medical card expires',fx.medExpires&&fmtDate(fx.medExpires))+ro('Background check',[fx.bgResult,fx.bgDate&&fmtDate(fx.bgDate)].filter(Boolean).join(' · '))+'</dl>';
   var mine=function(k,label,type,opts){return empField(k,label,type,opts,i[k],'data-mk')};
@@ -8248,8 +8971,9 @@ function empSave(){
   if(email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))return fail('That email address does not look right.');
   if(email&&people.list.some(function(x){return x.email===email&&(!rec||x.id!==rec.id)}))return fail('Another profile already uses that email.');
   if(i.ssnLast4&&!/^\d{4}$/.test(String(i.ssnLast4).trim()))return fail('Social Security: enter only the last 4 digits.');
-  var A=d.access||{owner:false,field:'crew',dispatch:false,cc:false},A2={owner:!!A.owner,field:A.owner?'off':(A.field==='lead'||A.field==='crew'?A.field:'off'),dispatch:!A.owner&&!!A.dispatch,cc:!A.owner&&!!A.cc};
-  if(d.active&&!A2.owner&&A2.field==='off'&&!A2.dispatch&&!A2.cc)return fail('Turn on at least one side for them (Field view, Dispatch or Call center), or turn off “Can use MoveCrew”.');
+  if(i.payrollId&&(String(i.payrollId).trim().length>40||!/^[A-Za-z0-9 ._#\/-]*$/.test(String(i.payrollId).trim())))return fail('Payroll ID: up to 40 letters, numbers, spaces and . _ # / -');
+  var A=d.access||{owner:false,field:'crew',dispatch:false,cc:false,hr:false},A2={owner:!!A.owner,field:A.owner?'off':(A.field==='lead'||A.field==='crew'?A.field:'off'),dispatch:!A.owner&&!!A.dispatch,cc:!A.owner&&!!A.cc,hr:!A.owner&&!!A.hr};
+  if(d.active&&!A2.owner&&A2.field==='off'&&!A2.dispatch&&!A2.cc&&!A2.hr)return fail('Turn on at least one side for them (Field view, Dispatch, Call center or HR), or turn off “Can use MoveCrew”.');
   var info={};Object.keys(i).forEach(function(k){var v=i[k];if(v!==''&&v!=null)info[k]=typeof v==='string'?v.trim():v});info.access=A2;
   var out={id:rec?rec.id:undefined,name:name,role:roleOfSides(A2),email:email,active:!!d.active,info:info,notes:String(d.notes||'').slice(0,5000)};
   var done=function(saved){
@@ -8270,7 +8994,7 @@ function empDelete(){
   E.armed='';
   var finish=function(){
     people.list=people.list.filter(function(x){return x.id!==rec.id});delete people.docs[rec.id];
-    var S=state.settings;S.crew=S.crew.filter(function(x){return x!==rec.name});S.leads=S.leads.filter(function(x){return x!==rec.name});S.ccStaff=(S.ccStaff||[]).filter(function(x){return x!==rec.name});if(S.drivers)S.drivers=S.drivers.filter(function(x){return x!==rec.name});S.office=(S.office||[]).filter(function(o){return o.name!==rec.name});delete S.contacts[rec.name];dirChanged();
+    var S=state.settings;S.crew=S.crew.filter(function(x){return x!==rec.name});S.leads=S.leads.filter(function(x){return x!==rec.name});S.ccStaff=(S.ccStaff||[]).filter(function(x){return x!==rec.name});S.hr=(S.hr||[]).filter(function(x){return x!==rec.name});if(S.drivers)S.drivers=S.drivers.filter(function(x){return x!==rec.name});S.office=(S.office||[]).filter(function(o){return o.name!==rec.name});delete S.contacts[rec.name];dirChanged();
     ui.emp=null;renderEmp();softSettings();toast(rec.name+' removed.');
   };
   if(!peopleHosted()){empLocalSave(empLocal().filter(function(x){return x.id!==rec.id}));finish();return}
@@ -8771,6 +9495,7 @@ function previewPeople(role){
   if(role==='crew')return S.crew.filter(function(n){return !isLead(n)});
   if(role==='lead')return S.crew.filter(isLead);
   if(role==='callcenter')return (S.ccStaff||[]).filter(function(n){return !isOfficeName(n)});   // the company's own (MoveCrew's team: Anyone)
+  if(role==='hr')return (S.hr||[]).filter(function(n){return S.crew.indexOf(n)<0&&!isOfficeName(n)&&!ccStaffHas(n)});   // HR alone
   return (S.office||[]).filter(function(o){return o.kind===role}).map(function(o){return o.name});
 }
 function startPreview(role,staff){
@@ -8814,9 +9539,10 @@ function companySheet(){
     '<button class="btn ghost" data-act="co:other">Start or join another company</button>';
 }
 function previewSheet(){
-  var roles=[['owner','Owner'],['dispatch','Dispatch'],['callcenter','Call center'],['lead','Crew lead'],['crew','Crew']];
+  var roles=[['owner','Owner'],['dispatch','Dispatch'],['callcenter','Call center'],['lead','Crew lead'],['crew','Crew']].concat(previewPeople('hr').length?[['hr','HR']]:[]);
   var rows=roles.map(function(r){
     var people=previewPeople(r[0]);
+    if(r[0]==='hr')return '<div class="pvrow"><span class="who-n"><b>HR</b></span></div><div class="scrollx">'+people.map(function(n){return '<button class="chip" data-act="pv:set" data-role="crew" data-staff="'+esc(n)+'">'+esc(n)+'</button>'}).join('')+'</div>';
     var who=people.length?people.map(function(n){return '<button class="chip" data-act="pv:set" data-role="'+r[0]+'" data-staff="'+esc(n)+'">'+esc(n)+'</button>'}).join('')+(r[0]==='callcenter'?'<button class="chip" data-act="pv:set" data-role="callcenter" data-staff="">MoveCrew’s team</button>':'')
       :'<button class="chip" data-act="pv:set" data-role="'+r[0]+'" data-staff="">Anyone</button>';
     return '<div class="pvrow"><span class="who-n"><b>'+r[1]+'</b></span></div><div class="scrollx">'+who+'</div>';
@@ -11032,7 +11758,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone};
 })();
 </script>
 </body>

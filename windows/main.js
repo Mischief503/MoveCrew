@@ -318,6 +318,11 @@ if (!SMOKE && !app.requestSingleInstanceLock()) {
       cb(ALLOW.has(perm) && rules.inside((d && (d.requestingUrl || d.requestingOrigin)) || ''));
     });
     ses.setPermissionCheckHandler((wc, perm, origin) => ALLOW.has(perm) && rules.inside(origin || ''));
+    // Payroll's spreadsheet (batch 8): Save As, starting in Downloads. Nothing but a file the page made downloads.
+    ses.on('will-download', (e, item) => {
+      if (!rules.madeHere(item.getURL())) { item.cancel(); return; }
+      item.setSaveDialogOptions({ title: 'Save ' + item.getFilename(), defaultPath: path.join(app.getPath('downloads'), item.getFilename()) });
+    });
 
     ipcMain.on('movecrew:open', (e, url) => { if (fromApp(e)) goOutside(url); });
     ipcMain.on('movecrew:attention', (e, info) => { if (fromApp(e)) attention(info); });

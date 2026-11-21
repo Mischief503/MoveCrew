@@ -54,8 +54,8 @@ most first, and a list of the rest.
   finishing up, as the lead taps them.
 - **The bill**, once the move is done (Nov 7): **Subtotal** (the bill, after what's paid), then **Add a tip for your
   crew** (No tip, 10, 15 or 20% of the whole bill, or Other), then the **Final total** and **Pay $…**, which waits until
-  they pick (No tip is a pick). Options › Tips for the crew. The tip goes to the movers on the job, split evenly, apart
-  from the bill. The crew's and the office's Collect payment ask the same way (the customer picks on the crew's phone),
+  they pick (No tip is a pick). Options › Tips for the crew. The tip goes to the movers on the job, apart from the bill,
+  split the way Payroll settings say (by hours on the job, evenly, or by the crew lead; see [PAYROLL.md](PAYROLL.md)). The crew's and the office's Collect payment ask the same way (the customer picks on the crew's phone),
   for every way to pay: a card on file, a card typed in, a pay link (the tip its own line on the page) and cash.
 - **Who moved them** (Nov 7): once the move is done, **Your move was done by**: the company, the lead and the crew size
   with the date, the company's number with Call and Text, and **Book another move**.

@@ -121,7 +121,7 @@ const fnCalls = (A, act) => A.calls.fn.filter((c) => c.body.action === act);
 
   // ---- the tip before the final total (Richie, Nov 7: "give a sub total then ask for a tip then give the final total",
   // everywhere the bill is paid): the move is done, so Collect payment asks for the crew's tip before charging
-  ok(/Subtotal/.test(flowText()) && /Add a tip for the crew/.test(flowText()) && $$('#flow [data-act="flow:tip"]').length === 5 && /It goes to the 2 movers on the move \(Marcus’s crew\), split evenly\./.test(flowText()) && /Final total ?\$1,000/.test(flowText()),
+  ok(/Subtotal/.test(flowText()) && /Add a tip for the crew/.test(flowText()) && $$('#flow [data-act="flow:tip"]').length === 5 && /It goes to the 2 movers on the move \(Marcus’s crew\)\. /.test(flowText()) && !/split evenly/.test(flowText()) && /Final total ?\$1,000/.test(flowText()),
     'the bill after the move: the subtotal, the crew’s tip (no tip, 10, 15, 20% or another amount), then the final total');
   ok($('#flow [data-act="flow:pay"]').disabled && $('#flow [data-act="flow:pay"]').textContent === 'Pick a tip first', 'nothing is charged until a tip is picked (No tip counts)');
   click('#flow [data-act="flow:tip"][data-t="15"]'); await sleep(30);

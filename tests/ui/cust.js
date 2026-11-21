@@ -125,7 +125,7 @@ const L = (m) => label + ': ' + m;
   ok(/Moved · bill due/.test(view()) && /Pay your bill: \$/.test(view()), L('the bill due, with Pay'));
   click('#view [data-act="cs:pay"]'); await sleep(15);
   const total0 = T.custMoves()[0].bill.total, dueNow = T.custMoves()[0].bill.due;
-  ok(/Pay your bill/.test(sheet()) && /Add a tip for your crew/.test(sheet()) && /It goes to the 2 movers on your move \(Marcus’s crew\), split evenly\./.test(sheet()) && $$('[data-act="cs:tip"]').length === 5, L('the bill, and a tip for the crew: no tip, 10, 15, 20%, or another amount'));
+  ok(/Pay your bill/.test(sheet()) && /Add a tip for your crew/.test(sheet()) && /It goes to the 2 movers on your move \(Marcus’s crew\)\. /.test(sheet()) && !/split evenly/.test(sheet()) && $$('[data-act="cs:tip"]').length === 5, L('the bill, and a tip for the crew: no tip, 10, 15, 20%, or another amount'));
   // Richie, Nov 7: "the tip should come before the final bill . give a sub total then ask for a tip then give the final total"
   const sOrder = sheet(), iSub = sOrder.indexOf('Subtotal'), iTip = sOrder.indexOf('Add a tip for your crew'), iTot = sOrder.indexOf('Final total');
   ok(iSub >= 0 && iSub < iTip && iTip < iTot && $('#csPayBtn').disabled && $('#csPayBtn').textContent === 'Pick a tip first', L('in that order: the subtotal, the tip, the final total; nothing to pay until a tip is picked (No tip counts)'));

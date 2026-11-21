@@ -132,6 +132,8 @@ function makeSupabase(db, me, calls) {
     },
     rpc(name, args) {
       calls.rpc.push({ name, args: clone(args || {}) });
+      // a test's own stand-in for a database function (db.__rpc: {name: (args, me, db) => {data, error}})
+      if (db.__rpc && db.__rpc[name]) return Promise.resolve(db.__rpc[name](clone(args || {}), me, db));
       const emps = db.employees || [];
       if (name === 'claim_invites') return Promise.resolve({ data: db.__claim ? db.__claim() : 0 });
       if (name === 'my_profile') {

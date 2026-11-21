@@ -60,6 +60,12 @@ const notOut = [
 ];
 notOut.forEach(([u, m]) => ok(R.outside(u) === '', 'not opened: ' + m));
 
+/* ---------- what may download: only a file the page made ---------- */
+ok(R.madeHere('blob:app://movecrew/6a1b2c3d-0000-4000-8000-000000000000'), 'a file the page made (Payroll’s spreadsheet) saves');
+[['blob:https://evil.example/6a1b', 'a file another site made'], ['https://example.com/payroll.xlsx', 'a file on the web'], ['app://movecrew/index.html', 'the app’s own page'],
+ ['blob:app://movecrew.evil/x', 'a look-alike host'], ['', 'nothing']].forEach(([u, m]) => ok(!R.madeHere(u), 'doesn’t download: ' + m));
+ok(/ses\.on\('will-download'[\s\S]{0,200}rules\.madeHere\(item\.getURL\(\)\)[\s\S]{0,80}item\.cancel\(\)/.test(fs.readFileSync(path.join(__dirname, '../../windows/main.js'), 'utf8')), 'the app asks madeHere before any download, and cancels the rest');
+
 /* ---------- the pieces agree with each other ---------- */
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../windows/package.json'), 'utf8'));
 const page = fs.readFileSync(path.join(__dirname, '../../web/index.html'), 'utf8');

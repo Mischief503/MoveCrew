@@ -195,7 +195,7 @@ const OPEN = ['Priya Nair', 'Hollis & Reed Law', 'Nadia Farouk', 'Ortega family'
 
   /* ---------------- wide screens: in the side bar ---------------- */
   const B = await load(file, { width: 1100 });
-  ok(B.$$('nav.tabs [data-tab]').map((b) => b.dataset.tab).join() === 'today,quote,quotes,jobs,dispatch,crew,history,chat,reports,settings', L('wide screens list Job history after Field view (and Sales after New quote)'));
+  ok(B.$$('nav.tabs [data-tab]').map((b) => b.dataset.tab).join() === 'today,quote,quotes,jobs,dispatch,crew,history,chat,reports,payroll,settings', L('wide screens list Job history after Field view (and Sales after New quote), and Payroll after Reports'));
   B.click('nav.tabs [data-tab="history"]'); await sleep(15);
   ok(B.$$('#view [data-act="job:open"]').length === 6 && B.$('nav.tabs [data-tab="history"]').getAttribute('aria-current') === 'page', L('and it opens from there'));
 

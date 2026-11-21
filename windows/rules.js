@@ -39,6 +39,10 @@ function fileFor(u, root) {
   return full;
 }
 
+// A file the page made itself (Payroll's spreadsheet: a blob: address of MoveCrew's own page) may be saved; nothing
+// else downloads.
+function madeHere(u) { return /^blob:/i.test(String(u || '')) && inside(String(u).slice(5)); }
+
 function typeOf(file) { return TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream'; }
 
 // A link leaving the app, made safe to hand to the computer: websites go to the browser, calls,
@@ -52,4 +56,4 @@ function outside(u) {
   return '';
 }
 
-module.exports = { SCHEME, HOST, ORIGIN, START, TYPES, inside, fileFor, typeOf, outside };
+module.exports = { SCHEME, HOST, ORIGIN, START, TYPES, inside, fileFor, typeOf, outside, madeHere };

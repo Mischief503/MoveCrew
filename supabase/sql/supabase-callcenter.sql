@@ -126,7 +126,8 @@ create policy orgs_read on public.orgs for select to authenticated using (public
 
 -- ---------- docs-rules (as in supabase-schema-v2.sql) ----------
 -- docs: by collection.
--- read. The call center (not a member: Tally's team, for a company with the service) reads the rate card,
+-- read. HR (hr_of: the owner, and anyone with the HR switch) reads every clock row, and fixes them (can_write_doc).
+-- The call center (not a member: Tally's team, for a company with the service) reads the rate card,
 -- the open quotes and the schedule's copies, and nothing else: not the settings themselves (the crew, pay,
 -- costs and phones), the chat, the crew's locations, the photos or the forms.
 drop policy if exists docs_read on public.docs;
@@ -136,7 +137,7 @@ create policy docs_read on public.docs for select to authenticated using (
     or collection in ('org','meta','chat','locs','photos','formpages')
     or (collection = 'jobs'   and public.on_job(org_id, data))
     or (collection = 'vault'  and public.role_in(org_id) = 'lead')
-    or (collection = 'shifts' and (public.role_in(org_id) = 'lead' or data->>'who' = public.staff_in(org_id)))
+    or (collection = 'shifts' and (public.role_in(org_id) = 'lead' or data->>'who' = public.staff_in(org_id) or public.hr_of(org_id)))
   ))
   or (public.cc_in(org_id) and (
     collection in ('meta','ratecard','sched')
@@ -155,7 +156,7 @@ language sql stable security definer set search_path = public as $$
     when public.office_of(o)     then true
     when col = 'jobs'            then public.on_job(o, d)
     when col = 'vault'           then public.role_in(o) = 'lead'
-    when col = 'shifts'          then public.role_in(o) = 'lead' or d->>'who' = public.staff_in(o)
+    when col = 'shifts'          then public.role_in(o) = 'lead' or d->>'who' = public.staff_in(o) or public.hr_of(o)
     when col = 'locs'            then d->>'name' = public.staff_in(o)
     when col in ('chat','photos','formpages') then true
     else false end

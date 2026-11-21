@@ -3,4 +3,6 @@
     <cache-path name="camera" path="camera/" />
     <!-- photos made smaller for the page (MainActivity.readyPhoto) -->
     <cache-path name="picked" path="picked/" />
+    <!-- Payroll's spreadsheet, on its way to the share sheet (MainActivity.shareFile) -->
+    <cache-path name="share" path="share/" />
 </paths>

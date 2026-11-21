@@ -205,7 +205,7 @@ const empText = (A) => (A.$('#emp') ? A.$('#emp').textContent.replace(/\s+/g, ' 
   B.click(B.$('[data-ak="dispatch"]')); await sleep(10);
   B.click('[data-act="emp:save"]'); await sleep(30);
   const saved = JSON.parse(B.w.localStorage.getItem('tally.employees.local') || '[]');
-  ok(saved.length === 1 && saved[0].name === 'Pat' && saved[0].role === 'dispatch' && saved[0].info.phone === '503-555-0111' && JSON.stringify(saved[0].info.access) === JSON.stringify({ owner: false, field: 'off', dispatch: true, cc: false }), 'saved on this device only, with her switches');
+  ok(saved.length === 1 && saved[0].name === 'Pat' && saved[0].role === 'dispatch' && saved[0].info.phone === '503-555-0111' && JSON.stringify(saved[0].info.access) === JSON.stringify({ owner: false, field: 'off', dispatch: true, cc: false, hr: false }), 'saved on this device only, with her switches');
   ok(B.T.state().settings.office.some((o) => o.name === 'Pat' && o.kind === 'dispatch'), 'Pat joins the office list as dispatch');
   ok(/Document uploads work in the MoveCrew app/.test(empText(B)) && !B.$('#empDocFile'), 'no uploads in this copy, and it says why');
   ok(!/Text Pat the app/.test(empText(B)), 'no invite text without sign-in');

@@ -96,6 +96,16 @@ create or replace function public.on_job(o uuid, job jsonb) returns boolean
 language sql stable security definer set search_path = public as $$
   select coalesce(public.staff_in(o) <> '' and (job->'assign'->'crew') ? public.staff_in(o), false)
 $$;
+-- Do I have HR here (Payroll, batch 8): the owner, or someone with the HR switch on their profile (their name in the
+-- settings' hr list, which only the owner writes)? HR reads and fixes everyone's clock rows; the rest goes through
+-- the functions in supabase-payroll.sql, which ask this too.
+create or replace function public.hr_of(o uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(public.role_in(o) = 'owner', false)
+      or exists (select 1 from public.members m join public.docs s on s.org_id = m.org_id and s.path = 'org/settings'
+                  where m.org_id = o and m.user_id = auth.uid() and m.staff <> ''
+                    and jsonb_typeof(s.data->'hr') = 'array' and (s.data->'hr') ? m.staff)
+$$;
 -- @cc helpers
 -- The call center: Tally's own team (tally_cc_team, by email; a person is linked to their sign-in by
 -- claim_cc_team() once their email is confirmed), working for the companies that have the service
@@ -302,7 +312,8 @@ create policy req_delete on public.access_requests for delete to authenticated
 
 -- @cc docs-rules
 -- docs: by collection.
--- read. The call center (not a member: Tally's team, for a company with the service) reads the rate card,
+-- read. HR (hr_of: the owner, and anyone with the HR switch) reads every clock row, and fixes them (can_write_doc).
+-- The call center (not a member: Tally's team, for a company with the service) reads the rate card,
 -- the open quotes and the schedule's copies, and nothing else: not the settings themselves (the crew, pay,
 -- costs and phones), the chat, the crew's locations, the photos or the forms.
 drop policy if exists docs_read on public.docs;
@@ -312,7 +323,7 @@ create policy docs_read on public.docs for select to authenticated using (
     or collection in ('org','meta','chat','locs','photos','formpages')
     or (collection = 'jobs'   and public.on_job(org_id, data))
     or (collection = 'vault'  and public.role_in(org_id) = 'lead')
-    or (collection = 'shifts' and (public.role_in(org_id) = 'lead' or data->>'who' = public.staff_in(org_id)))
+    or (collection = 'shifts' and (public.role_in(org_id) = 'lead' or data->>'who' = public.staff_in(org_id) or public.hr_of(org_id)))
   ))
   or (public.cc_in(org_id) and (
     collection in ('meta','ratecard','sched')
@@ -331,7 +342,7 @@ language sql stable security definer set search_path = public as $$
     when public.office_of(o)     then true
     when col = 'jobs'            then public.on_job(o, d)
     when col = 'vault'           then public.role_in(o) = 'lead'
-    when col = 'shifts'          then public.role_in(o) = 'lead' or d->>'who' = public.staff_in(o)
+    when col = 'shifts'          then public.role_in(o) = 'lead' or d->>'who' = public.staff_in(o) or public.hr_of(o)
     when col = 'locs'            then d->>'name' = public.staff_in(o)
     when col in ('chat','photos','formpages') then true
     else false end
@@ -485,10 +496,10 @@ grant select, insert, update, delete on public.members, public.access_requests, 
 grant all on public.orgs, public.members, public.access_requests, public.docs to service_role;
 
 revoke all on function public.role_in(uuid), public.staff_in(uuid), public.member_of(uuid), public.office_of(uuid),
-  public.on_job(uuid, jsonb), public.can_write_doc(uuid, text, jsonb), public.new_join_code(),
+  public.on_job(uuid, jsonb), public.hr_of(uuid), public.can_write_doc(uuid, text, jsonb), public.new_join_code(),
   public.create_org(text), public.request_join(text), public.my_orgs(), public.people(uuid) from public, anon;
 grant execute on function public.role_in(uuid), public.staff_in(uuid), public.member_of(uuid), public.office_of(uuid),
-  public.on_job(uuid, jsonb), public.can_write_doc(uuid, text, jsonb),
+  public.on_job(uuid, jsonb), public.hr_of(uuid), public.can_write_doc(uuid, text, jsonb),
   public.create_org(text), public.request_join(text), public.my_orgs(), public.people(uuid) to authenticated;
 
 -- ---------- live updates ----------

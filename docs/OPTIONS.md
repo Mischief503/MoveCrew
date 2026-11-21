@@ -38,6 +38,8 @@ the old notes, tallies, photos and settings are still there.
 
 ## Time clock
 
+Pay periods, overtime and how tips are split are in Payroll, under HR, not here: see [PAYROLL.md](PAYROLL.md).
+
 | Switch | Off means |
 |---|---|
 | Time clock | No clock card, nothing to wait for at Start job; everyone on the job is logged on it when it starts. |

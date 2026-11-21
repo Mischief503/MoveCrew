@@ -289,6 +289,47 @@ public class MainActivity extends Activity {
                 Log.w(TAG, "Photos kept for now: " + e);
             }
         }
+        /* Payroll's file (batch 8): the spreadsheet the page made, as base64, goes into the cache's share/ folder and
+           out through Android's share sheet (email, Drive, a text, the payroll company's app). Only a CSV or an Excel
+           file, 10 MB at most, and the folder keeps just the last one. */
+        @JavascriptInterface
+        public boolean shareFile(String name, String mime, String b64) {
+            try {
+                if (name == null || mime == null || b64 == null) return false;
+                if (!mime.equals("text/csv") && !mime.equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) return false;
+                final String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
+                if (safe.isEmpty() || safe.length() > 100 || safe.startsWith(".")) return false;
+                byte[] data = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                if (data.length == 0 || data.length > 10 * 1024 * 1024) return false;
+                File dir = new File(getCacheDir(), "share");
+                if (!dir.isDirectory() && !dir.mkdirs()) return false;
+                File[] old = dir.listFiles();
+                if (old != null) for (File f : old) f.delete();
+                File out = new File(dir, safe);
+                try (FileOutputStream fo = new FileOutputStream(out)) {
+                    fo.write(data);
+                }
+                final Uri uri = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".files", out);
+                final String type = mime;
+                runOnUiThread(() -> {
+                    Intent send = new Intent(Intent.ACTION_SEND);
+                    send.setType(type);
+                    send.putExtra(Intent.EXTRA_STREAM, uri);
+                    send.putExtra(Intent.EXTRA_SUBJECT, safe);
+                    send.setClipData(ClipData.newRawUri(safe, uri));
+                    send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    try {
+                        startActivity(Intent.createChooser(send, "Send " + safe));
+                    } catch (ActivityNotFoundException e) {
+                        Toast.makeText(MainActivity.this, "No app here can take the file.", Toast.LENGTH_LONG).show();
+                    }
+                });
+                return true;
+            } catch (Exception e) {
+                Log.w(TAG, "The file wasn't shared: " + e);
+                return false;
+            }
+        }
     }
 
     private String googleRoute(String from, String to) {
