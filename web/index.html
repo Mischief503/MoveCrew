@@ -160,7 +160,23 @@ main{padding:10px 12px calc(70px + env(safe-area-inset-bottom));max-width:960px;
 .alert .ic.ok{background:var(--paidSoft);color:var(--paid)}
 .pill[data-s=lost]{background:transparent;border:1px solid var(--muted);color:var(--text)}
 .pill[data-s=storage]{background:transparent;border:1px dashed var(--info);color:var(--text)}
-.linkbtn{background:none;border:0;padding:0 2px;color:inherit;font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:8px}
+.vt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;min-height:66px;padding:8px 10px;border:var(--bw) solid var(--line);border-radius:var(--r2);background:var(--card);color:var(--text);font:inherit;text-align:left}
+.vt b{font-size:14px;line-height:1.2}
+.vt span,.vt small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vt span{font-size:12.5px}
+.vt small{font-size:11.5px;font-weight:600}
+button.vt{cursor:pointer}
+.vt.free{border-style:dashed;background:transparent}
+.vt.free span{color:var(--muted)}
+.vt.paid{background:var(--okSoft)}
+.vt.owes{background:var(--warnSoft)}
+.vt.late{background:var(--dueSoft);border-color:var(--due)}
+.vt.late small{color:var(--due)}
+.vlegend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:10px 0 0}
+.vdot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--line)}
+.vdot.free{border-style:dashed}.vdot.paid{background:var(--okSoft)}.vdot.owes{background:var(--warnSoft)}.vdot.late{background:var(--dueSoft);border-color:var(--due)}
+.linkbtn{background:none;border:0;padding:8px 2px;margin:-8px 0;min-width:36px;color:inherit;font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .pill.bad{background:var(--badSoft);color:var(--bad)}
 .pill.warn{background:var(--warnSoft)}
 
@@ -3124,14 +3140,16 @@ var ICON={
   sos:'<svg viewBox="0 0 24 24"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4.5M12 17.2v.1"/></svg>',
   admin:'<svg viewBox="0 0 24 24"><path d="M12 3l8 3v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
   history:'<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.7h3.7"/><path d="M12 8v4.3l2.8 1.7"/></svg>',
+  storage:'<svg viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5"/><path d="M5 8.5V20h14V8.5"/><path d="M8.5 20v-7h7v7M8.5 15.5h7M8.5 18h7"/></svg>',
   payroll:'<svg viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.8v4.4M17.5 9.8v4.4"/></svg>'
 };
-var TABS=[{id:'desk',label:'Companies'},{id:'sched',label:'Schedule'},{id:'today',label:'Today'},{id:'quote',label:'Quote'},{id:'quotes',label:'Sales'},{id:'jobs',label:'Jobs'},{id:'dispatch',label:'Board'},{id:'crew',label:'Field'},{id:'history',label:'Job history'},{id:'chat',label:'Chat'},{id:'reports',label:'Reports'},{id:'payroll',label:'Payroll'},{id:'settings',label:'Setup'},{id:'admin',label:'MoveCrew admin'},{id:'mymove',label:'My move'},{id:'mypay',label:'Pay'},{id:'myprofile',label:'Profile'}];
+var TABS=[{id:'desk',label:'Companies'},{id:'sched',label:'Schedule'},{id:'today',label:'Today'},{id:'quote',label:'Quote'},{id:'quotes',label:'Sales'},{id:'jobs',label:'Jobs'},{id:'dispatch',label:'Board'},{id:'crew',label:'Field'},{id:'history',label:'Job history'},{id:'storage',label:'Storage'},{id:'chat',label:'Chat'},{id:'reports',label:'Reports'},{id:'payroll',label:'Payroll'},{id:'settings',label:'Setup'},{id:'admin',label:'MoveCrew admin'},{id:'mymove',label:'My move'},{id:'mypay',label:'Pay'},{id:'myprofile',label:'Profile'}];
 var NAV={owner:['today','jobs','quotes','dispatch','chat'],dispatch:['today','jobs','quotes','dispatch','chat'],lead:['crew','chat'],crew:['crew','chat'],callcenter:['desk','sched','quotes'],customer:['mymove','mypay','myprofile']};
 function navTabs(){var r=state.ui.role,ids=hrOnly()?['payroll','chat']:ccToo()?['crew','sched','quotes','chat']:r==='callcenter'&&ccHouse()?['sched','quotes','chat']:(NAV[r]||NAV.owner);return ids.map(function(id){return TABS.filter(function(t){return t.id===id})[0]})}
 function allowedTabs(role){
   var ids=role==='customer'?['mymove','mypay','myprofile']:role==='crew'||role==='lead'?['crew','chat'].concat(ccToo()?['sched','quote','quotes']:[]):role==='callcenter'?(ccHouse()?['sched','quote','quotes','chat']:['desk','sched','quote','quotes']):role==='dispatch'?['today','quote','quotes','jobs','dispatch','crew','history','chat'].concat(opt('dispatchMoney')?['reports']:[]):
     ['today','quote','quotes','jobs','dispatch','crew','history','chat','reports','settings'];
+  if((role==='owner'||role==='dispatch')&&stoShown())ids=ids.concat(['storage']);   // Storage (batch 13): the vaults and who owes
   if(role!=='customer'&&canHR())ids=hrOnly()?['payroll','chat']:ids.concat(['payroll']);   // HR (batch 8): the owner, and anyone with the HR switch
   if(role!=='customer'&&typeof isTallyAdmin==='function'&&isTallyAdmin())ids=ids.concat(['admin']);   // MoveCrew's own admins, in any company
   var out=TABS.filter(function(t){return ids.indexOf(t.id)>=0});
@@ -3440,7 +3458,7 @@ function stoQuote(d,S){
 }
 function stoKindLine(j){var s=stoOf(j);return 'Storage account · '+stoVaultsWord(s.vaults.length)+' · '+money(stoMonthly(j))+' a month'}
 function stoLine(j){var s=stoOf(j);return j.status==='storage'?(s.since>todayISO()?'Goes in ':'Since ')+stoShort(s.since)+' · '+(stoWords(s.vaults)||'no vault yet')+' · '+money(stoMonthly(j))+' a month':'Out of storage '+stoShort(s.out)+(s.vaults.length?' · was in '+stoWords(s.vaults):'')}
-function stoBadge(j){var b=balOf(j);if(!(j.status==='storage'&&b>0.004))return '';return stoLate(j)?' <span class="pill bad">'+money(b)+' past due</span>':' <span class="pill due">'+money(b)+' owed</span>'}
+function stoBadge(j){var b=balOf(j);if(!(j.status==='storage'&&b>0.004))return '';return stoLate(j)?' <span class="pill bad">'+money(b)+' past due</span>':' <span class="pill warn">'+money(b)+' owed</span>'}
 function stoMoney(j){var paid=paidOf(j),bal=balOf(j);return kpiRow([[totalOf(j),'Billed',''],[paid,'Paid',paid>0?'paid':''],[bal,bal>0.004?(stoLate(j)?'Past due':'Owed'):'Paid up',bal>0.004?'due':'paid']])}
 // a form's picks (the vaults tapped, what's typed) until it's done: ui.stoPick[key]
 function stoPick(k){ui.stoPick=ui.stoPick||{};return ui.stoPick[k]||(ui.stoPick[k]={vaults:[]})}
@@ -3552,6 +3570,52 @@ function stoCustInfo(j,S){
   var s=stoOf(j),open=j.status==='storage';
   return {since:s.since,start:s.start,day:stoDayOf(s.start),n:s.vaults.length,names:stoWords(s.vaults,S),rate:s.rate,monthly:stoMonthly(j),next:open?stoNext(s.start,todayISO()):'',out:s.out,addr:stoAddr(S),
     bills:stoBills(j).map(function(e){return {from:stoBillFrom(e),to:String((e.sto||{}).to||''),amt:num(e.amt)}})};
+}
+/* ---------- the Storage screen (batch 13; Richie, Nov 22: "a storage tab that tells you what is available and what is
+   taken. Who is paid and who owes") ----------
+   For the owner and dispatch, in More (and the side list on a computer) while Options › Storage is on or anyone has
+   been in storage: how many vaults are free, every vault as a tile (free, or whose, coloured by paid up, owes or past
+   due), and everyone in storage (and anyone out of it who still owes), with All / Owe / Paid up. */
+function stoShown(){return opt('storage')||state.jobs.some(stoIs)}
+function stoPayState(j){return balOf(j)<=0.004?'paid':stoLate(j)?'late':'owes'}
+function stoPayWords(j){var b=balOf(j);return b<=0.004?'Paid up':money(b)+(stoLate(j)?' past due':' owed')}
+function renderStorage(){
+  stoTick();
+  var v=$('#view'),S=state.settings,c=stoCfg(S),used=stoUsedBy(),t=todayISO(),cash=state.ui.role==='owner'||opt('dispatchMoney');
+  var open=stoAccounts(),gone=state.jobs.filter(function(j){return stoIs(j)&&j.status==='done'&&balOf(j)>0.004});   // out of storage, still owing
+  var free=c.units.filter(function(u){return !used[u.id]}).length,taken=c.units.length-free;
+  var owed=open.concat(gone).reduce(function(a,j){return a+balOf(j)},0),month=open.reduce(function(a,j){return a+stoMonthly(j)},0);
+  var kpi=function(val,label,cls){return '<div class="kpi'+(cls?' '+cls:'')+'"><b>'+val+'</b><span>'+label+'</span></div>'};
+  var tiles='<div class="kpis">'+kpi(free,'Vault'+(free===1?'':'s')+' free, of '+c.units.length,'')+kpi(taken,'Taken','')+
+    (cash?kpi(money(owed),'Owed',owed>0.004?'due':'paid')+kpi(money(month),'Storage a month',''):'')+'</div>';
+  var tile=function(u){
+    var j=used[u.id];
+    if(!j)return '<div class="vt free"><b>'+esc(u.name)+'</b><span>Free</span></div>';
+    var st=stoPayState(j);
+    return '<button class="vt '+st+'" data-act="job:open" data-id="'+j.id+'" aria-label="'+esc(u.name+': '+jobName(j)+', '+stoPayWords(j))+'"><b>'+esc(u.name)+'</b><span>'+esc(jobName(j))+'</span><small>'+esc(stoPayWords(j))+'</small></button>';
+  };
+  var grid=c.units.length?'<div class="vgrid">'+c.units.map(tile).join('')+'</div>'+
+      '<p class="hint vlegend"><span><i class="vdot free"></i>Free</span><span><i class="vdot paid"></i>Paid up</span><span><i class="vdot owes"></i>Owes</span><span><i class="vdot late"></i>Past due</span></p>'
+    :'<p class="hint">No vaults set up yet.'+(state.ui.role==='owner'?' Add them in Setup › Storage.':'')+'</p>';
+  // everyone: past due first (the oldest first), then owing, then paid up; and who's out of storage but still owes
+  var rank={late:0,owes:1,paid:2},all=open.concat(gone).sort(function(a,b){var x=rank[stoPayState(a)],y=rank[stoPayState(b)];if(x!==y)return x-y;var da=stoDueSince(a),db=stoDueSince(b);if(da!==db)return da<db?-1:1;return jobName(a)<jobName(b)?-1:1});
+  var nOwe=all.filter(function(j){return balOf(j)>0.004}).length,nPaid=all.length-nOwe;
+  if(['all','owe','paid'].indexOf(ui.stoF)<0||(ui.stoF==='owe'&&!nOwe)||(ui.stoF==='paid'&&!nPaid))ui.stoF='all';
+  var chips=all.length?'<div class="scrollx" style="margin:0 0 10px">'+[['all','All',all.length],['owe','Owe',nOwe],['paid','Paid up',nPaid]].map(function(x){return '<button class="chip'+(ui.stoF===x[0]?' on':'')+'" data-act="sto:f" data-f="'+x[0]+'" aria-pressed="'+(ui.stoF===x[0])+'">'+x[1]+' <small>'+x[2]+'</small></button>'}).join('')+'</div>':'';
+  var list=all.filter(function(j){return ui.stoF==='all'||(ui.stoF==='owe'?balOf(j)>0.004:balOf(j)<=0.004)});
+  var card=function(j){
+    var s=stoOf(j),in_=j.status==='storage',st=stoPayState(j),nx=in_?stoNext(s.start,t):'';
+    var line=in_?(stoWords(s.vaults)||'No vault')+' · '+(s.since>t?'goes in ':'since ')+stoShort(s.since)+(nx?' · next bill '+stoShort(nx):'')
+      :'Out of storage '+stoShort(s.out)+(s.vaults.length?' · was in '+stoWords(s.vaults):'');
+    var badge=st==='paid'?'<span class="pill" data-s="paid">Paid up</span>':'<span class="pill '+(st==='late'?'bad':'warn')+'">'+esc(stoPayWords(j))+'</span>';
+    return '<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><div class="t">'+esc(jobName(j))+'</div><div class="r">'+(in_?money(stoMonthly(j))+'/mo':money(balOf(j)))+'</div></div><div class="route">'+esc(line)+'</div><div>'+pill(j.status)+' '+badge+(j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'')+'</div></button>';
+  };
+  var people=all.length?(list.map(card).join('')||'<p class="hint">Nobody here.</p>')
+    :'<div class="card empty"><h3>Nobody in storage yet</h3><p>Put a move’s things in storage from its job sheet (Storage, near the end)'+(state.ui.role==='owner'?', or add someone who’s already in your warehouse in Setup › Storage':'')+'.</p></div>';
+  v.innerHTML=(opt('storage')?'':'<div class="note">Options › Storage is off: nobody new goes into storage, and these accounts are still billed.</div>')+tiles+
+    '<section class="card"><h2>Vaults</h2><p class="sub">'+free+' free, '+taken+' taken.'+(taken?' Tap a taken one to open the customer’s account.':'')+'</p>'+grid+'</section>'+
+    '<div class="secline"><h2>Who’s in storage</h2>'+(all.length?'<small>'+open.length+' in'+(gone.length?', '+gone.length+' out and owing':'')+'</small>':'')+'</div>'+chips+people+
+    (state.ui.role==='owner'?'<button class="btn" style="width:100%;margin-top:12px" data-act="more:go" data-tab="settings" data-sec="storage">Setup › Storage: the vaults, the rate, someone already in storage</button>':'');
 }
 function packDayFrom(mj){
   var S=state.settings,md=mj.d||{},d=blankDraft(),who=myName()||'';
@@ -4522,7 +4586,7 @@ function renderMore(){
   var go=function(tab,title,sub){return row('more:go',' data-tab="'+tab+'"',ICON[tab]||ICON.more,title,sub)};
   var grp=function(label,rows){rows=rows.filter(Boolean);return rows.length?'<div class="glabel">'+esc(label)+'</div><div class="navlist">'+rows.join('')+'</div>':''};
   var tabs=allowedTabs(role).map(function(t){return t.id});
-  var work=office?[go('quote','New quote','Build and book a move'),go('crew','Field view','Work a job like the crew'),go('history','Job history','Paid and lost jobs'),
+  var work=office?[go('quote','New quote','Build and book a move'),go('crew','Field view','Work a job like the crew'),go('history','Job history','Paid and lost jobs'),tabs.indexOf('storage')>=0?go('storage','Storage','The vaults free and taken, who’s paid and who owes'):'',
       tabs.indexOf('reports')>=0?go('reports',role==='dispatch'?'Revenue':'Reports','Money, hours and accuracy'):'']
     :[];   // the crew's past jobs are in Jobs › History
   if(tabs.indexOf('payroll')>=0&&!hrOnly())work.push(go('payroll','Payroll','Hours, overtime and tips for the payroll company'));
@@ -4767,7 +4831,7 @@ function renderJobs(){
   var allPast=!jobs.length&&past>0;
   var histLine=past&&!allPast?'<div class="secline"><small>'+past+' paid or lost job'+(past===1?'':'s')+'</small><button data-act="hist:go">Job history ›</button></div>':'';
   v.innerHTML=(state.demo?'<div class="note">Sample data is loaded so you can look around. Clear it in Setup › Your data when you are ready to start fresh.</div>':'')+
-    '<div class="scrollx" style="margin-bottom:10px">'+chips+'</div>'+
+    '<div class="scrollx" style="margin-bottom:10px">'+chips+'</div>'+(ui.filter==='storage'&&allowedTabs(state.ui.role).some(function(x){return x.id==='storage'})?'<div class="secline"><small>The vaults, free and taken, and who owes</small><button data-act="tab" data-tab="storage">Storage ›</button></div>':'')+
     (cards||(allPast?'<div class="card empty"><h3>Nothing open right now</h3><p>Paid and lost jobs are in Job history.</p><div class="row" style="justify-content:center"><button class="btn primary" data-act="tab" data-tab="quote">New quote</button><button class="btn" data-act="hist:go">Job history</button></div></div>':
       '<div class="card empty"><h3>No jobs here yet</h3><p>Build a quote and it lands in this list.</p><button class="btn primary" data-act="tab" data-tab="quote">New quote</button></div>'))+
     histLine;
@@ -8519,7 +8583,7 @@ function payFreqShow(f){var wk=f==='weekly'||f==='biweekly',ab=$('#prAnchorBox')
 
 /* ---------- render core ---------- */
 function renderTab(){
-  var fn={desk:renderDesk,sched:renderSched,quotes:renderQuotes,today:renderToday,quote:renderQuote,jobs:renderJobs,dispatch:renderDispatch,crew:renderCrew,history:renderHistory,chat:renderChat,reports:renderReports,payroll:renderPayroll,settings:renderSettings,admin:renderAdmin,mymove:renderMyMove,mypay:renderMyPay,myprofile:renderMyProfile}[ui.tab];
+  var fn={desk:renderDesk,sched:renderSched,quotes:renderQuotes,today:renderToday,quote:renderQuote,jobs:renderJobs,dispatch:renderDispatch,crew:renderCrew,history:renderHistory,storage:renderStorage,chat:renderChat,reports:renderReports,payroll:renderPayroll,settings:renderSettings,admin:renderAdmin,mymove:renderMyMove,mypay:renderMyPay,myprofile:renderMyProfile}[ui.tab];
   if(fn)fn();
 }
 function render(){
@@ -12287,6 +12351,7 @@ document.addEventListener('click',function(e){
     case 'sh:fillpay':var pa=$('#payAmt');if(pa)pa.value=fmtCents(Math.round(+t.dataset.v*100));break;
     case 'sh:addpay':j=byId(ui.jobId);if(!j||!canCollect()||!$('#payMethod'))break;var amt=round2(moneyVal($('#payAmt')));if(addPayment(j,amt,$('#payMethod').value)){save();renderSheet();toast('Payment recorded.')}else toast(payLocked(j)?'Sign the required forms first.':'Enter an amount first.');break;
     case 'sh:rmphoto':j=byId(ui.jobId);j.photos=j.photos.filter(function(p){return p.id!==t.dataset.pid});save();renderSheet();break;
+    case 'sto:f':ui.stoF=t.dataset.f;renderStorage();break;
     case 'sto:pick':{var spk=stoPick(t.dataset.k),spu=t.dataset.u,spi=spk.vaults.indexOf(spu);if(spi>=0)spk.vaults.splice(spi,1);else spk.vaults.push(spu);if(/^mv:/.test(t.dataset.k))renderSheet();else renderSettings();break}
     case 'sto:in':{var smj=byId(ui.jobId);if(!smj||!canEditJobs()||stoIs(smj)||(smj.d.stoIn&&byId(smj.d.stoIn.id)))break;var sp=stoPick('mv:'+smj.id);
       if(!sp.vaults.length){toast('Pick at least one vault.');break}

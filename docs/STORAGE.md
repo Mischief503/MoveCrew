@@ -49,9 +49,25 @@ name, phone and email, the rate, the vaults, and the **Next bill** (the bills st
 - **Taken out another way: close it** (tap twice): out of storage today, the same way.
 - A closed account can be **Put back in storage** while its vaults are free.
 
+## The Storage screen
+
+Richie, Nov 22: "Why is there not a storage tab that tells you what is available and what is taken. Who is paid and
+who owes." **Storage** is in More (and in the side list on a computer), for the owner and dispatch, while Options ›
+Storage is on or anyone has been in storage.
+
+- **At the top:** vaults free ("6 Vaults free, of 12"), Taken, Owed (red when something is) and Storage a month.
+  Dispatch sees the last two only with Options › Dispatch sees revenue on.
+- **Vaults:** every vault as a tile: Free (dashed), or the customer's name and where they stand, green Paid up, orange
+  "$420 owed", red "$600 past due". Tap a taken one to open that customer's account. A legend says what the
+  colours mean.
+- **Who's in storage:** past due first (the oldest first), then owing, then paid up, and anyone out of storage who
+  still owes: the name, a month, the vaults, since when and the next bill, and Paid up or what they owe. **All**,
+  **Owe** and **Paid up** filter it.
+- For the owner, a button to Setup › Storage at the bottom. Jobs › In storage has **Storage ›** to it.
+
 ## Where it shows
 
-- **Jobs**: an **In storage** chip. Each account: "Since Oct 13 · Vault 3, Vault 4 · $300 a month", $300/mo, and
+- **Storage** (above), and **Jobs**: an **In storage** chip. Each account: "Since Oct 13 · Vault 3, Vault 4 · $300 a month", $300/mo, and
   "$300 owed" or "$600 past due".
 - **Today**: "Storage bill past due: Lena Wu", "$600 owed · since Tue, Oct 13" (three or more on one row, which
   opens Jobs › In storage).

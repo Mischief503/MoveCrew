@@ -62,6 +62,33 @@ const L = (m) => label + ': ' + m;
   T.ui.allAlerts = true; await go('today'); await sleep(10);
   ok(/Storage bill past due: Lena Wu/.test(view()), L('on Today, under Needs you'));
 
+  /* ---------------- the Storage screen (Richie, Nov 22: "what is available and what is taken. Who is paid and who owes") ---------------- */
+  click('[data-act="more:open"]'); await sleep(5);
+  const moreRow = $('#more [data-act="more:go"][data-tab="storage"]');
+  ok(moreRow && /The vaults free and taken, who’s paid and who owes/.test(moreRow.textContent), L('More › Storage'));
+  click(moreRow); await sleep(10);
+  const kp = $$('#view .kpi').map((k) => k.textContent.replace(/\s+/g, ' ').trim()), vt = $$('#view .vt');
+  ok(T.ui.tab === 'storage' && kp.join(' | ') === '10Vaults free, of 12 | 2Taken | $560Owed | $280Storage a month', L('Storage: ' + kp.join(' | ')));
+  ok(vt.length === 12 && vt.filter((e) => e.classList.contains('free')).length === 10 && vt[0].classList.contains('late') && /Vault 1/.test(vt[0].textContent) && /Lena Wu/.test(vt[0].textContent) && /\$560 past due/.test(vt[0].textContent) && /Free/.test(vt[2].textContent),
+    L('every vault as a tile: free, or whose and what they owe (Vault 1: Lena Wu, $560 past due)'));
+  ok(/Free/.test($('#view .vlegend').textContent) && /Past due/.test($('#view .vlegend').textContent), L('with what the colours mean'));
+  const sc = $$('#view button.job');
+  ok(sc.length === 1 && /Lena Wu/.test(sc[0].textContent) && /\$560 past due/.test(sc[0].textContent) && /Vault 1, Vault 2 · since/.test(sc[0].textContent) && /Owe 1/.test($('[data-act="sto:f"][data-f="owe"]').textContent.replace(/\s+/g, ' ')),
+    L('who’s in storage: Lena Wu, her vaults and what she owes; Owe 1'));
+  click('[data-act="sto:f"][data-f="owe"]'); await sleep(5);
+  ok(T.ui.stoF === 'owe' && $$('#view button.job').length === 1, L('Owe: the ones who owe'));
+  click('[data-act="sto:f"][data-f="all"]'); await sleep(5);
+  click($$('#view .vt')[0]); await sleep(10);
+  ok(T.ui.jobId === J.id && /Storage account/.test(sheet()), L('a taken vault opens the customer’s account'));
+  click('#sheet [data-act="sheet:close"]'); await sleep(5);
+  S().opt.dispatchMoney = false; st().ui.role = 'dispatch'; T.ui.tab = 'storage'; T.render(); await sleep(5);
+  ok(T.ui.tab === 'storage' && $$('#view .kpi').length === 2 && $$('#view .vt').length === 12, L('dispatch has it too, without the totals while Dispatch sees revenue is off'));
+  st().ui.role = 'crew'; st().ui.me = 'Dee'; T.render(); await sleep(5);
+  ok(T.ui.tab !== 'storage', L('the crew don’t'));
+  st().ui.role = 'owner'; delete S().opt.dispatchMoney; T.ui.tab = 'jobs'; T.ui.filter = 'storage'; T.render(); await sleep(5);
+  ok(!!$('#view [data-act="tab"][data-tab="storage"]'), L('Jobs › In storage points to it'));
+  T.ui.filter = 'all'; T.render(); await sleep(5);
+
   /* ---------------- the account's job sheet ---------------- */
   T.openJob(J.id); await sleep(10);
   const sh = sheet();

@@ -60,6 +60,11 @@ const SCREENS = {
   'owner Board': async (p) => { await tabTo(p, 'dispatch'); },
   'owner Chat': async (p) => { await tabTo(p, 'chat'); },
   'owner Reports': async (p) => { await tabTo(p, 'reports'); },
+  // Storage (batch 13, Nov 22): the vaults, free and taken, and who owes: past due, owing, paid up, and a long name
+  'owner Storage': async (p) => { await p.evaluate(() => { const T = window.__tally, iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'), ago = (n) => iso(new Date(Date.now() - n * 864e5));
+    T.stoNewAcct({ name: 'Lena Wu', phone: '5035550142', email: '', vaults: ['v3', 'v4'], rate: 150, start: ago(40) }, 'Owner');
+    const b = T.stoNewAcct({ name: 'Christopher Montgomery-Hall', phone: '', email: '', vaults: ['v7'], rate: 150, start: ago(45) }, 'Owner'); T.addPayment(b, T.balOf(b), 'Cash');
+    T.stoNewAcct({ name: 'Ana Ortiz', phone: '', email: '', vaults: ['v9', 'v10'], rate: 140, start: ago(3) }, 'Owner'); T.render(); }); await more(p, 'storage'); },
   'owner Setup': async (p) => { await more(p, 'settings'); },
   'owner Setup › Fleet': async (p) => { await more(p, 'settings', 'fleet'); },
   'owner Setup › Custom job fields': async (p) => { await more(p, 'settings', 'fields'); },
@@ -103,10 +108,10 @@ const SCREENS = {
   'crew Chat': async (p) => { await pv(p, 'crew', 'Dee'); await tabTo(p, 'chat'); },
 };
 // the smallest phones (320 wide), a tablet held upright, and a phone turned sideways
-const SMALL = ['call center Companies', 'call center Schedule', 'call center Quotes', 'crew lead bill, crew changes', 'owner Today', 'owner Jobs', 'owner Reports', 'owner Setup › Inventory catalog', 'owner new quote, price', 'owner job sheet, booked', 'owner job sheet, finished', 'crew lead Jobs, all clocked in', 'crew lead Jobs, job running', 'crew Jobs', 'crew lead new quote, rooms', 'crew lead new quote, check it', 'crew lead new quote, signature', 'owner job sheet, new quote to approve', 'crew lead movers panel', 'owner job sheet, crew changes'];
+const SMALL = ['owner Storage', 'call center Companies', 'call center Schedule', 'call center Quotes', 'crew lead bill, crew changes', 'owner Today', 'owner Jobs', 'owner Reports', 'owner Setup › Inventory catalog', 'owner new quote, price', 'owner job sheet, booked', 'owner job sheet, finished', 'crew lead Jobs, all clocked in', 'crew lead Jobs, job running', 'crew Jobs', 'crew lead new quote, rooms', 'crew lead new quote, check it', 'crew lead new quote, signature', 'owner job sheet, new quote to approve', 'crew lead movers panel', 'owner job sheet, crew changes'];
 const TABLET = ['owner Today', 'owner Reports', 'owner job sheet, booked', 'crew lead Jobs, job running'];
 const SIDEWAYS = ['call center Companies', 'call center Schedule', 'owner Today', 'owner job sheet, booked', 'owner new quote, price', 'crew lead Jobs, all clocked in', 'crew Jobs', 'crew lead new quote, rooms'];
-const NARROW = ['owner Today', 'owner Jobs', 'owner Setup › Fleet', 'owner Setup › Custom job fields', 'owner Setup › Inventory catalog', 'owner Setup › Rate card', 'owner new quote, price', 'owner job sheet, booked', 'crew lead Jobs, all clocked in', 'crew Jobs'];
+const NARROW = ['owner Storage', 'owner Today', 'owner Jobs', 'owner Setup › Fleet', 'owner Setup › Custom job fields', 'owner Setup › Inventory catalog', 'owner Setup › Rate card', 'owner new quote, price', 'owner job sheet, booked', 'crew lead Jobs, all clocked in', 'crew Jobs'];
 
 /* ---------- the checks, in the page (shared with layout-hosted.js) ---------- */
 const { CHECK } = require('./layoutcheck');
@@ -158,7 +163,7 @@ const { CHECK } = require('./layoutcheck');
   if (!AXE) ok(false, 'axe-core is installed for the contrast check (npm install in tests/ui)');
   else {
     const looks = [['movingday', 'light'], ['movingday', 'dark'], ['contrast', 'light'], ['hivis', 'dark'], ['cardboard', 'light'], ['terminal', 'dark']];
-    const shots = ['owner Today', 'owner job sheet, finished', 'owner new quote, price', 'owner Setup › Options', 'crew lead Jobs, job running', 'crew Jobs', 'crew lead History, a job opened', 'crew lead new quote, rooms', 'crew lead new quote, check it', 'owner job sheet, new quote to approve', 'crew lead movers panel', 'owner job sheet, crew changes'];
+    const shots = ['owner Storage', 'owner Today', 'owner job sheet, finished', 'owner new quote, price', 'owner Setup › Options', 'crew lead Jobs, job running', 'crew Jobs', 'crew lead History, a job opened', 'crew lead new quote, rooms', 'crew lead new quote, check it', 'owner job sheet, new quote to approve', 'crew lead movers panel', 'owner job sheet, crew changes'];
     for (const [t, m] of looks) {
       const found = [];
       for (const n of shots) {
