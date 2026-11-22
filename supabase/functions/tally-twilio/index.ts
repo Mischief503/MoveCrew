@@ -449,6 +449,7 @@ export async function checkJob(org: string, jobId: string, origin?: string | nul
 }
 
 function pendingForms(S: J, job: J): J[] {
+  if (stoIsC(job)) return [];   // a storage account has no forms to sign
   if (optOff(S, "forms")) return [];   // Options › Signatures before payment is off
   const signed: J = job.signed || {};
   const done = Object.keys(signed).map((k) => signed[k] && signed[k].formId);
@@ -3628,7 +3629,7 @@ async function handleApp(req: Request): Promise<Response> {
    the bill's part first, then the tip's (an rt_ line). */
 export const CUST_BY = "customer (app)";
 const CUST_OPEN = ["lead", "quoted", "booked", "active"];
-const CUST_SEEN = ["lead", "quoted", "booked", "active", "done", "paid"];
+const CUST_SEEN = ["lead", "quoted", "booked", "active", "done", "paid", "storage"];
 const CUST_PAGES_PER_HOUR = 12;
 // an email the way it signs in: a Gmail address is the same mailbox with or without dots or a +tag (the app's emailKey)
 export function emailKey(e: unknown): string {
@@ -3733,12 +3734,39 @@ function custLd(S: J, job: J): J | null {
   return { est: L.est === "b" ? "b" : "nb", w0: String(ld.w0 || ""), w1: String(ld.w1 || ""), day: String(ld.day || ""), lbs: Number(L.lbs) || 0,
     net: Number(w.net) > 0 ? Math.round(Number(w.net)) : 0, cap: r2(L.cap), inter, usdot: String((S && S.usdot) || ""), mc: String((S && S.mcNo) || "") };
 }
+// Storage (batch 13, Nov 22): a customer's things in the company's warehouse are a storage account, a job with
+// d.jobType "storage" and status "storage" while they're in it (then "done" or "paid"). d.sto has the vaults, the rate
+// a vault a month and the first bill (the bills come on that day of each month, the 28th at the latest); each month's
+// bill is an extra "sm_<date>". The customer's copy (sto) is the app's stoCustInfo.
+export function stoIsC(job: J): boolean { return !!(job && job.d && job.d.jobType === "storage"); }
+const STO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+function stoDateKC(start: string, k: number): string {
+  if (!k) return start;
+  const m = Number(start.slice(5, 7)) - 1 + k, y = Number(start.slice(0, 4)) + Math.floor(m / 12), p = (n: number) => (n < 10 ? "0" : "") + n;
+  return y + "-" + p((m % 12) + 1) + "-" + p(Math.min(28, Number(start.slice(8, 10))));
+}
+export function stoNextC(start: string, after: string): string {
+  if (!STO_DAY_RE.test(start || "")) return "";
+  for (let k = 0; k < 1200; k++) { const dt = stoDateKC(start, k); if (dt > after) return dt; }
+  return "";
+}
+export function custSto(S: J, job: J): J | null {
+  if (!stoIsC(job)) return null;
+  const s = (job.d && job.d.sto) || {}, units: J[] = S && S.sto && Array.isArray(S.sto.units) ? S.sto.units : [];
+  const vaults: string[] = Array.isArray(s.vaults) ? s.vaults.map(String) : [], rate = r2(s.rate), start = String(s.start || ""), open = job.status === "storage";
+  const name = (id: string) => { const u = units.find((x: J) => x && x.id === id); return u ? String(u.name || "Vault") : "A removed vault"; };
+  const addr = String((S && S.sto && S.sto.addr) || "").trim() || String((S && S.shopAddress) || "").trim();
+  const bills = vals(job.extras).filter((e: J) => e && /^sm_\d{4}-\d{2}-\d{2}$/.test(String(e.id || ""))).sort((a: J, b: J) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((e: J) => ({ from: String((e.sto && e.sto.from) || String(e.id).slice(3)), to: String((e.sto && e.sto.to) || ""), amt: r2(e.amt) }));
+  return { since: String(s.since || start), start, day: Math.min(28, Number(start.slice(8, 10)) || 0), n: vaults.length, names: vaults.map(name).join(", "), rate,
+    monthly: r2(vaults.length * rate), next: open ? stoNextC(start, today()) : "", out: String(s.out || ""), addr, bills };
+}
 export function custCopy(org: string, S: J, job: J, o: { company: string; phone: string; paidC: number; pages?: Record<string, string> }): J {
   const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [], kind = custKind(job);
   const totalC = jobTotalCents(job), dueC = Math.max(0, totalC - o.paidC);
   const depC = job.status === "booked" && !(d.moveDate && String(d.moveDate) < today()) ? Math.max(0, cents(qt.deposit) - o.paidC) : 0;
   const signed = vals(job.signed).filter((x: J) => x && !x.waived), crewF = custCrewOf(S, job);
-  const forms = (crewF ? [crewF] : []).concat(optOff(S, "forms") ? [] : ((S && S.forms) || []).filter((f: J) => f && f.required).map((f: J) => {
+  const forms = stoIsC(job) ? [] : (crewF ? [crewF] : []).concat(optOff(S, "forms") ? [] : ((S && S.forms) || []).filter((f: J) => f && f.required).map((f: J) => {
     const sg = signed.find((x: J) => x.formId === f.id), text = f.kind === "text";
     return { id: String(f.id), title: String(f.title || ""), kind: text ? "text" : "pages", text: text ? String(f.text || "") : "",
       pages: text ? [] : (f.pageIds || []).map((id: string) => (o.pages && o.pages[id]) || ""), ahead: !!f.ahead,
@@ -3758,6 +3786,8 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     bill: { total: totalC / 100, paid: o.paidC / 100, due: dueC / 100, deposit: depC / 100, now: ldNowC(job, dueC, o.paidC) / 100 },
     // a long-distance move (batch 12): the window or the delivery day, the estimate, the weight
     ldInfo: custLd(S, job),
+    // a storage account (batch 13): the vaults, a month, the bills, the next one
+    sto: custSto(S, job),
     pays, forms,
     day: { startedAt: Number(job.startedAt) || 0, eta: (job.eta && Number(job.eta.at)) || 0, phases: job.phases && typeof job.phases === "object" ? job.phases : {}, finishedAt: Number(job.finishedAt) || 0 },
     crew: { lead: String(leadOf(S, job)).split(" ")[0], n: crew.length },
@@ -4069,6 +4099,7 @@ export function custBack(raw: unknown, jobId: string): string {
 // what the customer can pay now: the deposit holding a booked date, or the bill once the move is done
 function custDueC(job: J, owedC: number, paidC: number): J {
   const d = job.d || {};
+  if (job.status === "storage") return { amt: owedC, kind: owedC > 0 ? "bill" : "" };   // a storage account: what's owed
   if (job.status === "booked") {
     if (d.moveDate && String(d.moveDate) < today()) return { amt: 0, kind: "" };
     return { amt: Math.max(0, Math.min(owedC, cents(job.quote && job.quote.deposit) - paidC)), kind: "deposit" };

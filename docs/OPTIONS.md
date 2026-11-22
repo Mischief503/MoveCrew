@@ -1,6 +1,6 @@
 # Options: what the owner can switch on and off
 
-**Setup › Options** has 55 switches, in nine groups. They apply to everyone in the company and save
+**Setup › Options** has 56 switches, in nine groups. They apply to everyone in the company and save
 as soon as they're flipped. Each switch also sits in the Setup section it belongs to, so the Rate
 card has the pricing switches, Roles has what crew, leads and dispatch can do, and so on. Only the
 owner can change them.
@@ -92,6 +92,7 @@ The number under a switch (radius, %, $) shows only while the switch is on. See
 | Follow-up texts for quotes (starts off) | On: a quote texted from MoveCrew gets up to three check-ins from the company line, about 1, 3 and 7 days later in the evening, until they book, text back or someone logs a call (Nov 14). Needs the company line and the evening texts. |
 | Damage claims | No Damage claims on job sheets, and no Report damage on the crew lead's card or in the customer app. Claims already made stay on their jobs. See [CLAIMS.md](CLAIMS.md). |
 | Truck reminders | No dates under each truck in Setup › Fleet, and none on Today. See [CLAIMS.md](CLAIMS.md#truck-reminders). |
+| Storage | No Storage part on move job sheets (no Put in storage), no Setup › Storage, and no Storage card in Reports unless there are accounts. Accounts already made stay, and keep being billed. See [STORAGE.md](STORAGE.md). |
 | A driver for every truck | No driver boxes on jobs, no Who drives list in Setup › Fleet and drivers, and a truck without a driver doesn't make a job need scheduling. The texts just name the truck. |
 | Office approves new quotes from the crew (starts off) | On: a crew lead's new quote waits for the owner or dispatch to approve it (Today: *New quote to approve*), then the customer signs it. Off: the customer's signature is enough, and the office is told. |
 | Dispatch can take payments | Dispatch has no payment buttons (*The owner takes payments on this job*); the server refuses dispatch's payments too. |

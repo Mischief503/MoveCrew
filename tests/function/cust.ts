@@ -662,5 +662,39 @@ ok(fn.ldNowC(ldj, 650000, 0) === 560000 && fn.ldNowC(ldj, 90000, 560000) === 900
   "what's due now: the 110% part, then the rest once that's paid; a bill inside it, or a binding one, all of it");
 DB.docs = DB.docs.filter((x) => x.path !== "jobs/lb1" && x.path !== "jobs/pk1" && x.path !== "jobs/md1" && x.path !== "jobs/ld1");
 
+/* ---------- a storage account (batch 13, Nov 22) ---------- */
+const todayUtc = new Date().toISOString().slice(0, 10);
+ok(fn.stoNextC("2026-01-31", "2026-02-28") === "2026-03-28" && fn.stoNextC("2026-12-02", "2026-12-02") === "2027-01-02" && fn.stoNextC("2026-12-02", "2026-12-01") === "2026-12-02" && fn.stoNextC("", "2026-12-01") === "",
+  "the next storage bill: that day each month, the 28th at the latest, over the new year");
+settings.sto = { units: [{ id: "v1", name: "Vault 1" }, { id: "v2", name: "Vault 2" }, { id: "v3", name: "Vault 3" }], rate: 150, fee: 0, addr: "9 Dock Rd" };
+putDoc(ORG, "org/settings", settings);
+const stoStart = "2026-09-02";
+putDoc(ORG, "jobs/st1", job("st1", { status: "storage", d: { name: "Priya Nair", phone: "512-555-0142", email: "priyanair@gmail.com", moveDate: "", time: "", from: "9 Dock Rd", to: "", jobType: "storage",
+    sto: { vaults: ["v1", "v2"], rate: 150, start: stoStart, since: "2026-09-01", from: "d1", out: "", outJob: "" } },
+  quote: { total: 0, deposit: 0, crew: 0, hours: 0, nTrucks: 0, nte: 0, flat: true, kind: "storage", lines: [] }, costs: {}, crewNotes: {},
+  extras: { "sm_2026-09-02": { id: "sm_2026-09-02", label: "Storage Sep 2 to Oct 1: 2 vaults at $150", amt: 300, ts: 1, sto: { from: "2026-09-02", to: "2026-10-01", n: 2, rate: 150 } },
+    "sm_2026-10-02": { id: "sm_2026-10-02", label: "Storage Oct 2 to Nov 1: 2 vaults at $150", amt: 300, ts: 2, sto: { from: "2026-10-02", to: "2026-11-01", n: 2, rate: 150 } } },
+  payments: { p1: { id: "p1", amt: 300, method: "Cash", date: "2026-09-03", ts: 3 } } }));
+r = await app("tok-priya", { action: "cust_list" });
+const stm = r.body.moves.find((m: any) => m.id === "st1");
+ok(stm && stm.status === "storage" && stm.sto && stm.sto.n === 2 && stm.sto.names === "Vault 1, Vault 2" && stm.sto.monthly === 300 && stm.sto.rate === 150 && stm.sto.since === "2026-09-01" && stm.sto.start === stoStart && stm.sto.day === 2 && stm.sto.addr === "9 Dock Rd",
+  "her storage account is in her app: Vault 1 and Vault 2, $300 a month, at the warehouse");
+ok(stm.sto.bills.length === 2 && stm.sto.bills[0].from === "2026-09-02" && stm.sto.bills[1].to === "2026-11-01" && stm.sto.next === fn.stoNextC(stoStart, todayUtc) && stm.bill.total === 600 && stm.bill.due === 300 && stm.forms.length === 0,
+  "her copy: the bills, the next one (" + stm.sto.next + "), $300 owed, no forms");
+ok(fn.custSto(settings, job("q9")) === null && r.body.moves.find((m: any) => m.id === "q1").sto === null, "a move has no storage part");
+r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "st1", kind: "bill", amount: 20000, tip: 0 });
+ok(!r.body.ok && r.body.changed && /What's owed now is \$300\.00/.test(r.body.message), "paying storage: what's owed is the account's balance: " + r.body.message);
+r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "st1", kind: "bill", amount: 30000, tip: 1000 });
+ok(!r.body.ok && /A tip goes on the bill after the move/.test(r.body.message), "no tip on storage");
+r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "st1", kind: "bill", amount: 30000, tip: 0 });
+cs = ST.sessions[(r.body.url || "").split("/").pop()];
+ok(r.body.ok && cs && cs.amount_total === 30000, "a Stripe page for the $300 she owes");
+const stOut = doc("jobs/st1"); stOut.status = "done"; stOut.d.sto.out = todayUtc; putDoc(ORG, "jobs/st1", stOut);
+r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "st1", kind: "bill", amount: 30000, tip: 0 });
+ok(r.body.ok && !/forms/.test(String(r.body.message || "")), "out of storage with $300 owed: she pays it, with no forms to sign first");
+r = await app("tok-priya", { action: "cust_list" });
+ok(r.body.moves.find((m: any) => m.id === "st1").sto.next === "" && r.body.moves.find((m: any) => m.id === "st1").sto.out === todayUtc, "out of storage: no next bill");
+DB.docs = DB.docs.filter((x) => x.path !== "jobs/st1");
+
 console.log(`\ncust: ${passes} passed, ${failures} failed`);
 if (failures) Deno.exit(1);

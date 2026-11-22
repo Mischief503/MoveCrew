@@ -159,6 +159,8 @@ main{padding:10px 12px calc(70px + env(safe-area-inset-bottom));max-width:960px;
 .alert .ic.bad{background:var(--dueSoft);color:var(--due)}
 .alert .ic.ok{background:var(--paidSoft);color:var(--paid)}
 .pill[data-s=lost]{background:transparent;border:1px solid var(--muted);color:var(--text)}
+.pill[data-s=storage]{background:transparent;border:1px dashed var(--info);color:var(--text)}
+.linkbtn{background:none;border:0;padding:0 2px;color:inherit;font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .pill.bad{background:var(--badSoft);color:var(--bad)}
 .pill.warn{background:var(--warnSoft)}
 
@@ -2049,7 +2051,7 @@ var CATS=['Living room','Bedroom','Dining','Kitchen & laundry','Office','Boxes',
 function defaultSettings(){return {
   company:'Your Moving Co.',
   rates:{r2:140,r3:195,r4:250},
-  minHours:3,prod:45,mph:30,shopAddress:'',shopTravel:true,lateMins:30,activities:['Job day','Warehouse','Dump run','Truck and shop upkeep','Other'],truckFee:45,includedMiles:20,mileRate:1.5,stairFee:25,packPerBox:8,packRate:8,boxPrice:3,nightFee:0,ldMiles:0,ldRates:[{to:500,r:55},{to:1000,r:70},{to:1500,r:82},{to:2000,r:92},{to:2500,r:100},{to:0,r:108}],ldMinLbs:2000,ldFuelPct:0,ldSpread:5,ldMiDay:500,ldEst:'nb',usdot:'',mcNo:'',taxPct:0,depositPct:25,ntePct:15,quoteDays:30,commPct:0,crewCost:24,
+  minHours:3,prod:45,mph:30,shopAddress:'',shopTravel:true,lateMins:30,activities:['Job day','Warehouse','Dump run','Truck and shop upkeep','Other'],truckFee:45,includedMiles:20,mileRate:1.5,stairFee:25,packPerBox:8,packRate:8,boxPrice:3,nightFee:0,sto:{units:stoUnitsDef(),rate:150,fee:0,addr:''},ldMiles:0,ldRates:[{to:500,r:55},{to:1000,r:70},{to:1500,r:82},{to:2000,r:92},{to:2500,r:100},{to:0,r:108}],ldMinLbs:2000,ldFuelPct:0,ldSpread:5,ldMiDay:500,ldEst:'nb',usdot:'',mcNo:'',taxPct:0,depositPct:25,ntePct:15,quoteDays:30,commPct:0,crewCost:24,
   trucks:[{id:'t26',name:'Box 1 (26 ft)',cf:1700},{id:'t20',name:'Box 2 (20 ft)',cf:1000},{id:'t16',name:'Van (16 ft)',cf:800}],
   crew:['Marcus','Dee','Luis','Tanya','Andre','Kim'],ccStaff:[],hr:[],
   sources:['Google','Referral','Yelp','Facebook','Repeat customer','Other'],
@@ -2101,8 +2103,8 @@ document.addEventListener('visibilitychange',function(){if(document.hidden){clea
 function loadState(){try{var r=localStorage.getItem(KEY);if(r)return JSON.parse(r)}catch(e){}return null}
 
 var STATUS=['lead','quoted','booked','active','done','paid','lost'];
-var LABEL={lead:'Lead',quoted:'Quoted',booked:'Booked',active:'In progress',done:'Complete',paid:'Paid',lost:'Lost'};
-var RANK={active:0,booked:1,quoted:2,lead:3,done:4,paid:5,lost:6};
+var LABEL={lead:'Lead',quoted:'Quoted',booked:'Booked',active:'In progress',done:'Complete',paid:'Paid',lost:'Lost',storage:'In storage'};
+var RANK={active:0,booked:1,quoted:2,lead:3,done:4,storage:4.5,paid:5,lost:6};
 
 /* ---------- Options: the owner's on/off switches ----------
    Setup › Options lists every switch, grouped; each Setup section also shows its own. Most live in
@@ -2163,6 +2165,7 @@ var OPTS=[
   {g:'texts',k:'salesFollow',def:false,t:'Follow-up texts for quotes',h:'After a quote is texted from MoveCrew, the customer gets up to three check-in texts (about 1, 3 and 7 days later, in the evening) until they book, text back, or someone logs a call. Needs the company line and the evening texts (Supabase Cron).'},
   {g:'office',k:'claims',t:'Damage claims',h:'Claims on the job sheet, Report damage on the crew lead’s card and in the customer app for 30 days after the move, and the open ones on Today and in Reports.'},
   {g:'office',k:'truckDue',t:'Truck reminders',h:'Each truck’s registration, insurance, inspection and next service in Setup › Fleet, and on Today from 30 days before.'},
+  {g:'office',k:'storage',t:'Storage',h:'Customers’ things in your warehouse between moves: Put in storage on a move’s job sheet, a bill every month for the vaults, and Deliver from storage later. The vaults and the rate are in Setup › Storage.'},
   {g:'office',k:'drivers',t:'A driver for every truck',h:'Dispatch picks who drives each truck on a job. A truck with no driver shows as needing scheduling. Off: no drivers to pick.'},
   {g:'office',k:'dispatchPay',t:'Dispatch can take payments',h:'Dispatch can collect payments and send pay links.'},
   {g:'office',k:'rqOffice',def:false,t:'Office approves new quotes from the crew',h:'A crew lead’s new quote waits for the owner or dispatch to approve it, then the customer signs. Off: the customer’s signature is enough.'},
@@ -2360,6 +2363,7 @@ function crewNoun(x,n){return (jobTypeOf(x)==='packing'?'packer':'mover')+(n===1
 function jobKindWords(x){var t=jobTypeOf(x),k=laborKindOf(x);return t==='labor'?'Labor only: '+(k==='load'?'loading':k==='unload'?'unloading':'loading and unloading'):t==='packing'?'Packing':'Move'}
 // the job's addresses and what each is called: a move's pickup and delivery; one place for most labor and packing jobs
 function addrRoles(x){
+  if(stoIs(x))return [['from','Stored at']];
   var t=jobTypeOf(x),k=laborKindOf(x);
   if(t==='packing')return [['from','Where we pack']];
   if(t==='labor')return k==='both'?[['from','Where we load'],['to','Where we unload']]:[['from',k==='load'?'Where we load':'Where we unload']];
@@ -2541,6 +2545,7 @@ function calcCrew(d,S,jt){
     flat:!opt('byClock',S),shopTravel:false,backH:0,capNte:S.nteCap!==false,driveH:0};
 }
 function calc(d,S){
+  if(stoIs(d))return stoQuote(d,S);
   var jt=jobTypeOf(d);if(jt)return calcCrew(d,S,jt);
   if(moveKind(d,S)==='long')return calcLong(d,S);
   var cf=0,count=0,boxes=0,fees=0;
@@ -2886,7 +2891,7 @@ function payLine(j,you,who){
 // Options › Signatures before payment off: no form is asked for
 // the forms the customer signs: the ones marked Required (Options › Signatures before payment), and on a running job
 // the bigger crew's signature first (crewReq)
-function formsRequired(j){var F=opt('forms')?(state.settings.forms||[]).filter(function(f){return f.required}):[],c=crewReq(j);return c?[c].concat(F):F}
+function formsRequired(j){if(stoIs(j))return [];var F=opt('forms')?(state.settings.forms||[]).filter(function(f){return f.required}):[],c=crewReq(j);return c?[c].concat(F):F}
 function isSigned(j,fid){return (j.signed||[]).some(function(x){return x.formId===fid})}
 function formsPending(j){return formsRequired(j).filter(function(f){return !isSigned(j,f.id)})}
 function payLocked(j){return (j.status==='active'||j.status==='done')&&formsPending(j).length>0}
@@ -3196,7 +3201,7 @@ function ccToo(){var r=state.ui.role;return (r==='crew'||r==='lead')&&ccHouse()}
    with a tip for the crew on the bill) and Profile. What they see is a customer's copy of each move (custMoveOf; the
    server makes the same copy for the phone app): never the crew's pay, the costs, the notes or the activity. The owner
    sees it with More › See it their way › Customer, where what they do changes the job just as the customer would. ---------- */
-var CUST_ST=['lead','quoted','booked','active','done','paid'];
+var CUST_ST=['lead','quoted','booked','active','done','paid','storage'];
 // an email the way it signs in: a Gmail address is the same mailbox with or without dots or a +tag
 function emailKey(e){
   e=String(e||'').trim().toLowerCase();var at=e.lastIndexOf('@');if(at<1||at>=e.length-1||/\s/.test(e))return '';
@@ -3234,10 +3239,10 @@ function custMoveOf(j,S){
     items:(j.items||[]).map(function(it){return {name:String(it.name||''),qty:num(it.qty)}}),
     bill:{total:totalOf(j),paid:paidOf(j),due:balOf(j),deposit:depositDue(j),now:ldNowDue(j)},
     pays:(j.payments||[]).filter(function(p){return payCounts(p)||num(p.tip)>0}).map(function(p){return {amt:payCounts(p)?num(p.amt):0,tip:num(p.tip),method:String(p.method||''),date:p.date||'',ts:p.ts||0}}),
-    forms:(custCrewForm(j)?[custCrewForm(j)]:[]).concat((opt('forms',S)?(S.forms||[]).filter(function(f){return f.required}):[]).map(function(f){return {id:f.id,title:String(f.title||''),kind:f.kind==='text'?'text':'pages',text:f.kind==='text'?String(f.text||''):'',pages:f.kind==='text'?[]:(f.pages||[]).slice(),ahead:!!f.ahead,signed:signed(f.id)}})),
+    forms:stoIs(j)?[]:(custCrewForm(j)?[custCrewForm(j)]:[]).concat((opt('forms',S)?(S.forms||[]).filter(function(f){return f.required}):[]).map(function(f){return {id:f.id,title:String(f.title||''),kind:f.kind==='text'?'text':'pages',text:f.kind==='text'?String(f.text||''):'',pages:f.kind==='text'?[]:(f.pages||[]).slice(),ahead:!!f.ahead,signed:signed(f.id)}})),
     day:{startedAt:j.startedAt||0,eta:j.eta&&j.eta.at?j.eta.at:0,phases:Object.assign({},j.phases||{}),finishedAt:j.finishedAt||0},
     crew:{lead:String(ld).split(' ')[0],n:crew.length},
-    ldInfo:ldCustInfo(j,S),tips:opt('custTips',S),book:opt('custBook',S),claimsOn:opt('claims',S),claims:claimsOf(j).map(function(c){return {item:c.item||'',what:c.what||'',amt:num(c.amt),status:c.status||'open',paid:num(c.paid),at:c.at||0}}),review:custReviewUrl(S),reviewed:!!c.reviewAt,bookedBy:c.bookedAt?'customer':'',
+    ldInfo:ldCustInfo(j,S),sto:stoCustInfo(j,S),tips:opt('custTips',S),book:opt('custBook',S),claimsOn:opt('claims',S),claims:claimsOf(j).map(function(c){return {item:c.item||'',what:c.what||'',amt:num(c.amt),status:c.status||'open',paid:num(c.paid),at:c.at||0}}),review:custReviewUrl(S),reviewed:!!c.reviewAt,bookedBy:c.bookedAt?'customer':'',
     survey:surveyOf(j)?{at:j.survey.at,kind:j.survey.kind==='voice'?'voice':'video',who:String(j.survey.who||'').split(' ')[0],w:walkOn()&&j.survey.room&&j.survey.kind!=='voice'?window.tallyWalk.org()+'.'+j.id+'.'+j.survey.room:''}:null,
     req:j.req?{from:String(j.req.from||''),to:String(j.req.to||''),at:num(j.req.at),note:String(j.req.note||''),quoted:!!j.req.quotedAt}:null};
 }
@@ -3297,6 +3302,257 @@ function invoicesCard(){
    move's d.packDay its id), for the same customer at the pickup, the day before at 9 AM, with the move's boxes. It
    starts as a quote, for the office to check and book. A move that has packing on moving day keeps it until its quote
    is changed: the job sheet says so. */
+/* ---------- storage (batch 13, Nov 22) ----------
+   A customer's things kept in the warehouse between moves (the new place isn't ready, a delivery later) are a
+   storage account: a job of its own (d.jobType 'storage', status 'storage', "In storage"), so payments, pay links,
+   the customer's app, texts and the activity work as on any job, and no screen that looks for booked, running or
+   finished moves sees it. j.d.sto = {vaults: [unit ids], rate ($ a vault a month), start (the first bill; the bills
+   come on that day of each month, the 28th at the latest), since (the day it went in), from (the move it came off),
+   out (the day it came out), outJob (the move that takes it out)}. Each month's bill is an extra 'sm_<date>' an office
+   phone adds on its day (stoSweep), the same on every phone. Out of storage: 'done' while something's owed, else
+   'paid'. Setup › Storage has the vaults (S.sto.units), the rate, a handling fee and the warehouse's address. */
+var STO_GRACE=10;   // a bill is past due this many days after it comes
+function stoIs(x){var d=x&&x.d?x.d:x;return !!d&&d.jobType==='storage'}
+function stoOf(j){var s=(j&&j.d&&j.d.sto)||{};return {vaults:Array.isArray(s.vaults)?s.vaults.slice():[],rate:num(s.rate),start:String(s.start||''),since:String(s.since||s.start||''),from:String(s.from||''),out:String(s.out||''),outJob:String(s.outJob||'')}}
+function stoUnitsDef(){var a=[];for(var i=1;i<=12;i++)a.push({id:'v'+i,name:'Vault '+i});return a}
+// Setup › Storage, with anything missing filled in
+function stoCfg(S){
+  S=S||state.settings;var c=S.sto;
+  if(!c||typeof c!=='object')c=S.sto={units:stoUnitsDef(),rate:150,fee:0,addr:''};
+  if(!Array.isArray(c.units))c.units=stoUnitsDef();
+  if(c.rate==null||c.rate==='')c.rate=150;
+  if(c.fee==null||c.fee==='')c.fee=0;
+  if(c.addr==null)c.addr='';
+  return c;
+}
+function stoAddr(S){S=S||state.settings;return String(((S.sto||{}).addr)||'').trim()||String(S.shopAddress||'').trim()}
+function stoUnitName(id,S){var u=stoCfg(S).units.filter(function(x){return x&&x.id===id})[0];return u?String(u.name||'Vault'):'A removed vault'}
+function stoWords(ids,S){return (ids||[]).map(function(id){return stoUnitName(id,S)}).join(', ')}
+function stoVaultsWord(n){return n+' vault'+(n===1?'':'s')}
+function stoMonthly(j){var s=stoOf(j);return round2(s.vaults.length*s.rate)}
+function stoOpen(j){return stoIs(j)&&j.status==='storage'}
+function stoAccounts(){return state.jobs.filter(stoOpen)}
+// the vaults in use: the open account each is in
+function stoUsedBy(){var m={};stoAccounts().forEach(function(j){stoOf(j).vaults.forEach(function(id){m[id]=j})});return m}
+function stoFree(S,keepId){var used=stoUsedBy();return stoCfg(S).units.filter(function(u){var by=used[u.id];return !by||(!!keepId&&by.id===keepId)})}
+// the bill days: the start, then that day of each month after (the 28th at the latest)
+function stoPad(n){return (n<10?'0':'')+n}
+function stoDateK(start,k){if(!k)return start;var m=+start.slice(5,7)-1+k,y=+start.slice(0,4)+Math.floor(m/12);return y+'-'+stoPad(m%12+1)+'-'+stoPad(Math.min(28,+start.slice(8,10)))}
+function stoBillDates(start,upto){var out=[];if(!/^\d{4}-\d\d-\d\d$/.test(start||'')||!upto)return out;for(var k=0;k<1200;k++){var dt=stoDateK(start,k);if(dt>upto)break;out.push(dt)}return out}
+function stoNext(start,after){if(!/^\d{4}-\d\d-\d\d$/.test(start||''))return '';for(var k=0;k<1200;k++){var dt=stoDateK(start,k);if(dt>after)return dt}return ''}
+function stoDayOf(start){return Math.min(28,+String(start||'').slice(8,10)||0)}
+function stoOrd(n){var s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])}
+function stoShort(s){return /^\d{4}-\d\d-\d\d$/.test(s||'')?parseISO(s).toLocaleDateString('en-US',{month:'short',day:'numeric'}):''}
+function stoBills(j){return (j.extras||[]).filter(function(e){return !!e&&/^sm_\d{4}-\d\d-\d\d$/.test(e.id||'')}).sort(function(a,b){return a.id<b.id?-1:a.id>b.id?1:0})}
+function stoBillFrom(e){return (e.sto&&e.sto.from)||String(e.id||'').slice(3)}
+// what's on the account, oldest first: the handling fee, the monthly bills, and charges or credits put on it
+function stoCharges(j){
+  var s=stoOf(j),d0=s.start||s.since||'',L=[],pre=round2(num((j.quote||{}).total)+matTotal(j));
+  if(pre)L.push({id:'fee',date:d0,amt:pre,label:'Handling into storage'});
+  (j.extras||[]).forEach(function(e){if(!e)return;var bill=/^sm_\d{4}-\d\d-\d\d$/.test(e.id||'');L.push({id:e.id,date:bill?stoBillFrom(e):(e.ts?iso(new Date(e.ts)):d0),amt:num(e.amt),label:String(e.label||''),bill:bill})});
+  return L.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:(a.bill?1:0)-(b.bill?1:0)});
+}
+// the day the oldest charge not paid yet came (payments pay the oldest first); '' when it's all paid
+function stoDueSince(j){var paid=round2(paidOf(j)),run=0,hit='';stoCharges(j).forEach(function(c){if(hit)return;run=round2(run+c.amt);if(run>paid+0.004)hit=c.date});return hit}
+function stoLate(j){var d=stoDueSince(j);return !!d&&balOf(j)>0.004&&addDays(d,STO_GRACE)<todayISO()}
+// who adds the bills: an office phone with the company's jobs in
+function stoCanBill(){return canEditJobs()&&!isCC()&&!previewing()&&(sync.mode!=='shared'||!!(sync.got&&sync.got.jobs))}
+// each open account's bills up to today (the vaults and rate as they are now), and an account whose move out has
+// started comes out of storage
+function stoSweep(){
+  if(!stoCanBill())return false;
+  var t=todayISO(),ch=false;
+  state.jobs.forEach(function(j){
+    if(!stoOpen(j))return;
+    var s=stoOf(j),oj=s.outJob?byId(s.outJob):null;
+    if(oj&&['active','done','paid'].indexOf(oj.status)>=0){stoClose(j,oj.d.moveDate&&oj.d.moveDate<=t?oj.d.moveDate:t,'the move out started');ch=true;return}
+    if(!s.vaults.length||!(s.rate>0))return;
+    var have={};(j.extras||[]).forEach(function(e){if(e&&e.id)have[e.id]=1});
+    stoBillDates(s.start,t).forEach(function(dt,k){
+      if(have['sm_'+dt])return;
+      var to=addDays(stoDateK(s.start,k+1),-1),n=s.vaults.length;
+      if(!j.extras)j.extras=[];
+      j.extras.push({id:'sm_'+dt,label:'Storage '+stoShort(dt)+' to '+stoShort(to)+': '+stoVaultsWord(n)+' at '+money(s.rate),amt:round2(n*s.rate),ts:parseISO(dt).getTime(),sto:{from:dt,to:to,n:n,rate:s.rate}});
+      ch=true;
+    });
+  });
+  return ch;
+}
+function stoTick(){if(stoSweep())save()}
+// out of storage: no bills from that day on (the first month stays); 'done' while something's owed, else 'paid'
+function stoClose(j,out,why){
+  var s=j.d.sto=Object.assign({},j.d.sto||{});s.out=out||todayISO();
+  var gone=stoBills(j).filter(function(e){var f=stoBillFrom(e);return f>=s.out&&f!==s.start});
+  if(gone.length)j.extras=j.extras.filter(function(e){return gone.indexOf(e)<0});
+  j.finishedAt=Date.now();j.status=balOf(j)>0.004?'done':'paid';
+  var over=round2(paidOf(j)-totalOf(j));
+  logEv(j,'Out of storage '+fmtDate(s.out)+(why?' ('+why+')':'')+(gone.length?'; '+gone.length+' bill'+(gone.length===1?'':'s')+' from then taken off':'')+'. '+(j.status==='done'?money(balOf(j))+' still owed.':over>0.004?money(over)+' paid past the bill: refund it.':'Paid in full.'));
+}
+function stoReopen(j,who){
+  var s=stoOf(j),used=stoUsedBy(),clash=s.vaults.filter(function(id){return used[id]&&used[id].id!==j.id});
+  if(!s.vaults.length)return 'Pick its vaults first.';
+  if(clash.length)return stoWords(clash)+(clash.length===1?' is':' are')+' in use now. Pick other vaults first.';
+  j.d.sto=Object.assign({},j.d.sto,{out:'',outJob:''});j.status='storage';delete j.finishedAt;
+  logEv(j,'Back in storage'+(who?' ('+who+')':''));stoSweep();return '';
+}
+// the vaults in words on the moves in and out: the crew's card shows them (the crew can't open the account)
+function stoLinks(j){var s=stoOf(j),w=stoWords(s.vaults);[[s.from,'stoIn'],[s.outJob,'stoOut']].forEach(function(x){var m=x[0]?byId(x[0]):null,k=x[1];if(m&&m.d[k]&&m.d[k].id===j.id&&m.d[k].words!==w)m.d[k]=Object.assign({},m.d[k],{words:w})})}
+function stoSetVaults(j,ids,who){var was=stoWords(stoOf(j).vaults);j.d.sto=Object.assign({},j.d.sto,{vaults:ids.slice()});stoLinks(j);logEv(j,'Vaults: '+(stoWords(ids)||'none')+' (was '+(was||'none')+')'+(who?' · '+who:''))}
+// the day a move's things go in: its last day (the delivery day of a long-distance move), else today
+function stoInDay(mj){var D=jobDays(mj).filter(function(x){return !!x.date}).map(function(x){return x.date}).sort();return D.length?D[D.length-1]:todayISO()}
+function stoNewJob(src,o){
+  var S=state.settings,d=blankDraft();
+  ['name','phone','email'].forEach(function(k){d[k]=String(src[k]||'')});
+  d.source='';d.time='';d.moveDate='';d.jobType='storage';d.from=stoAddr(S);d.to='';d.items=clone(src.items||{});
+  d.sto={vaults:o.vaults.slice(),rate:round2(num(o.rate)),start:o.start,since:o.since||o.start,from:o.from||'',out:'',outJob:''};
+  return newJob(d,S,'storage');
+}
+// Put in storage, from a move's job sheet
+function stoFrom(mj,o,who){
+  var md=mj.d||{},start=o.start||stoInDay(mj),w=stoWords(o.vaults);
+  var j=stoNewJob(md,{vaults:o.vaults,rate:o.rate,start:start,from:mj.id});if(mj.test)j.test=true;
+  logEv(j,'Put in storage from the move'+(md.moveDate?' on '+fmtDate(md.moveDate):'')+': '+w+' at '+money(num(o.rate))+' a vault a month, billed from '+fmtDate(start)+(who?' ('+who+')':''));
+  mj.d.stoIn={id:j.id,words:w};logEv(mj,'Into storage after the move: '+w+(who?' ('+who+')':''));
+  state.jobs.push(j);stoSweep();
+  return j;
+}
+// Setup › Storage: someone who was in the warehouse before MoveCrew
+function stoNewAcct(o,who){
+  var j=stoNewJob({name:o.name,phone:o.phone,email:o.email,items:{}},{vaults:o.vaults,rate:o.rate,start:o.start,since:o.since});
+  logEv(j,'Added in storage'+(o.since?' (in since '+fmtDate(o.since)+')':'')+': '+stoWords(o.vaults)+' at '+money(num(o.rate))+' a vault a month, the next bill '+fmtDate(o.start)+(who?' ('+who+')':''));
+  state.jobs.push(j);stoSweep();return j;
+}
+// Deliver from storage: a move quote from the warehouse with what's stored; it comes out when that move starts
+function stoOutJob(acct,who){
+  var S=state.settings,ad=acct.d||{},d=blankDraft(),w=stoWords(stoOf(acct).vaults);
+  ['name','phone','email'].forEach(function(k){d[k]=String(ad[k]||'')});
+  d.source='';d.from=ad.from||stoAddr(S);d.to='';d.items=clone(ad.items||{});d.stoOut={id:acct.id,words:w};
+  var j=newJob(d,S,'quoted');if(who)j.createdBy=who;if(acct.test)j.test=true;
+  if(quoteDaysOf(S))j.quote.until=addDays(todayISO(),quoteDaysOf(S));
+  logEv(j,'Made to deliver from storage ('+w+')'+(who?' by '+who:''));
+  acct.d.sto=Object.assign({},acct.d.sto,{outJob:j.id});logEv(acct,'Delivery from storage quoted'+(who?' by '+who:''));
+  state.jobs.push(j);return j;
+}
+// a storage account's quote: no truck, no crew; the handling fee (Setup › Storage) when there is one
+function stoQuote(d,S){
+  var fee=round2(num(stoCfg(S).fee)),lines=fee>0?[{label:'Handling into storage',amt:fee}]:[];
+  return {cf:0,crew:0,hours:0,nTrucks:0,lines:lines,total:fee,deposit:0,nte:0,flat:true,kind:'storage'};
+}
+function stoKindLine(j){var s=stoOf(j);return 'Storage account · '+stoVaultsWord(s.vaults.length)+' · '+money(stoMonthly(j))+' a month'}
+function stoLine(j){var s=stoOf(j);return j.status==='storage'?(s.since>todayISO()?'Goes in ':'Since ')+stoShort(s.since)+' · '+(stoWords(s.vaults)||'no vault yet')+' · '+money(stoMonthly(j))+' a month':'Out of storage '+stoShort(s.out)+(s.vaults.length?' · was in '+stoWords(s.vaults):'')}
+function stoBadge(j){var b=balOf(j);if(!(j.status==='storage'&&b>0.004))return '';return stoLate(j)?' <span class="pill bad">'+money(b)+' past due</span>':' <span class="pill due">'+money(b)+' owed</span>'}
+function stoMoney(j){var paid=paidOf(j),bal=balOf(j);return kpiRow([[totalOf(j),'Billed',''],[paid,'Paid',paid>0?'paid':''],[bal,bal>0.004?(stoLate(j)?'Past due':'Owed'):'Paid up',bal>0.004?'due':'paid']])}
+// a form's picks (the vaults tapped, what's typed) until it's done: ui.stoPick[key]
+function stoPick(k){ui.stoPick=ui.stoPick||{};return ui.stoPick[k]||(ui.stoPick[k]={vaults:[]})}
+// the storage account's job sheet: the vaults, the rate, the bills, and taking it out
+function stoSheetHtml(j){
+  var S=state.settings,s=stoOf(j),open=j.status==='storage',t=todayISO(),used=stoUsedBy(),units=stoCfg(S).units;
+  var mj=s.from?byId(s.from):null,oj=s.outJob?byId(s.outJob):null;if(oj&&oj.status==='lost')oj=null;
+  var chips=units.filter(function(u){var by=used[u.id];return s.vaults.indexOf(u.id)>=0||!by||by.id===j.id}).map(function(u){var on=s.vaults.indexOf(u.id)>=0,by=used[u.id],clash=on&&by&&by.id!==j.id;return '<button class="chip'+(on?' on':'')+'" data-act="sto:vault" data-u="'+esc(u.id)+'" aria-pressed="'+on+'">'+esc(u.name)+(clash?' <small>(in use)</small>':'')+'</button>'}).join('');
+  var paid=round2(paidOf(j)),run=0;
+  var rows=stoCharges(j).map(function(c){
+    var from=run;run=round2(run+c.amt);var full=paid+0.004>=run,part=!full&&paid>from+0.004,late=!full&&addDays(c.date,STO_GRACE)<t;
+    return '<tr><td>'+esc(c.label)+(c.bill?'':' <small>'+esc(stoShort(c.date))+'</small>')+'</td><td>'+(c.amt<0?'−'+money(-c.amt):money(c.amt)+'<br><small class="'+(full?'money-paid':late?'money-due':'')+'">'+(full?'Paid':late?'Past due':part?'Part paid':'Owed')+'</small>')+'</td></tr>'}).join('');
+  var next=open?stoNext(s.start,t):'',bills=s.vaults.length&&s.rate>0;
+  var head='<p style="margin:0 0 8px">'+(open?(s.since>t?'Goes into storage ':'In storage since ')+'<b>'+esc(fmtDate(s.since))+'</b>':'Out of storage <b>'+esc(fmtDate(s.out))+'</b>'+(s.since?' · in since '+esc(stoShort(s.since)):''))+
+    (mj?' · from the move'+(mj.d.moveDate?' on '+esc(stoShort(mj.d.moveDate)):'')+'. <button class="linkbtn" data-act="job:open" data-id="'+mj.id+'">Open it</button>':'')+'</p>';
+  var billLine=open?'<p class="hint" style="margin:8px 0 0">'+(bills?(s.start>t?'The first bill comes '+esc(fmtDate(s.start))+': '+money(stoMonthly(j))+'.':'Billed on the '+stoOrd(stoDayOf(s.start))+' of each month. Next: '+esc(fmtDate(next))+', '+money(stoMonthly(j))+'.'):'Nothing is billed until it has a vault and a rate.')+' A bill is past due '+STO_GRACE+' days after it comes.</p>':'';
+  var form='<div class="grid2 stack" style="margin-top:8px">'+fld('A vault a month ($)','<input type="number" inputmode="decimal" min="0" step="0.01" data-stoj="rate" value="'+esc(String(s.rate))+'">')+
+    (stoBills(j).length?'':fld('First bill','<input type="date" data-stoj="start" value="'+esc(s.start)+'">'))+
+    fld('In storage since','<input type="date" data-stoj="since" value="'+esc(s.since)+'">')+'</div>';
+  var out=open?(oj?'<p style="margin:10px 0 0">Delivery: <b>'+esc(oj.d.moveDate?fmtDate(oj.d.moveDate):'day not set')+'</b> · '+esc(LABEL[oj.status]||'')+'. <button class="linkbtn" data-act="job:open" data-id="'+oj.id+'">Open it</button></p><p class="hint" style="margin:4px 0 0">It comes out of storage when that move starts, and the bills stop.</p>'
+      :'<button class="btn" style="margin-top:10px;width:100%" data-act="sto:out">Deliver from storage</button><p class="hint" style="margin:4px 0 0">A move quote from the warehouse with what’s stored. It comes out of storage when that move starts.</p>')+
+    '<button class="btn'+(ui.armed==='sto:close'?' danger':' ghost')+'" style="margin-top:8px;width:100%" data-act="sto:close">'+(ui.armed==='sto:close'?'Tap again: out of storage today':'Taken out another way: close it')+'</button>'
+    :'<button class="btn" style="margin-top:10px;width:100%" data-act="sto:reopen">Put back in storage</button>';
+  var meta=open?(stoWords(s.vaults)||'No vault')+' · '+money(stoMonthly(j))+' a month':'Out '+stoShort(s.out);
+  return '<div class="sec" data-meta="'+esc(meta)+'"><h3>Storage account</h3>'+head+
+    '<div class="f"><span>Vaults</span><div class="chips" style="margin:0">'+(chips||'<small>Every vault is in use. Add vaults in Setup › Storage.</small>')+'</div></div>'+
+    (open?form:'')+billLine+
+    (rows?'<table class="lines" style="margin-top:8px">'+rows+'</table>':'<p class="hint" style="margin:8px 0 0">No bills yet.</p>')+
+    '<details class="grp" style="margin-top:10px"><summary>Add a charge or credit</summary><div class="grid2 stack" style="margin-top:8px">'+fld('What it’s for','<input id="stoChL" placeholder="A late fee, a box taken out">','span2')+fld('Amount','<input id="stoChA" data-money="1" type="text" inputmode="numeric" autocomplete="off" placeholder="0.00">')+fld('Type','<select id="stoChT"><option value="charge">Charge</option><option value="credit">Credit</option></select>')+'</div><button class="btn" style="margin-top:6px" data-act="sto:charge">Add to the account</button></details>'+out+'</div>';
+}
+// a move's job sheet: Put in storage, or where its things went (or came from)
+function stoMoveHtml(j){
+  if(stoIs(j)||jobTypeOf(j)||isCC()||!canEditJobs())return '';
+  var d=j.d||{},a=d.stoIn&&d.stoIn.id?byId(d.stoIn.id):null,b=d.stoOut&&d.stoOut.id?byId(d.stoOut.id):null;
+  if(a)return '<div class="sec" data-meta="'+esc(stoWords(stoOf(a).vaults))+'"><h3>Storage</h3><p style="margin:0">Into storage after this move: <b>'+esc(stoWords(stoOf(a).vaults))+'</b> · '+money(stoMonthly(a))+' a month · '+esc(LABEL[a.status]||'')+'. <button class="linkbtn" data-act="job:open" data-id="'+a.id+'">Open the storage account</button></p></div>';
+  if(b)return '<div class="sec" data-meta="'+esc(stoWords(stoOf(b).vaults))+'"><h3>Storage</h3><p style="margin:0">From storage: <b>'+esc(stoWords(stoOf(b).vaults))+'</b>. It comes out of storage when this move starts. <button class="linkbtn" data-act="job:open" data-id="'+b.id+'">Open the storage account</button></p></div>';
+  if(!opt('storage')||['quoted','booked','active','done','paid'].indexOf(j.status)<0)return '';
+  var S=state.settings,k='mv:'+j.id,P=stoPick(k),free=stoFree(S),c=stoCfg(S);
+  P.vaults=P.vaults.filter(function(id){return free.some(function(u){return u.id===id})});
+  var chips=free.map(function(u){var on=P.vaults.indexOf(u.id)>=0;return '<button class="chip'+(on?' on':'')+'" data-act="sto:pick" data-k="'+esc(k)+'" data-u="'+esc(u.id)+'" aria-pressed="'+on+'">'+esc(u.name)+'</button>'}).join('');
+  var rate=P.rate==null?String(num(c.rate)):String(P.rate),start=P.start||stoInDay(j),n=P.vaults.length;
+  return '<div class="sec"><h3>Storage</h3><p class="hint" style="margin:-2px 0 8px">When their things go to your warehouse after this move: pick the vaults, and it’s billed every month from the day it goes in.</p>'+
+    '<div class="chips">'+(chips||'<small>Every vault is in use. Add vaults in Setup › Storage.</small>')+'</div>'+
+    '<div class="grid2 stack">'+fld('A vault a month ($)','<input type="number" inputmode="decimal" min="0" step="0.01" data-stof="rate" data-k="'+esc(k)+'" value="'+esc(rate)+'">')+fld('Goes in (the first bill)','<input type="date" data-stof="start" data-k="'+esc(k)+'" value="'+esc(start)+'">')+'</div>'+
+    '<button class="btn" style="margin-top:8px;width:100%" data-act="sto:in">'+(n?'Put in storage: '+stoVaultsWord(n)+', '+money(round2(n*num(rate)))+' a month':'Put in storage')+'</button></div>';
+}
+// Setup › Storage
+function stoSetupHtml(S){
+  var c=stoCfg(S),used=stoUsedBy(),inp='style="min-height:44px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--field)"',cols='grid-template-columns:minmax(0,1fr) auto;align-items:center';
+  var rows=c.units.map(function(u,i){var by=used[u.id];return '<div class="grid2" style="'+cols+';margin-bottom:6px"><input aria-label="Vault name" data-s="sto.units.'+i+'.name" data-t="text" value="'+esc(u.name)+'" '+inp+'>'+(by?'<button class="linkbtn" data-act="job:open" data-id="'+by.id+'">'+esc(jobName(by))+'</button>':'<button class="btn sm danger" data-act="sto:rmunit" data-i="'+i+'" aria-label="Remove '+esc(u.name)+'">Remove</button>')+'</div>'}).join('');
+  var P=stoPick('new'),fv=function(k){return esc(P[k]==null?'':String(P[k]))},free=stoFree(S);
+  P.vaults=P.vaults.filter(function(id){return free.some(function(u){return u.id===id})});
+  var chips=free.map(function(u){var on=P.vaults.indexOf(u.id)>=0;return '<button class="chip'+(on?' on':'')+'" data-act="sto:pick" data-k="new" data-u="'+esc(u.id)+'" aria-pressed="'+on+'">'+esc(u.name)+'</button>'}).join('');
+  var n=stoAccounts().length,inUse=Object.keys(used).length;
+  return '<section class="card" id="stoCard"><h2>Storage</h2><p class="sub">Customers’ things in your warehouse, in vaults, billed every month on the day they went in. Put a move’s things in storage from its job sheet.</p>'+
+    '<div class="grid2 stack">'+fld('A vault a month ($)','<input type="number" inputmode="decimal" min="0" step="0.01" data-min="0" data-s="sto.rate" data-t="num" value="'+esc(String(num(c.rate)))+'" '+inp+'>')+
+      fld('Handling into storage, once ($; 0: none)','<input type="number" inputmode="decimal" min="0" step="0.01" data-min="0" data-s="sto.fee" data-t="num" value="'+esc(String(num(c.fee)))+'" '+inp+'>')+
+      fld('Warehouse address (blank: the shop’s)','<input data-s="sto.addr" data-t="text" autocomplete="street-address" value="'+esc(c.addr||'')+'" placeholder="'+esc(String(S.shopAddress||'')||'Where the vaults are')+'" '+inp+'>','span2')+'</div>'+
+    '<p class="hint">The rate and the handling fee go on accounts made from now on; each account keeps its own rate, changed on its job sheet. A bill is past due '+STO_GRACE+' days after it comes.</p>'+
+    '<h3 style="margin:16px 0 4px">Vaults</h3><p class="sub" style="margin:0 0 8px">'+inUse+' of '+c.units.length+' in use'+(n?', for '+n+' customer'+(n===1?'':'s'):'')+'. A vault in use shows whose it is.</p>'+rows+
+    '<div class="grid2" style="'+cols+';margin-top:4px"><input id="nStoUnit" placeholder="Vault '+(c.units.length+1)+'" aria-label="New vault name" '+inp+'><button class="btn sm" data-act="sto:addunit">Add</button></div>'+
+    '<h3 style="margin:16px 0 4px">Someone already in storage</h3><p class="sub" style="margin:0 0 8px">For customers in your warehouse from before MoveCrew. The bills start on the day you pick.</p>'+
+    '<div class="grid2 stack">'+fld('Name','<input data-stof="name" data-k="new" value="'+fv('name')+'" '+inp+'>')+fld('Phone','<input type="tel" data-stof="phone" data-k="new" value="'+fv('phone')+'" '+inp+'>')+
+      fld('Email (they see it and pay in the customer app)','<input type="email" inputmode="email" autocapitalize="off" spellcheck="false" data-stof="email" data-k="new" value="'+fv('email')+'" '+inp+'>','span2')+
+      fld('A vault a month ($)','<input type="number" inputmode="decimal" min="0" step="0.01" data-stof="rate" data-k="new" value="'+(P.rate==null?esc(String(num(c.rate))):fv('rate'))+'" '+inp+'>')+
+      fld('Next bill','<input type="date" data-stof="start" data-k="new" value="'+(P.start?fv('start'):todayISO())+'" '+inp+'>')+
+      fld('In storage since (if you know)','<input type="date" data-stof="since" data-k="new" value="'+fv('since')+'" '+inp+'>','span2')+'</div>'+
+    '<div class="f" style="margin-top:8px"><span>Their vaults</span><div class="chips" style="margin:0">'+(chips||'<small>Every vault is in use. Add one above.</small>')+'</div></div>'+
+    '<button class="btn" style="margin-top:8px;width:100%" data-act="sto:new">Add to storage</button></section>';
+}
+function stoSetupSum(S){var c=stoCfg(S),n=Object.keys(stoUsedBy()).length;return n+' of '+c.units.length+' vault'+(c.units.length===1?'':'s')+' in use · '+money(num(c.rate))+' a vault a month'}
+// the account's rate and dates, saved as they change
+document.addEventListener('change',function(e){
+  var t=e.target;if(!t||!t.dataset||t.dataset.stoj===undefined)return;
+  var j=canEditJobs()?byId(ui.jobId):null;if(!j||!stoIs(j))return;
+  var k=t.dataset.stoj,v=t.value,s=Object.assign({},j.d.sto||{}),who=myName()||'Office';
+  if(k==='rate'){var r=round2(Math.max(0,num(v)));if(r===num(s.rate))return;s.rate=r;logEv(j,'Rate: '+money(r)+' a vault a month ('+who+')')}
+  else if(k==='start'){if(!/^\d{4}-\d\d-\d\d$/.test(v)||stoBills(j).length){renderSheet();return}s.start=v;logEv(j,'First bill: '+fmtDate(v)+' ('+who+')')}
+  else if(k==='since'){if(!/^\d{4}-\d\d-\d\d$/.test(v)){renderSheet();return}s.since=v}
+  else return;
+  j.d.sto=s;stoSweep();save();renderSheet();
+});
+// what's typed on a storage form, kept across redraws
+document.addEventListener('input',function(e){var t=e.target;if(!t||!t.dataset||t.dataset.stof===undefined||!t.dataset.k)return;stoPick(t.dataset.k)[t.dataset.stof]=t.value});
+// the crew's card: where the things go (or come from)
+function stoCrewLine(j){var d=j.d||{},a=d.stoIn,b=d.stoOut;if(a&&a.words)return '<p class="cc-sub" style="margin:-4px 0 8px"><b>Into storage:</b> '+esc(a.words)+'</p>';if(b&&b.words)return '<p class="cc-sub" style="margin:-4px 0 8px"><b>From storage:</b> '+esc(b.words)+'</p>';return ''}
+// Today: storage bills past due (two on their own rows, more on one)
+function stoAlerts(){
+  var L=stoAccounts().filter(function(j){return !j.test&&stoLate(j)}).sort(function(a,b){return stoDueSince(a)<stoDueSince(b)?-1:1});
+  if(!L.length)return [];
+  if(L.length<=2)return L.map(function(j){return alertRow('bad','Storage bill past due: '+esc(jobName(j)),'<span class="money-due">'+money(balOf(j))+'</span> owed · since '+esc(fmtDayShort(stoDueSince(j))),'job:open',j.id)});
+  return ['<button class="alert" data-act="tab" data-tab="jobs" data-f="storage"><span class="ic bad">$</span><span class="tx"><b>'+L.length+' storage accounts are past due</b><small>'+esc(namesLine(L))+' · '+money(L.reduce(function(a,j){return a+balOf(j)},0))+' owed</small></span><span class="go">›</span></button>'];
+}
+// Reports › Storage
+function stoReportCard(inR){
+  var all=state.jobs.filter(function(j){return stoIs(j)&&!j.test});
+  if(!all.length&&!opt('storage'))return '';
+  var open=all.filter(stoOpen),c=stoCfg(),used=stoUsedBy(),month=open.reduce(function(a,j){return a+stoMonthly(j)},0),late=open.filter(stoLate);
+  var owed=all.reduce(function(a,j){return a+(j.status==='storage'||j.status==='done'?balOf(j):0)},0),billed=0;
+  all.forEach(function(j){stoBills(j).forEach(function(e){if(inR(stoBillFrom(e)))billed+=num(e.amt)})});
+  var rows=open.slice().sort(function(a,b){return jobName(a)<jobName(b)?-1:1}).map(function(j){var b=balOf(j);return '<tr><td><button class="linkbtn" data-act="job:open" data-id="'+j.id+'">'+esc(jobName(j))+'</button><br><small>'+esc(stoWords(stoOf(j).vaults))+'</small></td><td class="n">'+money(stoMonthly(j))+'</td><td class="n">'+(b>0.004?(stoLate(j)?'<b class="money-due">'+money(b)+'</b><br><small>past due</small>':money(b)):'—')+'</td></tr>'}).join('');
+  return '<section class="card" id="stoRep"><h2>Storage</h2><p class="sub">'+(open.length?'In storage now: '+open.length+' customer'+(open.length===1?'':'s')+' · '+Object.keys(used).length+' of '+c.units.length+' vaults · '+money(month)+' a month':'Nobody in storage now.')+
+    (owed>0.004?' · '+money(owed)+' owed'+(late.length?' (<b class="money-due">'+late.length+' past due</b>)':''):'')+(billed>0?'. Billed in these dates: '+money(billed):'')+'.</p>'+
+    (rows?'<table class="tbl"><tr><th>Customer</th><th class="n">A month</th><th class="n">Owed</th></tr>'+rows+'</table>':'')+'</section>';
+}
+// the customer's copy (the server's custSto)
+function stoCustInfo(j,S){
+  if(!stoIs(j))return null;
+  var s=stoOf(j),open=j.status==='storage';
+  return {since:s.since,start:s.start,day:stoDayOf(s.start),n:s.vaults.length,names:stoWords(s.vaults,S),rate:s.rate,monthly:stoMonthly(j),next:open?stoNext(s.start,todayISO()):'',out:s.out,addr:stoAddr(S),
+    bills:stoBills(j).map(function(e){return {from:stoBillFrom(e),to:String((e.sto||{}).to||''),amt:num(e.amt)}})};
+}
 function packDayFrom(mj){
   var S=state.settings,md=mj.d||{},d=blankDraft(),who=myName()||'';
   ['name','phone','email','source'].forEach(function(k){if(md[k]!=null)d[k]=md[k]});
@@ -3326,6 +3582,7 @@ function packAddHtml(j){
 }
 // the job sheet's line under the name: what kind of job, the crew and the hours
 function sheetKindLine(j){
+  if(stoIs(j))return esc(stoKindLine(j));
   var q=j.quote||{};
   if(crewOnly(j))return esc(jobKindWords(j))+' · '+q.crew+' '+crewNoun(j,q.crew)+' · '+q.hours+' h'+(jobTypeOf(j)==='packing'&&q.boxes?' · '+fmtInt(q.boxes)+' boxes':'');
   return fmtInt(q.cf)+' cu ft · '+q.crew+' movers · '+q.hours+' h'+(q.kind==='mileage'?' · mileage move':q.kind==='local'?' · local move':q.kind==='long'?' · long distance, '+fmtInt(num((q.ld||{}).lbs))+' lb est.':'');
@@ -3345,12 +3602,40 @@ function custMoves(){
   var k=custWho(),S=state.settings;if(!k)return [];
   return state.jobs.filter(function(j){return CUST_ST.indexOf(j.status)>=0&&custOwns(j,k)}).map(function(j){return custMoveOf(j,S)});
 }
-function custStage(m){return m.req&&!m.req.quoted&&(m.status==='lead'||m.status==='quoted')?'request':m.status==='lead'||m.status==='quoted'?'quote':m.status==='booked'?'booked':m.status==='active'?'today':m.status==='done'&&m.bill.due>0?'due':'done'}
+function custStage(m){return m.sto?'storage':m.req&&!m.req.quoted&&(m.status==='lead'||m.status==='quoted')?'request':m.status==='lead'||m.status==='quoted'?'quote':m.status==='booked'?'booked':m.status==='active'?'today':m.status==='done'&&m.bill.due>0?'due':'done'}
 // the move their screens open on: today's, a bill to pay, the next booked one, an open quote, else the latest
+// the customer app: a storage account (batch 13): since when, the vaults, a month, the next bill, what's owed
+function custRk(m,rank){var s=custStage(m);return s==='storage'?(m.bill.due>0.004?1.5:2.5):rank[s]}
+function custStoCard(m){
+  var o=m.sto||{},open=m.status==='storage',due=m.bill.due>0.004;
+  var top='<div class="cm-top"><span class="pill" data-s="'+(open?'storage':due?'done':'paid')+'">'+(open?'In storage':due?'Out of storage · bill due':'Out of storage')+'</span>'+(m.test?'<span class="pill">Test</span>':'')+'</div>';
+  var when=open?'<h2 class="cm-when">'+(o.since>todayISO()?'Going into storage ':'In storage since ')+esc(custLong(o.since))+'</h2>':'<h2 class="cm-when">Out of storage '+esc(custLong(o.out))+'</h2>';
+  var where='<p class="cm-sub">'+esc((o.names||stoVaultsWord(o.n||0))+(o.addr?' at '+o.addr:''))+'</p>';
+  var price=open?'<div class="cm-price"><b>'+money(o.monthly)+'</b><span>a month'+(o.n>1?' · '+o.n+' vaults at '+money(o.rate):'')+(o.next?' · next bill '+esc(fmtDayShort(o.next)):'')+'</span></div>':'';
+  return '<section class="card cm-card">'+top+when+where+price+'</section>';
+}
+function custStoNext(m,due){
+  var o=m.sto||{},open=m.status==='storage',out=[],add=function(st,t,sub,b){out.push(custStepHtml(st,t,sub,b))};
+  add(o.since>todayISO()?'later':'done','Into storage',o.since?esc(fmtDate(o.since)):'');
+  if(due.amt>0)add('now','Pay your storage bill: '+money(due.amt),'',custBtn(m,'cs:pay','Pay '+money(due.amt),1));
+  else add('done',m.bill.paid>0?'Paid up':'Nothing owed yet',m.bill.paid>0?'Thank you!':'');
+  if(open){
+    add('later','Next bill'+(o.next?': '+esc(fmtDayShort(o.next)):''),money(o.monthly)+' for '+esc(stoVaultsWord(o.n||0))+'. You can pay it here.');
+    add('later','When you want your things','Call or text '+esc(m.company||'us')+' to set a delivery day.');
+  }else add('done','Out of storage',o.out?esc(fmtDate(o.out)):'');
+  return '<section class="card"><h3>'+(open?'Your storage':'All done')+'</h3><ol class="cm-steps">'+out.join('')+'</ol></section>';
+}
+function custStoDetails(m){
+  var o=m.sto||{},rows=(m.quote.lines||[]).map(function(l){return '<tr><td>'+esc(l.label)+'</td><td>'+money(l.amt)+'</td></tr>'}).join('')+(o.bills||[]).map(function(b){return '<tr><td>Storage '+esc(stoShort(b.from))+(b.to?' to '+esc(stoShort(b.to)):'')+'</td><td>'+money(b.amt)+'</td></tr>'}).join('');
+  var items=(m.items||[]).map(function(i){return esc(i.name)+(i.qty>1?' × '+i.qty:'')}).join(', ');
+  return '<details class="card cm-det"><summary><span>Your storage bills</span><b>'+money(m.bill.total)+'</b></summary>'+
+    (rows?'<table class="lines">'+rows+'<tr class="sub"><td>Paid</td><td>'+money(m.bill.paid)+'</td></tr><tr class="total"><td>Owed</td><td>'+money(m.bill.due)+'</td></tr></table>':'<p class="hint">No bills yet.'+(o.next?' The first comes '+esc(fmtDate(o.next))+'.':'')+'</p>')+
+    (items?'<h4>What’s in storage</h4><p class="hint">'+items+'</p>':'')+'</details>';
+}
 function custSorted(){
   var rank={today:0,due:1,booked:2,quote:3,request:3,done:4};
   return custMoves().sort(function(a,b){
-    var ra=rank[custStage(a)],rb=rank[custStage(b)];if(ra!==rb)return ra-rb;
+    var ra=custRk(a,rank),rb=custRk(b,rank);if(ra!==rb)return ra-rb;
     var x=a.d.moveDate||'9999-99-99',y=b.d.moveDate||'9999-99-99';
     return ra===4?(x<y?1:x>y?-1:0):(x<y?-1:x>y?1:0);
   });
@@ -3366,7 +3651,7 @@ function custSelf(){   // their name, phone and email: their profile in the phon
 function custLong(day){return day?parseISO(day).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):''}
 function custIn(day){if(!day)return '';var n=Math.round((parseISO(day)-parseISO(todayISO()))/864e5);return n===0?'Today':n===1?'Tomorrow':n>1?'In '+n+' days':''}
 // what they can pay now: the deposit that holds a booked date, or the bill once the move is done
-function custDueNow(m){var s=custStage(m);return s==='booked'&&m.bill.deposit>0?{amt:m.bill.deposit,kind:'deposit'}:s==='due'?{amt:m.bill.now!=null?m.bill.now:m.bill.due,kind:'bill'}:{amt:0,kind:''}}
+function custDueNow(m){var s=custStage(m);if(s==='storage')return m.bill.due>0.004?{amt:m.bill.due,kind:'bill'}:{amt:0,kind:''};return s==='booked'&&m.bill.deposit>0?{amt:m.bill.deposit,kind:'deposit'}:s==='due'?{amt:m.bill.now!=null?m.bill.now:m.bill.due,kind:'bill'}:{amt:0,kind:''}}
 function custTipOk(m){return !!m.tips&&(m.status==='done'||m.status==='paid')&&m.crew.n>0}
 function custTipped(m){return (m.pays||[]).some(function(p){return p.tip>0})}
 function custAhead(m){return (m.forms||[]).filter(function(f){return f.ahead&&!f.signed&&(m.status!=='active'||f.kind==='crew')})}
@@ -3380,10 +3665,11 @@ function custLinesHtml(m,fin){
   return '<table class="lines">'+rows+(fin?'<tr class="sub"><td>Quote</td><td>'+money(q.total)+'</td></tr><tr class="total"><td>Your bill</td><td>'+money(m.bill.total)+'</td></tr>':'<tr class="total"><td>'+(q.flat?'Price':'Estimate')+'</td><td>'+money(q.total)+'</td></tr>')+'</table>'+
     (q.flat||fin?'':'<p class="hint">Billed by the hour from your crew’s times'+(q.nte?', with an estimated top price of '+money(q.nte):'')+'.</p>');
 }
-var CUST_PILL={request:['Requested','lead'],quote:['Quote','quoted'],booked:['Booked','booked'],today:['Moving today','active'],due:['Moved · bill due','done'],done:['Done','paid']};
+var CUST_PILL={request:['Requested','lead'],quote:['Quote','quoted'],booked:['Booked','booked'],today:['Moving today','active'],due:['Moved · bill due','done'],done:['Done','paid'],storage:['In storage','storage']};
 function custBtn(m,act,label,pri){return '<button class="btn'+(pri?' primary':'')+'" data-act="'+act+'" data-k="'+esc(custKeyOf(m))+'">'+label+'</button>'}
 function custCardHtml(m){
   var s=custStage(m),pl=CUST_PILL[s],q=m.quote,day=m.d.moveDate;
+  if(s==='storage')return custStoCard(m);
   if(s==='request')return '<section class="card cm-card"><div class="cm-top"><span class="pill" data-s="'+pl[1]+'">'+pl[0]+'</span>'+(m.test?'<span class="pill">Test</span>':'')+'</div>'+
     '<h2 class="cm-when">'+esc(reqRange(m.req))+'</h2><p class="cm-sub">The days you can move. '+esc(m.company||'Your mover')+' will call or text you to set the day.</p>'+custSurveyHtml(m)+custRouteHtml(m)+
     (m.items.length?'<p class="cm-sub">'+custItemsN(m)+' things moving</p>':'')+'</section>';
@@ -3399,6 +3685,7 @@ function custStepHtml(st,title,sub,btn){return '<li class="'+st+'"><span class="
 // what's next, in order: book, sign ahead, the deposit, move day, the bill (and a tip), the review
 function custNextHtml(m){
   var s=custStage(m),A=custAhead(m),due=custDueNow(m),out=[],add=function(st,t,sub,b){out.push(custStepHtml(st,t,sub,b))};
+  if(s==='storage')return custStoNext(m,due);
   if(s==='request'){
     var co=esc(m.company||'Your mover');
     add('done','Sent to '+co,m.req.at?'On '+esc(fmtDate(iso(new Date(m.req.at)))):'');
@@ -3437,7 +3724,8 @@ function custDayHtml(m){
   return '<section class="card"><h3>Move day</h3><ol class="cm-steps">'+L.map(function(x,i){return custStepHtml(x.done?'done':i===cur?'now':'later',esc(x.t),esc(x.sub))}).join('')+'</ol><p class="hint">This follows your crew as they go.</p></section>';
 }
 function custDetailsHtml(m){
-  var s=custStage(m),fin=s==='due'||s==='done',items=m.items.map(function(i){return esc(i.name)+(i.qty>1?' × '+i.qty:'')}).join(', ');
+  var s=custStage(m);if(s==='storage')return custStoDetails(m);
+  var fin=s==='due'||s==='done',items=m.items.map(function(i){return esc(i.name)+(i.qty>1?' × '+i.qty:'')}).join(', ');
   if(s==='request')return '<details class="card cm-det"><summary><span>Your request</span><b>'+custItemsN(m)+' items</b></summary>'+(items?'<h4>What’s moving</h4><p class="hint">'+items+'</p>':'')+(m.req.note?'<h4>Your note</h4><p class="hint">'+esc(m.req.note)+'</p>':'')+'</details>';
   return '<details class="card cm-det"><summary><span>'+(fin?'Your bill':'Your quote')+'</span><b>'+money(fin?m.bill.total:m.quote.total)+'</b></summary>'+custLinesHtml(m,fin)+(items?'<h4>What’s moving</h4><p class="hint">'+items+'</p>':'')+'</details>';
 }
@@ -3448,14 +3736,14 @@ function custHelpHtml(m){
 }
 function custMovesHtml(L,cur){
   return '<div class="navlist cm-moves">'+L.map(function(m){var k=custKeyOf(m),pl=CUST_PILL[custStage(m)];
-    return '<button class="navrow" data-act="cs:move" data-k="'+esc(k)+'"'+(cur&&k===custKeyOf(cur)?' aria-current="true"':'')+'><span class="tx"><b>'+esc(m.d.moveDate?fmtDate(m.d.moveDate):'Day not set')+(m.company?' · '+esc(m.company):'')+'</b><small>'+esc((m.d.from||'?')+' → '+(m.d.to||'?'))+'</small></span><span class="pill" data-s="'+pl[1]+'">'+pl[0]+'</span></button>'}).join('')+'</div>';
+    return '<button class="navrow" data-act="cs:move" data-k="'+esc(k)+'"'+(cur&&k===custKeyOf(cur)?' aria-current="true"':'')+'><span class="tx"><b>'+esc(m.sto?(m.status==='storage'?'In storage since '+fmtDayShort(m.sto.since):'Storage until '+fmtDayShort(m.sto.out)):m.d.moveDate?fmtDate(m.d.moveDate):'Day not set')+(m.company?' · '+esc(m.company):'')+'</b><small>'+esc(m.sto?m.sto.names||stoVaultsWord(m.sto.n||0):(m.d.from||'?')+' → '+(m.d.to||'?'))+'</small></span><span class="pill" data-s="'+(m.sto&&m.status!=='storage'?(m.bill.due>0.004?'done':'paid'):pl[1])+'">'+(m.sto&&m.status!=='storage'?'Out of storage':pl[0])+'</span></button>'}).join('')+'</div>';
 }
 function renderMyMove(){
   var v=$('#view'),L=custSorted(),m=custCur(),me=custSelf();
   if(!m){v.innerHTML='<div class="hero-day"><h1>'+esc(custHi(me.name))+'</h1></div><section class="card empty"><h3>No move here yet</h3><p>When your moving company puts '+(me.email?esc(me.email):'your email')+' on your move, it shows up here.</p></section>';return}
   var s=custStage(m),noEmail=!custLive()&&!emailKey(m.d.email);
   v.innerHTML=(noEmail?'<div class="note">This customer has no email on their move yet, so they can’t sign in to see this. Put it on the quote or the job.</div>':'')+
-    '<div class="hero-day"><h1>'+esc(custHi(m.d.name))+'</h1><p class="sub">Your move with '+esc(m.company||'your moving company')+'</p></div>'+
+    '<div class="hero-day"><h1>'+esc(custHi(m.d.name))+'</h1><p class="sub">'+(s==='storage'?'Your storage':'Your move')+' with '+esc(m.company||'your moving company')+'</p></div>'+
     custCardHtml(m)+custLdHtml(m)+(s==='today'?custDayHtml(m):'')+custNextHtml(m)+(s==='done'||s==='due'?custByHtml(m)+custClaimsHtml(m)+custDetailsHtml(m):custDetailsHtml(m)+custHelpHtml(m))+
     (L.length>1?'<h3 class="cm-h3">Your moves</h3>'+custMovesHtml(L,m):'');
   custAutoThanks(m);
@@ -3467,7 +3755,7 @@ function renderMyPay(){
   if(s==='request'){v.innerHTML='<div class="hero-day"><h1>Pay</h1><p class="sub">'+esc(m.company||'')+'</p></div><section class="card"><p class="hint" style="margin:0">Nothing to pay yet. '+esc(m.company||'Your mover')+' sets the day and the price with you first.</p></section>'+custDetailsHtml(m);return}
   var tiles=kpiRow([[before?m.quote.total:m.bill.total,before?(m.quote.flat?'Price':'Estimate'):'Bill',''],[m.bill.paid,'Paid',m.bill.paid>0?'paid':''],[due.amt>0?due.amt:m.bill.due,due.kind==='deposit'?'Deposit due':before?'After the move':'Due now',due.amt>0?'due':'']]);
   var act=due.amt>0?custBtn(m,'cs:pay',due.kind==='bill'?'Pay my bill':'Pay '+money(due.amt),1).replace('class="btn primary"','class="btn primary bigbtn"')+'<p class="hint cm-center">Google Pay, Apple Pay or a card'+(due.kind==='bill'&&custTipOk(m)?'. You can add a tip for your crew before the final total':'')+'.</p>'
-    :'<p class="hint" style="margin:0">'+(s==='quote'?'Nothing to pay yet. Book your move first.':s==='booked'?(m.quote.deposit>0?'Your deposit is paid. ':'')+'The bill is due after the move.':s==='today'?'Your bill is ready when the move is done.':'Nothing to pay. Thank you!')+'</p>';
+    :'<p class="hint" style="margin:0">'+(s==='quote'?'Nothing to pay yet. Book your move first.':s==='booked'?(m.quote.deposit>0?'Your deposit is paid. ':'')+'The bill is due after the move.':s==='today'?'Your bill is ready when the move is done.':s==='storage'&&m.sto.next?'Nothing owed now. Your next storage bill comes '+esc(fmtDayShort(m.sto.next))+'.':'Nothing to pay. Thank you!')+'</p>';
   var rows=(m.pays||[]).slice().sort(function(a,b){return (b.ts||0)-(a.ts||0)}).map(function(p){return '<tr><td>'+esc(p.method||'Payment')+'<br><small>'+esc(p.date?fmtDate(p.date):'')+'</small></td><td>'+(p.amt?money(p.amt):'')+(p.tip?(p.amt?'<br>':'')+'<small>'+money(p.tip)+' tip</small>':'')+'</td></tr>'}).join('');
   v.innerHTML='<div class="hero-day"><h1>Pay</h1><p class="sub">'+esc(m.company||'')+(m.d.moveDate?' · '+esc(fmtDate(m.d.moveDate)):'')+'</p></div>'+tiles+'<section class="card">'+act+'</section>'+
     (rows?'<section class="card"><h3>Receipts</h3><table class="lines">'+rows+'</table></section>':'')+custDetailsHtml(m);
@@ -3578,7 +3866,7 @@ function csTipAsk(m){return custTipOk(m)&&custDueNow(m).kind==='bill'}
 function csPayWord(m,c,total){return c.busy?'Opening…':csTipAsk(m)&&c.tip==null?'Pick a tip first':total>0?'Pay '+money(total):'Nothing to pay'}
 function csPayHtml(m,c){
   var due=custDueNow(m),tipOk=csTipAsk(m),tip=csTipAmt(m,c),total=round2(due.amt+tip);
-  var head=due.amt>0?'<div class="cm-total cm-first"><span>'+(due.kind==='deposit'?'Deposit for '+esc(fmtDate(m.d.moveDate)):'Subtotal'+(m.bill.paid>0?' <small>(your bill, after '+money(m.bill.paid)+' paid)</small>':' <small>(your bill)</small>'))+'</span><b>'+money(due.amt)+'</b></div>'+(due.kind==='deposit'?'<p class="hint" style="margin:0 0 8px">It holds your date. The rest is due after the move.</p>':''):'';
+  var head=due.amt>0?'<div class="cm-total cm-first"><span>'+(due.kind==='deposit'?'Deposit for '+esc(fmtDate(m.d.moveDate)):m.sto?'Owed for storage':'Subtotal'+(m.bill.paid>0?' <small>(your bill, after '+money(m.bill.paid)+' paid)</small>':' <small>(your bill)</small>'))+'</span><b>'+money(due.amt)+'</b></div>'+(due.kind==='deposit'?'<p class="hint" style="margin:0 0 8px">It holds your date. The rest is due after the move.</p>':''):'';
   var tips=tipOk?'<h3 class="cm-h3">Add a tip for your crew</h3><p class="hint" style="margin:0 0 6px">'+esc(custTipWho(m)+(m.bill.paid>0?' The percentages are of your whole '+money(m.bill.total)+' bill.':''))+'</p><div class="cm-tips">'+TIP_OPTS.map(function(o){
       var on=o[0]==='other'?c.tip==='other':c.tip!=null&&c.tip!=='other'&&num(c.tip)===o[0],amt=o[0]>0?money(Math.round(m.bill.total*o[0])/100):'';
       return '<button class="chip'+(on?' on':'')+'" data-act="cs:tip" data-t="'+o[0]+'" aria-pressed="'+on+'">'+o[1]+(amt?'<small>'+amt+'</small>':'')+'</button>'}).join('')+'</div>'+
@@ -4114,6 +4402,7 @@ function alertRow(kind,title,sub,act,id){
   return '<button class="alert" data-act="'+act+'"'+(id?' data-id="'+id+'"':'')+'><span class="ic '+kind+'">!</span><span class="tx"><b>'+title+'</b><small>'+sub+'</small></span><span class="go">›</span></button>';
 }
 function renderToday(){
+  stoTick();
   var v=$('#view'),S=state.settings,t=todayISO(),role=state.ui.role,office=canEditJobs();
   var when=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   var who=office?(sync.identity.status==='ok'&&!sync.isOwner?sync.identity.staff:(state.ui.who||'')):fieldMe();
@@ -4184,6 +4473,7 @@ function renderToday(){
   if(role==='owner')empExpiryAlerts().forEach(function(x){A.push(x)});
   if(role==='owner'||role==='dispatch')truckDueAlerts().forEach(function(x){A.push(x)});
   if(office)ldDayAlerts().forEach(function(x){A.push(x)});
+  if(office)stoAlerts().forEach(function(x){A.push(x)});
   var mine=jobMsgsPending(myName());
   if(mine)A.push('<button class="alert" data-act="jm:open"><span class="ic warn">'+mine+'</span><span class="tx"><b>Confirm your jobs</b><small>You are on '+mine+' job'+(mine===1?'':'s')+' that need'+(mine===1?'s':'')+' your OK</small></span><span class="go">›</span></button>');
   var unread=chatUnread(myName());
@@ -4451,12 +4741,13 @@ function saveQuote(kind){
 
 /* ---------- JOBS ---------- */
 function renderJobs(){
+  stoTick();
   var v=$('#view'),t=todayISO(),past=0;
   var jobs=state.jobs.filter(function(j){if(isHistory(j,t)){past++;return false}return true})   // paid and lost jobs live in Job history
     .sort(function(a,b){return (RANK[a.status]-RANK[b.status])||((a.d.moveDate||'9999')<(b.d.moveDate||'9999')?-1:1)});
-  var counts={all:jobs.length,late:jobs.filter(function(j){return datePassed(j,t)}).length};STATUS.forEach(function(s){counts[s]=jobs.filter(function(j){return j.status===s}).length});
-  if(ui.filter==='lost'||(ui.filter==='late'&&!counts.late))ui.filter='all';
-  var chips=['all'].concat(counts.late?['late']:[]).concat(STATUS.filter(function(s){return s!=='lost'})).map(function(s){return '<button class="chip'+(ui.filter===s?' on':'')+'" data-act="filter" data-f="'+s+'">'+(s==='all'?'All':s==='late'?'Date passed':LABEL[s])+' <small>'+counts[s]+'</small></button>'}).join('');
+  var counts={all:jobs.length,late:jobs.filter(function(j){return datePassed(j,t)}).length};STATUS.forEach(function(s){counts[s]=jobs.filter(function(j){return j.status===s}).length});counts.storage=jobs.filter(stoOpen).length;
+  if(ui.filter==='lost'||(ui.filter==='late'&&!counts.late)||(ui.filter==='storage'&&!counts.storage))ui.filter='all';
+  var chips=['all'].concat(counts.late?['late']:[]).concat(STATUS.filter(function(s){return s!=='lost'})).concat(counts.storage?['storage']:[]).map(function(s){return '<button class="chip'+(ui.filter===s?' on':'')+'" data-act="filter" data-f="'+s+'">'+(s==='all'?'All':s==='late'?'Date passed':LABEL[s])+' <small>'+counts[s]+'</small></button>'}).join('');
   var list=jobs.filter(function(j){return ui.filter==='all'||(ui.filter==='late'?datePassed(j,t):j.status===ui.filter)});
   var cards=list.map(function(j){
     var cf=conflictsFor(j),bal=balOf(j),badges='';
@@ -4467,10 +4758,11 @@ function renderJobs(){
     if(invoiceJob(j)&&invState(j)!=='later')badges+=' <span class="pill'+(invState(j)==='overdue'?' bad':'')+'">'+esc(invNoWords(j)+(invState(j)==='overdue'?' · past due':invState(j)==='paid'?' · paid':''))+'</span>';
     if(needsSched(j))badges+=' <span class="pill warn">Needs scheduling</span>';
     if(j.status==='booked'&&j.assign.truckId&&trucksNoDriver(j).length)badges+=' <span class="pill bad">No driver</span>';
+    if(stoIs(j))badges+=stoBadge(j);
     if(j.test)badges+=' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>';
     if(j.status==='done'&&bal>0)badges+=' <span class="pill due">'+money(bal)+' due</span>';
     if(depositDue(j,t)>0)badges+=' <span class="pill warn">No deposit yet</span>';
-    return '<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><div class="t">'+esc(jobName(j))+'</div><div class="r">'+(priced(j.quote)?money(totalOf(j)):'')+'</div></div><div class="route">'+esc(fmtDate(j.d.moveDate))+(j.d.time&&j.d.moveDate?' · '+fmtTime(j.d.time):'')+' · '+esc(routeWords(j))+'</div><div>'+pill(j.status)+badges+'</div></button>';
+    return '<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><div class="t">'+esc(jobName(j))+'</div><div class="r">'+(stoIs(j)?(j.status==='storage'?money(stoMonthly(j))+'/mo':money(totalOf(j))):priced(j.quote)?money(totalOf(j)):'')+'</div></div><div class="route">'+(stoIs(j)?esc(stoLine(j)):esc(fmtDate(j.d.moveDate))+(j.d.time&&j.d.moveDate?' · '+fmtTime(j.d.time):'')+' · '+esc(routeWords(j)))+'</div><div>'+pill(j.status)+badges+'</div></button>';
   }).join('');
   var allPast=!jobs.length&&past>0;
   var histLine=past&&!allPast?'<div class="secline"><small>'+past+' paid or lost job'+(past===1?'':'s')+'</small><button data-act="hist:go">Job history ›</button></div>':'';
@@ -4483,7 +4775,7 @@ function renderJobs(){
 function openJob(id,force){
   if(!canEditJobs())return;
   if(!force&&ui.jobId&&ui.jobId!==id){var cj=byId(ui.jobId);if(cj&&sheetDirty(cj).length){leaveSheet(function(){openJob(id,true)});return}}
-  ui.jobId=id;ui.armed='';ui.closeAsk=null;ui.open['sh:Schedule']=true;renderSheet();commsLoadLog(id);
+  ui.jobId=id;ui.armed='';ui.closeAsk=null;ui.open['sh:Schedule']=true;ui.open['sh:Storage account']=true;renderSheet();commsLoadLog(id);
 }
 function closeSheet(){ui.jobId=null;ui.closeAsk=null;renderSheet();renderTab()}
 
@@ -4610,6 +4902,7 @@ function costAddFrom(j,ctx,who){
   return c;
 }
 function nextAction(j){
+  if(stoIs(j))return canCollect()&&balOf(j)>0.004?{label:'Collect payment',act:'flow:open',attrs:' data-id="'+j.id+'" data-who="Office"'}:null;
   if(j.status==='lead')return {label:'Build quote',act:'sh:requote'};
   if(j.status==='quoted')return {label:'Book job',act:'sh:next'};
   if(j.status==='booked')return {label:'Start job',act:'sh:next'};
@@ -4627,6 +4920,7 @@ function kpiRow(T){
   return '<div class="kpis" style="grid-template-columns:repeat('+T.length+',minmax(0,1fr))">'+T.map(function(t){return '<div class="kpi'+(t[2]?' '+t[2]:'')+'"><b'+cls+'>'+money(t[0])+'</b><span>'+t[1]+'</span></div>'}).join('')+'</div>';
 }
 function sheetMoney(j){
+  if(stoIs(j))return stoMoney(j);
   var q=j.quote||{},paid=paidOf(j),bal=balOf(j),tot=totalOf(j),st=j.status,T=[];
   var k=function(v,l,c){T.push([v,l,c])};
   if(st==='lead'&&!(tot>0))return '';
@@ -4687,18 +4981,18 @@ function renderSheet(){
   var steps=[['Quoted',['quoted','booked','active','done','paid']],['Scheduled',['booked','active','done','paid']],['On the job',['active','done','paid']],['Signed',['done','paid']],['Paid',['paid']]];
   var nowIx=-1;steps.forEach(function(st,i){if(st[1].indexOf(j.status)>=0)nowIx=i});
   if(j.status==='booked'&&needsSched(j))nowIx=0;
-  var rail=j.status==='lost'?'':'<div class="rail">'+steps.map(function(st,i){return '<span class="st '+(i<nowIx?'done':i===nowIx?'now':'')+'"><i></i><span>'+st[0]+'</span></span>'}).join('')+'</div>';
+  var rail=j.status==='lost'||stoIs(j)?'':'<div class="rail">'+steps.map(function(st,i){return '<span class="st '+(i<nowIx?'done':i===nowIx?'now':'')+'"><i></i><span>'+st[0]+'</span></span>'}).join('')+'</div>';
   var lateNote=datePassed(j)?'<div class="note">The move date ('+esc(fmtDate(j.d.moveDate))+') has passed. '+(j.status==='booked'?'If the move happened, set Status to Complete or Paid. If not, pick a new date or set Status to Lost.':'If they are still moving, pick a new date. If not, set Status to Lost.')+' Paid and lost jobs move to Job history.</div>':'';
   el.innerHTML='<div class="scrim" data-act="sheet:close"></div><div class="panel" role="dialog" aria-modal="true" aria-label="Job details">'+
    '<div class="sheet-head"><div><h2>'+esc(jobName(j))+'</h2><div style="margin-top:4px">'+pill(j.status)+(j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'')+' <small>'+sheetKindLine(j)+(['active','done','paid'].indexOf(j.status)>=0&&leadOf(j)?' · Lead: '+esc(leadOf(j)):'')+'</small></div></div><button class="btn sm" data-act="sheet:close" id="sheetClose">Close</button></div>'+
    '<div class="sheet-body">'+lateNote+rail+
    sheetMoney(j)+rqSheetTop(j)+reqSheetTop(j)+salesSheetTop(j)+
-   '<div class="row sec">'+(na?'<button class="btn primary grow" data-act="'+na.act+'"'+(na.attrs||'')+'>'+na.label+'</button>':'')+(na&&na.act==='sh:requote'?'':'<button class="btn grow" data-act="sh:requote">Edit quote</button>')+'</div>'+
-   '<div class="sec" data-meta="'+esc(fmtDate(j.d.moveDate)+(j.d.moveDate&&j.d.time?' · '+fmtTime(j.d.time):''))+'"><h3>Schedule</h3>'+clash+'<div class="grid2 stack">'+
+   (stoIs(j)&&!na?'':'<div class="row sec">'+(na?'<button class="btn primary grow" data-act="'+na.act+'"'+(na.attrs||'')+'>'+na.label+'</button>':'')+(na&&na.act==='sh:requote'||stoIs(j)?'':'<button class="btn grow" data-act="sh:requote">Edit quote</button>')+'</div>')+
+   (stoIs(j)?stoSheetHtml(j):'<div class="sec" data-meta="'+esc(fmtDate(j.d.moveDate)+(j.d.moveDate&&j.d.time?' · '+fmtTime(j.d.time):''))+'"><h3>Schedule</h3>'+clash+'<div class="grid2 stack">'+
      fld('Date','<input type="date" data-j="moveDate" data-re="1" value="'+esc(j.d.moveDate)+'">')+
      fld('Start time','<input type="time" data-j="time" data-re="1" value="'+esc(j.d.time)+'">')+sheetDaysHtml(j)+
      fld('Status','<select data-jstatus="1">'+statusOpts+'</select>','span2')+
-   '</div>'+truckRows+'<div class="f" style="margin-top:10px"><span>Crew</span><div class="chips" style="margin:0">'+crewChips+'</div></div>'+leadLine(j)+confirmLine(j)+clockLine(j)+mvLine(j,myName()||'Office')+crewLines(j,myName()||'Office',true)+packAddHtml(j)+'</div>'+
+   '</div>'+truckRows+'<div class="f" style="margin-top:10px"><span>Crew</span><div class="chips" style="margin:0">'+crewChips+'</div></div>'+leadLine(j)+confirmLine(j)+clockLine(j)+mvLine(j,myName()||'Office')+crewLines(j,myName()||'Office',true)+packAddHtml(j)+'</div>')+
    '<div class="sec" data-meta="'+esc(secMeta(j,'cust'))+'"><h3>Customer and route</h3><div class="grid2 stack">'+
      fld('Name','<input data-j="name" value="'+esc(jv(j,'name'))+'">')+
      fld('Phone','<input data-j="phone" type="tel" value="'+esc(jv(j,'phone'))+'">')+
@@ -4712,7 +5006,7 @@ function renderSheet(){
    packLinkHtml(j)+invoiceSecHtml(j)+
    '<div class="sec" data-meta="'+esc(secMeta(j,'notes'))+'"><h3>Job notes</h3><textarea data-j="notes" aria-label="Job notes" placeholder="Gate code, elevator booking, what to bring" style="width:100%;min-height:72px;background:var(--field);border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:16px;color:var(--text)">'+esc(jv(j,'notes'))+'</textarea>'+jedBarHtml(j,'notes')+walkVidsHtml(j,'sheet')+'</div>'+
    (onJob||(j.crewNotes||[]).length?'<div class="sec" data-meta="'+((j.crewNotes||[]).length||'')+'"><h3>Crew notes</h3><p class="hint" style="margin:-4px 0 6px">Written by the crew in the field. Gate codes, access details, anything for the office.</p>'+cnotes+'</div>':'')+
-   '<div class="sec" data-meta="'+money(totalOf(j))+'"><h3>Quote</h3><table class="lines">'+lines+'</table>'+(j.createdBy||j.createdCC?'<p class="hint" style="margin:6px 0 0">Quote made by '+(j.createdCC?esc(j.createdBy?j.createdBy+' (call center)':'the call center'):esc(j.createdBy)+whoTag(j.createdBy))+'</p>':'')+'<p class="hint">'+esc(items)+'</p>'+quoteMetaHtml(j)+clockHtml(j)+rqHistHtml(j,true)+'</div>'+
+   (stoIs(j)?'':'<div class="sec" data-meta="'+money(totalOf(j))+'"><h3>Quote</h3><table class="lines">'+lines+'</table>'+(j.createdBy||j.createdCC?'<p class="hint" style="margin:6px 0 0">Quote made by '+(j.createdCC?esc(j.createdBy?j.createdBy+' (call center)':'the call center'):esc(j.createdBy)+whoTag(j.createdBy))+'</p>':'')+'<p class="hint">'+esc(items)+'</p>'+quoteMetaHtml(j)+clockHtml(j)+rqHistHtml(j,true)+'</div>')+
    (shownMats?'<div class="sec" data-meta="'+esc(secMeta(j,'mats'))+'"><h3>Materials and costs</h3>'+matSection(j,'s',myName()||'Office',true)+'</div>':'')+
    (shownPay?payHtml:'')+
    (shownForms?fsec:'')+
@@ -4720,12 +5014,12 @@ function renderSheet(){
    (j.startedAt?'<div class="sec" data-meta="'+(j.status==='active'?esc(phaseNow(j)):(j.phases&&j.phases.unloadEnd?fmtDur(j.phases.unloadEnd-j.phases.loadStart)+' handling':''))+'"><h3>On-site times</h3>'+
      (j.status==='active'||(crewOnly(j)&&j.finishedAt)||(j.phases&&j.phases.loadStart)?'<div class="phz">'+phaseRows(j)+'</div>':'<p class="hint">The crew did not record load and unload times on this job.</p>')+crewOnRows(j)+
      (j.actualHours>0?'<p class="hint"'+(topUpFor(j)?' style="color:var(--text)"':'')+'>'+esc(payLine(j,false))+'.</p>':'')+'</div>':'')+
-   ldSheetHtml(j)+claimsSecHtml(j)+
+   stoMoveHtml(j)+ldSheetHtml(j)+claimsSecHtml(j)+
    commsSection(j)+
    '<div class="sec"><h3>Activity</h3>'+acts+'</div>'+
    (state.ui.role==='owner'?'<button class="btn danger" data-act="sh:delete">'+(ui.armed==='sh:delete'?'Tap again to delete this job':'Delete job')+'</button>':'')+
    '</div>'+leaveBarHtml(j)+'</div>';
-  accordify($('.sheet-body',el),'.sec','H3','sh',['Schedule']);
+  accordify($('.sheet-body',el),'.sec','H3','sh',['Schedule','Storage account']);
   // a part with something unsaved stays open, so its Save button is in view
   ['Customer and route','Job notes','Materials and costs'].forEach(function(tt){
     var dirty=tt==='Customer and route'?jedDirty(j,'cust').length:tt==='Job notes'?jedDirty(j,'notes').length:costDirty(matKey('s',j.id));
@@ -7133,7 +7427,7 @@ function crewKit(me){
     var testTag=j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'';
     var body='<div class="cc-sub">Crew: '+(crewLine||'none yet')+'</div>'+crewLeadLine(j)+crewHint+(asLead?mvLine(j,me)+crewLines(j,me,false):'')+truckLines+
       (j.actualHours>0&&(j.status==='done'||j.status==='paid')?'<div class="cc-sub"><b>'+esc(payLine(j,true,me))+'</b></div>':'')+
-      '<div class="cc-route">'+addrRoles(j).map(function(r){return '<div><small>'+esc(r[1])+'</small>'+map(j.d[r[0]])+'</div>'}).join('')+'</div>'+
+      '<div class="cc-route">'+addrRoles(j).map(function(r){return '<div><small>'+esc(r[1])+'</small>'+map(j.d[r[0]])+'</div>'}).join('')+'</div>'+stoCrewLine(j)+
       notesSec+matsSec+photoSec+crewClaimHtml(j,me,asLead)+runSec;
     var est=['booked','active'].indexOf(j.status)>=0?(multiDay(j)?'Est. '+(Math.round(dayHoursOf(j,(onDate(j,t)||{i:0}).i)*2)/2)+' h':estLine(j)):'';
     if(fold){var hk='h:'+j.id,fin=['done','paid'].indexOf(j.status)>=0,dayW=onDate(j,t)?'Today':fmtDate(j.d.moveDate);
@@ -7249,9 +7543,9 @@ function histFill(){
   shown.forEach(function(j){
     var k=jobDay(j).slice(0,7);
     if(k!==cur){cur=k;var m=mt[k];html+='<div class="secline"><h2>'+esc(parseISO(k+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'}))+'</h2><small>'+m.n+' job'+(m.n===1?'':'s')+(office&&m.amt?' · '+money(m.amt):'')+'</small></div>'}
-    var when=esc((j.d.moveDate?fmtDate(j.d.moveDate):'No move date')+' · '+routeWords(j));
+    var when=stoIs(j)?esc(stoLine(j)):esc((j.d.moveDate?fmtDate(j.d.moveDate):'No move date')+' · '+routeWords(j));
     var test=j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'';
-    if(office){html+='<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><div class="t">'+esc(j.d.name||'Unnamed')+'</div><div class="r"'+(j.status==='lost'?' style="color:var(--muted)"':'')+'>'+(priced(j.quote)?money(totalOf(j)):'')+'</div></div><div class="route">'+when+'</div><div>'+pill(j.status)+test+'</div></button>';return}
+    if(office){html+='<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><div class="t">'+esc(j.d.name||'Unnamed')+'</div><div class="r"'+(j.status==='lost'?' style="color:var(--muted)"':'')+'>'+(priced(j.quote)||stoIs(j)?money(totalOf(j)):'')+'</div></div><div class="route">'+when+'</div><div>'+pill(j.status)+test+'</div></button>';return}
     html+=kit.card(j,true);   // the customer's name and the day; tap for everything on it (Richie, Oct 21)
   });
   var left=list.length-shown.length;
@@ -7268,8 +7562,8 @@ function renderReports(){
   var collected=allPays.reduce(function(a,x){return a+x.p.amt},0);
   var outstanding=jobs.filter(function(j){return j.status==='done'}).reduce(function(a,j){return a+balOf(j)},0);   // finished and not paid yet, as on Today
   var won=jobs.filter(function(j){return ['booked','active','done','paid'].indexOf(j.status)>=0});
-  var quotedPlus=jobs.filter(function(j){return j.status!=='lead'});
-  var finished=jobs.filter(function(j){return j.status==='done'||j.status==='paid'});
+  var quotedPlus=jobs.filter(function(j){return j.status!=='lead'&&!stoIs(j)});
+  var finished=jobs.filter(function(j){return (j.status==='done'||j.status==='paid')&&!stoIs(j)});
   var avg=finished.length?finished.reduce(function(a,j){return a+totalOf(j)},0)/finished.length:0;
   var win=quotedPlus.length?Math.round(won.length/quotedPlus.length*100)+'%':'—';
   var months={};allPays.forEach(function(x){var m=x.p.date.slice(0,7);months[m]=(months[m]||0)+x.p.amt});
@@ -7288,7 +7582,7 @@ function renderReports(){
   var crewRows=Object.keys(cm).sort().map(function(k){var r=cm[k];return '<tr><td>'+esc(k)+(k==='No lead'?'':'’s crew')+'</td><td class="n">'+r.jobs+'</td><td class="n">'+money(r.billed)+'</td><td class="n">'+(r.th?money(r.tb/r.th):'—')+'</td></tr>'}).join('');
   var out='<div class="card" style="padding:10px 12px"><div class="grid2"><label class="f"><span>From</span><input type="date" id="rFrom" value="'+esc(from)+'"></label><label class="f"><span>To</span><input type="date" id="rTo" value="'+esc(to)+'"></label></div><div class="hint" style="margin-top:4px">Leave blank for all time.</div></div>'+
    '<div class="kpis"><div class="kpi paid"><b>'+money(collected)+'</b><span>Collected</span></div><div class="kpi'+(outstanding>0?' due':'')+'"><b>'+money(outstanding)+'</b><span>Still owed</span></div><div class="kpi"><b>'+money(avg)+'</b><span>Average job</span></div><div class="kpi"><b>'+win+'</b><span>Quote win rate</span></div></div>'+
-   invoicesCard()+claimsCard(inR)+
+   invoicesCard()+claimsCard(inR)+stoReportCard(inR)+
    '<section class="card"><h2>Collected by month</h2>'+(bars?'<div class="bars">'+bars+'</div>':'<p class="hint">No payments in this range.</p>')+'</section>'+
    '<section class="card"><h2>Revenue by crew</h2><p class="sub">Finished jobs, grouped by the crew lead on the job.</p>'+(crewRows?'<table class="tbl"><tr><th>Crew</th><th class="n">Jobs</th><th class="n">Billed</th><th class="n">Per job hour</th></tr>'+crewRows+'</table>':'<p class="hint">No finished jobs in this range.</p>')+'</section>';
   var srcCard='<section class="card"><h2>Where jobs come from</h2><table class="tbl"><tr><th>Source</th><th class="n">Leads</th><th class="n">Won</th><th class="n">Collected</th></tr>'+(srcRows||'<tr><td colspan="4"><small>No jobs in this range.</small></td></tr>')+'</table></section>';
@@ -7347,7 +7641,7 @@ function renderReports(){
    Right now: what's waiting in Sales. */
 var BOOKED_ST=['booked','active','done','paid'];
 function salesReport(inR){
-  var leads=state.jobs.filter(function(j){return !j.test&&inR(iso(new Date(j.createdAt||0)))});
+  var leads=state.jobs.filter(function(j){return !j.test&&!stoIs(j)&&inR(iso(new Date(j.createdAt||0)))});
   var open=state.jobs.filter(function(j){return isOpenQuote(j)&&!j.test}),fresh=open.filter(salesNew).length,due=open.filter(function(j){return salesDue(j)}).length;
   var now='<div class="row between" style="gap:8px;margin:0 0 10px"><span class="hint" style="margin:0">Right now: '+open.length+' open in Sales'+(fresh?', '+fresh+' not called yet':'')+(due?', '+due+' due':'')+'.</span><button class="btn sm" data-act="sl:go" data-f="'+(due?'due':'open')+'">Open Sales</button></div>';
   var head='<section class="card" id="salesRep"><h2>Sales</h2><p class="sub">The leads that came in '+(ui.from||ui.to?(ui.from&&ui.to?'from '+esc(fmtDate(ui.from))+' to '+esc(fmtDate(ui.to)):ui.from?'from '+esc(fmtDate(ui.from))+' on':'up to '+esc(fmtDate(ui.to))):'any time')+', and what became of them.</p>'+now;
@@ -7495,6 +7789,7 @@ function setupSecs(){
       fld('Moves per truck, at most','<input type="number" inputmode="numeric" min="1" data-min="1" step="1" data-s="truckDay.jobs" data-t="num" value="'+esc(String(dayCfg(S).jobs))+'" '+inp+'>')+
       fld('Minutes between moves','<input type="number" inputmode="numeric" min="0" data-min="0" step="5" data-s="truckDay.gap" data-t="num" value="'+esc(String(dayCfg(S).gap))+'" '+inp+'>')+
     '</div></section>'+drvCard,'trucks drivers driver drives driving license');
+  if(opt('storage'))add('storage','price','Storage',stoSetupSum(S),stoSetupHtml(S),'storage vaults warehouse monthly rent rate customers in storage');
   add('employees','people','Employees',nIn+' '+(nIn===1?'person':'people'),employeesCard(),'crew staff people hiring documents phone');
   add('access','people','App access',sync.mode==='shared'?'Who can sign in, and as what':'Sign-in for your team',accessCard(),'sign in login users approve revoke');
   add('roles','people','Roles','What crew, crew leads and dispatch can do, and the call center',
@@ -9193,7 +9488,8 @@ function pullJobs(snap){
   // a bill line worked out on another phone from older numbers (two phones changed the job at once):
   // work it out again here, so the bill matches the job. Lines from another version of MoveCrew are left.
   Object.keys(remote).forEach(function(id){var cj=byId[id];if(clockStale(cj)){rebill(cj,'worked out again');changed=true}});
-  if(invSweep())changed=true;   // a crew lead's finished invoice job gets its number here
+  if(invSweep())changed=true;
+  if(stoSweep())changed=true;   // storage: the month's bills, and an account whose move out started   // a crew lead's finished invoice job gets its number here
   sync.got.jobs=true;
   jobMsgNotice();noteNotice();onJobNotice(false);rqNotice();leadNotice();ringStart();walkSweepSoon();
   // the call center's screens have no photos, and the hosted database doesn't give it them
@@ -11804,9 +12100,9 @@ function payStepOffline(j){
    payment toward the quote (a deposit), with what is left to pay */
 function payTitle(j){return ['active','done','paid'].indexOf(j.status)>=0?'Collect payment':'Take a payment'}
 function payTiles(j){
-  var bal=balOf(j),fin=['active','done','paid'].indexOf(j.status)>=0;
+  var bal=balOf(j),fin=['active','done','paid'].indexOf(j.status)>=0||stoIs(j);
   var sv=savedOf(j);
-  return kpiRow([[totalOf(j),fin?'Bill':'Quote',''],[paidOf(j),'Paid',paidOf(j)>0?'paid':''],[fin&&ldNow(j)&&ldNow(j).now>0.004?ldNow(j).now:bal,fin?'Due now':'Left to pay',bal>0?(fin?'due':''):'paid']])+ldPayNote(j,fin)+
+  return kpiRow([[totalOf(j),stoIs(j)?'Billed':fin?'Bill':'Quote',''],[paidOf(j),'Paid',paidOf(j)>0?'paid':''],[fin&&ldNow(j)&&ldNow(j).now>0.004?ldNow(j).now:bal,fin?'Due now':'Left to pay',bal>0?(fin?'due':''):'paid']])+ldPayNote(j,fin)+
     (sv?'<p class="hint money-paid saved">You saved '+money(sv)+' off your quote of '+money(j.quote.total)+'.</p>':'');
 }
 function payStep(j){
@@ -11991,6 +12287,32 @@ document.addEventListener('click',function(e){
     case 'sh:fillpay':var pa=$('#payAmt');if(pa)pa.value=fmtCents(Math.round(+t.dataset.v*100));break;
     case 'sh:addpay':j=byId(ui.jobId);if(!j||!canCollect()||!$('#payMethod'))break;var amt=round2(moneyVal($('#payAmt')));if(addPayment(j,amt,$('#payMethod').value)){save();renderSheet();toast('Payment recorded.')}else toast(payLocked(j)?'Sign the required forms first.':'Enter an amount first.');break;
     case 'sh:rmphoto':j=byId(ui.jobId);j.photos=j.photos.filter(function(p){return p.id!==t.dataset.pid});save();renderSheet();break;
+    case 'sto:pick':{var spk=stoPick(t.dataset.k),spu=t.dataset.u,spi=spk.vaults.indexOf(spu);if(spi>=0)spk.vaults.splice(spi,1);else spk.vaults.push(spu);if(/^mv:/.test(t.dataset.k))renderSheet();else renderSettings();break}
+    case 'sto:in':{var smj=byId(ui.jobId);if(!smj||!canEditJobs()||stoIs(smj)||(smj.d.stoIn&&byId(smj.d.stoIn.id)))break;var sp=stoPick('mv:'+smj.id);
+      if(!sp.vaults.length){toast('Pick at least one vault.');break}
+      var sst=sp.start||stoInDay(smj);if(!/^\d{4}-\d\d-\d\d$/.test(sst)){toast('Pick the day it goes in.');break}
+      var sused=stoUsedBy(),staken=sp.vaults.filter(function(id){return sused[id]});if(staken.length){sp.vaults=sp.vaults.filter(function(id){return !sused[id]});toast(stoWords(staken)+(staken.length===1?' was':' were')+' just taken. Pick again.');renderSheet();break}
+      var sj=stoFrom(smj,{vaults:sp.vaults,rate:sp.rate==null||sp.rate===''?num(stoCfg(S).rate):Math.max(0,num(sp.rate)),start:sst},myName()||'Office');delete ui.stoPick['mv:'+smj.id];save();renderSheet();
+      toast('In storage: '+stoWords(stoOf(sj).vaults)+', '+money(stoMonthly(sj))+' a month.');break}
+    case 'sto:vault':{var vj=byId(ui.jobId);if(!vj||!stoIs(vj)||!canEditJobs())break;var vs=stoOf(vj).vaults,vu=t.dataset.u,vi=vs.indexOf(vu);
+      if(vi>=0){if(vs.length===1&&vj.status==='storage'){toast('Keep at least one vault. When it all comes out, close it.');break}vs.splice(vi,1)}
+      else{var vby=stoUsedBy()[vu];if(vby&&vby.id!==vj.id){toast(stoUnitName(vu)+' is in use.');break}vs.push(vu)}
+      stoSetVaults(vj,vs,myName()||'Office');save();renderSheet();break}
+    case 'sto:out':{var oa=byId(ui.jobId);if(!oa||!stoOpen(oa)||!canEditJobs())break;var ocur=stoOf(oa).outJob?byId(stoOf(oa).outJob):null;if(ocur&&ocur.status!=='lost'){openJob(ocur.id);break}
+      leaveSheet(function(){var oa2=byId(ui.jobId);if(!oa2||!stoOpen(oa2))return;var oq=stoOutJob(oa2,myName()||'');save();
+        state.draft=Object.assign(blankDraft(),clone(oq.d),{editId:oq.id});ui.qstep=1;ui.jobId=null;ui.closeAsk=null;ui.tab='quote';render();window.scrollTo(0,0);
+        toast('A move quote from storage. Put in where it goes and the day, then save or book it.')});break}
+    case 'sto:close':{var scj=byId(ui.jobId);if(!scj||!stoOpen(scj)||!canEditJobs())break;if(armed('sto:close')){stoClose(scj,todayISO(),'closed by '+(myName()||'the office'));save();renderSheet();renderTab();toast(scj.status==='paid'?'Out of storage. Paid in full.':'Out of storage. '+money(balOf(scj))+' still owed.')}else renderSheet();break}
+    case 'sto:reopen':{var srj=byId(ui.jobId);if(!srj||!stoIs(srj)||srj.status==='storage'||!canEditJobs())break;var srw=stoReopen(srj,myName()||'Office');if(srw){toast(srw);break}save();renderSheet();renderTab();toast('Back in storage.');break}
+    case 'sto:charge':{var chj=byId(ui.jobId);if(!chj||!stoIs(chj)||!canEditJobs())break;var chl=String(($('#stoChL')||{}).value||'').trim(),cha=round2(moneyVal($('#stoChA')))*((($('#stoChT')||{}).value)==='credit'?-1:1);
+      if(!chl||!cha){toast('Put in what it’s for and an amount.');break}chj.extras=chj.extras||[];chj.extras.push({id:uid(),label:chl,amt:cha,ts:Date.now()});logEv(chj,(cha<0?'Credit: ':'Charge: ')+chl+' '+money(cha)+' ('+(myName()||'Office')+')');afterBillChange(chj);save();renderSheet();toast(cha<0?'Credit added.':'Added to the account.');break}
+    case 'sto:addunit':{var sc=stoCfg(S),snm=String(($('#nStoUnit')||{}).value||'').trim()||('Vault '+(sc.units.length+1));sc.units.push({id:uid(),name:snm});save();renderSettings();break}
+    case 'sto:rmunit':{var sc2=stoCfg(S),sri=+t.dataset.i,sru=sc2.units[sri];if(!sru)break;if(stoUsedBy()[sru.id]){toast(sru.name+' is in use.');break}sc2.units.splice(sri,1);save();renderSettings();
+      toastUndo('Removed '+sru.name+'.',function(){var l=stoCfg(state.settings).units;l.splice(Math.min(sri,l.length),0,sru);save();if(ui.tab==='settings')renderSettings();toast(sru.name+' is back.')});break}
+    case 'sto:new':{var snp=stoPick('new'),snn=String(snp.name||'').trim();if(!snn){toast('Put in their name.');break}if(!snp.vaults.length){toast('Pick at least one vault.');break}
+      var snst=snp.start||todayISO();if(!/^\d{4}-\d\d-\d\d$/.test(snst)){toast('Pick the day of the next bill.');break}
+      var snj=stoNewAcct({name:snn,phone:String(snp.phone||'').trim(),email:String(snp.email||'').trim(),vaults:snp.vaults,rate:snp.rate==null||snp.rate===''?num(stoCfg(S).rate):Math.max(0,num(snp.rate)),start:snst,since:/^\d{4}-\d\d-\d\d$/.test(snp.since||'')?snp.since:''},myName()||'Office');
+      delete ui.stoPick['new'];save();renderSettings();openJob(snj.id);toast('In storage: '+snn+', '+stoWords(stoOf(snj).vaults)+'.');break}
     case 'sh:delete':if(armed('sh:delete')){var djid=ui.jobId;state.jobs=state.jobs.filter(function(x){return x.id!==djid});delete ui.jed[djid];delete ui.cfm[matKey('s',djid)];save();ui.jobId=null;ui.closeAsk=null;render();toast('Job deleted.')}else renderSheet();break;
     case 'photo':ui.photoKind=t.dataset.kind;ui.photoJob=t.dataset.id||ui.jobId;pickPhotos();break;
     case 'tally':j=byId(t.dataset.id);var rec=j.tally[t.dataset.item]||(j.tally[t.dataset.item]={});rec[t.dataset.k]=rec[t.dataset.k]?0:1;save();renderCrew();break;
@@ -12582,7 +12904,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow,ldSync:ldSync,ldRateFor:ldRateFor,addrState:addrState,ldInter:ldInter,roadDays:roadDays,ldNow:ldNow,ldWeigh:ldWeigh,ldWeightBill:ldWeightBill,ldBilledLater:ldBilledLater,ldCustInfo:ldCustInfo,custLdHtml:custLdHtml,ldDayAlerts:ldDayAlerts,flowAmtNow:flowAmtNow,ldSheetSet:ldSheetSet,paidOf:paidOf,addPayment:addPayment};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow,ldSync:ldSync,ldRateFor:ldRateFor,addrState:addrState,ldInter:ldInter,roadDays:roadDays,ldNow:ldNow,ldWeigh:ldWeigh,ldWeightBill:ldWeightBill,ldBilledLater:ldBilledLater,ldCustInfo:ldCustInfo,custLdHtml:custLdHtml,ldDayAlerts:ldDayAlerts,flowAmtNow:flowAmtNow,stoIs:stoIs,stoOf:stoOf,stoCfg:stoCfg,stoSweep:stoSweep,stoFrom:stoFrom,stoClose:stoClose,stoReopen:stoReopen,stoBills:stoBills,stoDueSince:stoDueSince,stoLate:stoLate,stoMonthly:stoMonthly,stoCustInfo:stoCustInfo,stoBillDates:stoBillDates,stoNext:stoNext,stoOutJob:stoOutJob,stoNewAcct:stoNewAcct,stoAlerts:stoAlerts,stoUsedBy:stoUsedBy,stoReportCard:stoReportCard,stoSetVaults:stoSetVaults,custDetailsHtml:custDetailsHtml,newJob:newJob,ldSheetSet:ldSheetSet,paidOf:paidOf,addPayment:addPayment};
 })();
 </script>
 </body>
