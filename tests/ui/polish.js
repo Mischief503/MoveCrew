@@ -53,7 +53,7 @@ const L = (m) => label + ': ' + m;
   const total = +$$('#view .secline').find((x) => /Needs you/.test(x.textContent)).querySelector('small').textContent;
   const more = $('[data-act="today:alerts"]');
   ok(total > 6 && alerts().length === 5 && more && more.textContent === 'Show ' + (total - 5) + ' more' && more.getAttribute('aria-expanded') === 'false', L('Needs you shows the first five of ' + total + ' and a Show ' + (total - 5) + ' more button'));
-  ok(/Truck down|Double-booked|need scheduling|past/.test(alerts()[0].textContent), L('the most urgent kinds stay at the top: ' + alerts()[0].textContent.replace(/\s+/g, ' ').slice(0, 60)));
+  ok(/Truck down|Double-booked|needs? scheduling|past/.test(alerts()[0].textContent), L('the most urgent kinds stay at the top: ' + alerts()[0].textContent.replace(/\s+/g, ' ').slice(0, 60)));
   click(more); await sleep(5);
   ok(alerts().length === total && $('[data-act="today:alerts"]').textContent === 'Show fewer' && $('[data-act="today:alerts"]').getAttribute('aria-expanded') === 'true', L('tapping it shows all ' + total + ', with Show fewer'));
   click('[data-act="today:alerts"]'); await sleep(5);

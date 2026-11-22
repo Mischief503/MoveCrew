@@ -606,5 +606,18 @@ const sentBlue = sent.length;
 r = await app("tok-priya", reqOf({ org: ORG2, jobId: "z1" }));
 ok(r.body.ok && doc("jobs/" + r.body.jobId, ORG2).status === "lead" && doc("jobs/" + r.body.jobId, ORG2).d.source === "Customer app" && sent.length === sentBlue, "the other company takes hers too (its own count), with no company line to text from");
 
+/* ---------- a labor-only job billed on an invoice, and a packing day (batch 9, Nov 21) ---------- */
+putDoc(ORG, "jobs/lb1", job("lb1", { status: "done", d: { ...job("x").d, email: "priyanair@gmail.com", moveDate: past, jobType: "labor", laborKind: "unload", invoice: true, terms: "15", billTo: "Nair Design LLC" },
+  quote: { total: 585, deposit: 0, crew: 3, hours: 3, nTrucks: 0, truckId: "", nte: 675, flat: false, lines: [{ label: "3 movers, 3 hr at $195/hr", amt: 585 }] }, inv: { no: 1004, at: "2026-11-02" },
+  signed: { s1: { id: "s1", formId: "f_deliv" }, s2: { id: "s2", formId: "f_agree" }, s3: { id: "s3", formId: "f_scan" } } }));
+putDoc(ORG, "jobs/pk1", job("pk1", { status: "quoted", d: { ...job("x").d, email: "priyanair@gmail.com", jobType: "packing", packFor: "b1" }, quote: { total: 740, deposit: 185, crew: 2, hours: 4, nTrucks: 0, nte: 855, flat: false, lines: [] } }));
+r = await app("tok-priya", { action: "cust_list" });
+const lb = r.body.moves.find((m: any) => m.id === "lb1"), pk = r.body.moves.find((m: any) => m.id === "pk1"), qq = r.body.moves.find((m: any) => m.id === "q1");
+ok(lb && lb.type === "labor" && lb.labor === "unload" && lb.quote.trucks === 0 && lb.inv && lb.inv.no === 1004 && lb.inv.terms === 15 && lb.inv.due === "2026-11-17" && lb.bill.due === 585 && !/Nair Design/.test(JSON.stringify(lb.d)),
+  "a labor-only job billed on an invoice: unloading only, no truck, invoice 1004, Net 15, due Nov 17");
+ok(pk && pk.type === "packing" && pk.labor === "" && pk.inv === null && pk.quote.trucks === 0 && qq.type === "" && qq.inv === null && qq.quote.trucks === 1, "a packing day says so; a move is as before");
+ok(fn.custKind({ d: { invoice: true } }).inv.terms === 30 && fn.custKind({ d: { invoice: true } }).inv.due === "" && fn.custKind({ d: { jobType: "storage" } }).type === "", "terms start at Net 30; no due date before it's done; only the kinds there are");
+DB.docs = DB.docs.filter((x) => x.path !== "jobs/lb1" && x.path !== "jobs/pk1");
+
 console.log(`\ncust: ${passes} passed, ${failures} failed`);
 if (failures) Deno.exit(1);

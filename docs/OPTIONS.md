@@ -1,6 +1,6 @@
 # Options: what the owner can switch on and off
 
-**Setup › Options** has 47 switches, in nine groups. They apply to everyone in the company and save
+**Setup › Options** has 50 switches, in nine groups. They apply to everyone in the company and save
 as soon as they're flipped. Each switch also sits in the Setup section it belongs to, so the Rate
 card has the pricing switches, Roles has what crew, leads and dispatch can do, and so on. Only the
 owner can change them.
@@ -35,6 +35,7 @@ the old notes, tallies, photos and settings are still there.
 | Crew leads add movers on site | The lead can't put in a mover joining or leaving; the office still can (the job sheet's Movers on the bill). See [PRICING.md](PRICING.md#movers-joining-or-leaving-on-site). |
 | Customer signs for a bigger crew | More movers than quoted are billed without the customer's signature. On: the customer signs for them and their rate in the customer app, or on the lead's phone before loading (not at Start job), and again when someone joins; the job can't be finished until they do (or the owner waives it). See [PRICING.md](PRICING.md#a-bigger-crew-the-customer-signs-for-it). |
 | Miles back to the shop by GPS | On a mileage move, the miles back come from the quote; the lead can still change them. |
+| Invoices for business customers | No **Bill on an invoice** on quotes. Jobs already billed on an invoice stay that way. See [JOBTYPES.md](JOBTYPES.md#billed-on-an-invoice). |
 
 ## Time clock
 
@@ -61,6 +62,8 @@ Pay periods, overtime and how tips are split are in Payroll, under HR, not here:
 | Truck and fuel fee ($ per truck) | No truck fee on quotes. |
 | Stair fee ($ per flight) | No stair charge, and the quote form drops the stairs box. |
 | Packing ($ per box) | No packing on quotes, and the quote form drops the packing box. |
+| Labor-only jobs | No **Labor only** on new quotes. Labor jobs already made stay labor jobs. See [JOBTYPES.md](JOBTYPES.md). |
+| Packing days (boxes an hour per packer; $ per box) | No **Packing** on new quotes and no **Add a packing day** on a move. See [JOBTYPES.md](JOBTYPES.md#a-packing-day). |
 
 The number under a switch (radius, %, $) shows only while the switch is on. See
 [PRICING.md](PRICING.md) for how a quote and the final bill are worked out.

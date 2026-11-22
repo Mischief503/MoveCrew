@@ -3690,8 +3690,17 @@ export function custSurvey(job: J, org?: string): J | null {
   if (out.kind === "video" && org && typeof s.room === "string" && WALK_ROOM_RE.test(s.room) && job.id) out.w = org + "." + job.id + "." + s.room;
   return out;
 }
+// the kind of job (batch 9, Nov 21): '' a move, 'labor' (loading or unloading, d.laborKind) or 'packing'; and a job
+// billed on an invoice with terms (d.invoice, d.terms in days, 30 when not set; job.inv = {no, at} once it's done)
+const addDaysIso = (s: string, n: number) => { const t = new Date(s + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+export function custKind(job: J): J {
+  const d = (job && job.d) || {}, jt = d.jobType === "labor" || d.jobType === "packing" ? String(d.jobType) : "";
+  const terms = d.terms === "" || d.terms == null ? 30 : Math.max(0, parseInt(String(d.terms), 10) || 0), at = String((job && job.inv && job.inv.at) || "");
+  return { type: jt, labor: jt === "labor" ? (d.laborKind === "load" || d.laborKind === "unload" ? String(d.laborKind) : "both") : "",
+    inv: d.invoice ? { no: Number(job.inv && job.inv.no) || 0, due: /^\d{4}-\d{2}-\d{2}$/.test(at) ? addDaysIso(at, terms) : "", terms } : null };
+}
 export function custCopy(org: string, S: J, job: J, o: { company: string; phone: string; paidC: number; pages?: Record<string, string> }): J {
-  const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [];
+  const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [], kind = custKind(job);
   const totalC = jobTotalCents(job), dueC = Math.max(0, totalC - o.paidC);
   const depC = job.status === "booked" && !(d.moveDate && String(d.moveDate) < today()) ? Math.max(0, cents(qt.deposit) - o.paidC) : 0;
   const signed = vals(job.signed).filter((x: J) => x && !x.waived), crewF = custCrewOf(S, job);
@@ -3705,9 +3714,10 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     .map((p: J) => ({ amt: r2(p.amt), tip: r2(p.tip), method: String(p.method || ""), date: String(p.date || ""), ts: Number(p.ts) || 0 }));
   return {
     id: String(job.id || ""), org, company: o.company, phone: o.phone, status: job.status, test: !!job.test,
+    type: kind.type, labor: kind.labor, inv: kind.inv,
     d: { name: String(d.name || ""), phone: String(d.phone || ""), email: String(d.email || ""), moveDate: String(d.moveDate || ""), time: String(d.time || ""), from: String(d.from || ""), to: String(d.to || "") },
     quote: { lines: (Array.isArray(qt.lines) ? qt.lines : []).map((l: J) => ({ label: String((l && l.label) || ""), amt: r2(l && l.amt) })), total: r2(qt.total),
-      nte: !qt.flat && qt.capNte !== false ? r2(qt.nte) : 0, deposit: r2(qt.deposit), crew: Number(qt.crew) || 0, hours: Number(qt.hours) || 0, trucks: Number(qt.nTrucks) || 1, flat: !!qt.flat, until: quoteUntilOf(job) },
+      nte: !qt.flat && qt.capNte !== false ? r2(qt.nte) : 0, deposit: r2(qt.deposit), crew: Number(qt.crew) || 0, hours: Number(qt.hours) || 0, trucks: qt.nTrucks === 0 ? 0 : Number(qt.nTrucks) || 1, flat: !!qt.flat, until: quoteUntilOf(job) },
     items: (Array.isArray(job.items) ? job.items : []).map((it: J) => ({ name: String((it && it.name) || ""), qty: Number(it && it.qty) || 0 })),
     bill: { total: totalC / 100, paid: o.paidC / 100, due: dueC / 100, deposit: depC / 100 },
     pays, forms,
@@ -3832,7 +3842,8 @@ async function custWrite(user: J, org: string, jobId: string, fn: (job: J) => J 
   return { ok: false, message: "Your moving company was saving this move at the same moment. Try again." };
 }
 const hmOf = (t: unknown) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(t || "")); return m ? +m[1] * 60 + +m[2] : -1; };
-const trucksOf = (j: J) => Math.max(1, Number(j.quote && j.quote.nTrucks) || 1);
+// a labor or packing job takes no truck (quote.nTrucks 0)
+const trucksOf = (j: J) => (j && j.quote && j.quote.nTrucks === 0 ? 0 : Math.max(1, Number(j.quote && j.quote.nTrucks) || 1));
 const minsOf = (j: J) => Math.round(((Number(j.quote && j.quote.hours) || 3) + (j.quote && j.quote.kind === "mileage" ? Number(j.quote.driveH) || 0 : 0)) * 60);
 // Still room on the trucks then? The moves booked that day whose time overlaps this one's (with the time between moves
 // either side) and the trucks each takes, against the fleet; and no more moves in the day than each truck's day
