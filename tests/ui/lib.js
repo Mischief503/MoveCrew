@@ -11,7 +11,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function schedOf(j) {
   const d = j.d || {}, q = j.quote || {}, a = j.assign || {}, pick = (o, ks) => { const r = {}; ks.forEach((k) => { r[k] = o[k] === undefined ? null : o[k]; }); return r; };
   return { id: j.id === undefined ? null : j.id, status: j.status === undefined ? null : j.status, test: j.test === undefined ? false : j.test,
-    d: pick(d, ['name', 'phone', 'email', 'moveDate', 'time', 'from', 'to', 'notes', 'flights', 'custom', 'slots']),
+    d: pick(d, ['name', 'phone', 'email', 'moveDate', 'time', 'from', 'to', 'notes', 'flights', 'custom', 'slots', 'days']),
     items: (Array.isArray(j.items) ? j.items : []).map((i) => pick(i, ['id', 'name', 'qty'])),
     quote: pick(q, ['crew', 'hours', 'kind', 'driveH', 'nTrucks', 'truckId', 'truckName']),
     assign: { truckId: a.truckId === undefined ? null : a.truckId, more: a.more || [], crewN: Array.isArray(a.crew) ? a.crew.length : 0 },

@@ -390,7 +390,7 @@ language sql immutable set search_path = public as $$
     'id', j->'id', 'status', j->'status', 'test', coalesce(j->'test', 'false'::jsonb),
     'd', jsonb_build_object('name', j->'d'->'name', 'phone', j->'d'->'phone', 'email', j->'d'->'email',
            'moveDate', j->'d'->'moveDate', 'time', j->'d'->'time', 'from', j->'d'->'from', 'to', j->'d'->'to',
-           'notes', j->'d'->'notes', 'flights', j->'d'->'flights', 'custom', j->'d'->'custom', 'slots', j->'d'->'slots'),
+           'notes', j->'d'->'notes', 'flights', j->'d'->'flights', 'custom', j->'d'->'custom', 'slots', j->'d'->'slots', 'days', j->'d'->'days'),
     'items', coalesce((select jsonb_agg(jsonb_build_object('id', i->'id', 'name', i->'name', 'qty', i->'qty'))
                          from jsonb_array_elements(case when jsonb_typeof(j->'items') = 'array' then j->'items' else '[]'::jsonb end) i),
                       '[]'::jsonb),

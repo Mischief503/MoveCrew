@@ -130,6 +130,8 @@ check $RILEY "l1,q1|a1,b1|1|true" "select string_agg(doc_id, ',' order by doc_id
 check $DIS "false" "select public.cc_member('$O')::text" "dispatch named there too is still the office (it books anyway)"
 check $RILEY ok "select public.cc_save('$O','jobs/r1','{\"id\":\"r1\",\"status\":\"booked\",\"d\":{\"name\":\"In House\",\"moveDate\":\"2026-11-03\",\"time\":\"09:00\",\"slots\":[\"t26\"]},\"quote\":{\"total\":515,\"crew\":2,\"hours\":3},\"payments\":{}}',null)" "Riley books a move through cc_save"
 check $RILEY "1|t26" "select count(*)||'|'||(select data->'d'->'slots'->>0 from docs where path='sched/r1') from docs where path='sched/r1'" "and it's on the schedule's copy, in its slot"
+check $RILEY ok "select public.cc_save('$O','jobs/r2','{\"id\":\"r2\",\"status\":\"booked\",\"d\":{\"name\":\"Two Days\",\"moveDate\":\"2026-11-04\",\"time\":\"08:00\",\"days\":[{\"date\":\"2026-11-05\",\"time\":\"09:00\"}]},\"quote\":{\"total\":1500,\"crew\":3,\"hours\":9},\"payments\":{}}',null)" "a move over two days, booked through cc_save (batch 10)"
+check $RILEY "2026-11-05|09:00" "select (data->'d'->'days'->0->>'date')||'|'||(data->'d'->'days'->0->>'time') from docs where path='sched/r2'" "the schedule's copy keeps its second day, so the call center sees it on both days"
 says $RILEY "select public.cc_save('$O','jobs/q1',null,'{\"d\":{\"discount\":\"0\"}}')" "Only the office gives a discount" "no discount of her own"
 denied $RILEY "update docs set data=jsonb_set(data,'{ccStaff}','[\"Riley\",\"Marcus\"]') where path='org/settings' returning 1" "and she can't add anyone (the settings are the owner's)"
 as $OWN "update docs set data=jsonb_set(data,'{ccStaff}','[]') where path='org/settings'" >/dev/null

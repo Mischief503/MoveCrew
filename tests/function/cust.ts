@@ -617,7 +617,13 @@ ok(lb && lb.type === "labor" && lb.labor === "unload" && lb.quote.trucks === 0 &
   "a labor-only job billed on an invoice: unloading only, no truck, invoice 1004, Net 15, due Nov 17");
 ok(pk && pk.type === "packing" && pk.labor === "" && pk.inv === null && pk.quote.trucks === 0 && qq.type === "" && qq.inv === null && qq.quote.trucks === 1, "a packing day says so; a move is as before");
 ok(fn.custKind({ d: { invoice: true } }).inv.terms === 30 && fn.custKind({ d: { invoice: true } }).inv.due === "" && fn.custKind({ d: { jobType: "storage" } }).type === "", "terms start at Net 30; no due date before it's done; only the kinds there are");
-DB.docs = DB.docs.filter((x) => x.path !== "jobs/lb1" && x.path !== "jobs/pk1");
+/* ---------- a move over more than one day (batch 10, Nov 22) ---------- */
+putDoc(ORG, "jobs/md1", job("md1", { status: "booked", d: { ...job("x").d, email: "priyanair@gmail.com", days: [{ date: "2026-12-02", time: "09:00" }, { date: "", time: "" }, { date: "nope" }] } }));
+r = await app("tok-priya", { action: "cust_list" });
+const md = r.body.moves.find((m: any) => m.id === "md1");
+ok(md && JSON.stringify(md.d.days) === JSON.stringify([{ date: "2026-12-02", time: "09:00" }]) && qq.d && Array.isArray(r.body.moves.find((m: any) => m.id === "q1").d.days) && r.body.moves.find((m: any) => m.id === "q1").d.days.length === 0,
+  "a move over two days: her copy has day 2 (and only the days with a date); a one-day move has none");
+DB.docs = DB.docs.filter((x) => x.path !== "jobs/lb1" && x.path !== "jobs/pk1" && x.path !== "jobs/md1");
 
 console.log(`\ncust: ${passes} passed, ${failures} failed`);
 if (failures) Deno.exit(1);

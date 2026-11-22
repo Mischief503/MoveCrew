@@ -1,6 +1,6 @@
 # Options: what the owner can switch on and off
 
-**Setup › Options** has 50 switches, in nine groups. They apply to everyone in the company and save
+**Setup › Options** has 51 switches, in nine groups. They apply to everyone in the company and save
 as soon as they're flipped. Each switch also sits in the Setup section it belongs to, so the Rate
 card has the pricing switches, Roles has what crew, leads and dispatch can do, and so on. Only the
 owner can change them.
@@ -64,6 +64,7 @@ Pay periods, overtime and how tips are split are in Payroll, under HR, not here:
 | Packing ($ per box) | No packing on quotes, and the quote form drops the packing box. |
 | Labor-only jobs | No **Labor only** on new quotes. Labor jobs already made stay labor jobs. See [JOBTYPES.md](JOBTYPES.md). |
 | Packing days (boxes an hour per packer; $ per box) | No **Packing** on new quotes and no **Add a packing day** on a move. See [JOBTYPES.md](JOBTYPES.md#a-packing-day). |
+| Moves over more than one day (truck held overnight, $ per truck each night) | No **Days** on new quotes or the job sheet. Jobs already over more than one day keep their days. See [MULTIDAY.md](MULTIDAY.md). |
 
 The number under a switch (radius, %, $) shows only while the switch is on. See
 [PRICING.md](PRICING.md) for how a quote and the final bill are worked out.

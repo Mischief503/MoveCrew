@@ -3715,7 +3715,9 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
   return {
     id: String(job.id || ""), org, company: o.company, phone: o.phone, status: job.status, test: !!job.test,
     type: kind.type, labor: kind.labor, inv: kind.inv,
-    d: { name: String(d.name || ""), phone: String(d.phone || ""), email: String(d.email || ""), moveDate: String(d.moveDate || ""), time: String(d.time || ""), from: String(d.from || ""), to: String(d.to || "") },
+    d: { name: String(d.name || ""), phone: String(d.phone || ""), email: String(d.email || ""), moveDate: String(d.moveDate || ""), time: String(d.time || ""), from: String(d.from || ""), to: String(d.to || ""),
+      // a move over more than one day (batch 10): the days after the first
+      days: (Array.isArray(d.days) ? d.days : []).filter((x: J) => x && /^\d{4}-\d{2}-\d{2}$/.test(String(x.date || ""))).map((x: J) => ({ date: String(x.date), time: String(x.time || "") })) },
     quote: { lines: (Array.isArray(qt.lines) ? qt.lines : []).map((l: J) => ({ label: String((l && l.label) || ""), amt: r2(l && l.amt) })), total: r2(qt.total),
       nte: !qt.flat && qt.capNte !== false ? r2(qt.nte) : 0, deposit: r2(qt.deposit), crew: Number(qt.crew) || 0, hours: Number(qt.hours) || 0, trucks: qt.nTrucks === 0 ? 0 : Number(qt.nTrucks) || 1, flat: !!qt.flat, until: quoteUntilOf(job) },
     items: (Array.isArray(job.items) ? job.items : []).map((it: J) => ({ name: String((it && it.name) || ""), qty: Number(it && it.qty) || 0 })),
