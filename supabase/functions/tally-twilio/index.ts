@@ -3699,6 +3699,40 @@ export function custKind(job: J): J {
   return { type: jt, labor: jt === "labor" ? (d.laborKind === "load" || d.laborKind === "unload" ? String(d.laborKind) : "both") : "",
     inv: d.invoice ? { no: Number(job.inv && job.inv.no) || 0, due: /^\d{4}-\d{2}-\d{2}$/.test(at) ? addDaysIso(at, terms) : "", terms } : null };
 }
+// Long-distance moves (batch 12, Nov 22): the customer's copy (ldInfo), and what's due at delivery on a non-binding one:
+// at most 110% of the estimate plus what was added on the job (the bill-by-weight line not counted); the rest is billed
+// 30 days after delivery. In cents, the same as the app's ldNow and ldNowDue.
+const US_ST = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
+export function addrState(a: unknown): string {
+  const s = String(a || "").toUpperCase();
+  let m = s.match(/\b([A-Z]{2})\b\s*,?\s*(\d{5}(-\d{4})?)?\s*(,\s*(USA|US|UNITED STATES))?\s*$/);
+  if (m && US_ST.indexOf(m[1]) >= 0) return m[1];
+  const re = /\b([A-Z]{2})\s+\d{5}\b/g;
+  let last = "";
+  while ((m = re.exec(s))) if (US_ST.indexOf(m[1]) >= 0) last = m[1];
+  return last;
+}
+function ldNb(job: J): boolean { const qt = job.quote || {}; return qt.kind === "long" && !qt.flat && !(qt.ld && qt.ld.est === "b"); }
+export function ldCapC(job: J): number | null {
+  if (!ldNb(job)) return null;
+  const mats = r2(vals(job.materials).reduce((a: number, m: J) => a + (m && m.price != null ? (Number(m.qty) || 0) * (Number(m.price) || 0) : 0), 0));
+  const ex = vals(job.extras).filter((e: J) => e && e.id !== "weight").reduce((a: number, e: J) => a + (Number(e && e.amt) || 0), 0);
+  return Math.round(r2((Number(job.quote.total) || 0) * 1.1 + ex + mats) * 100);
+}
+export function ldNowC(job: J, owedC: number, paidC: number): number {
+  const cap = ldCapC(job);
+  if (cap == null || owedC + paidC <= cap) return owedC;
+  const now = Math.min(owedC, cap - paidC);
+  return now > 0 ? now : owedC;
+}
+function custLd(S: J, job: J): J | null {
+  const qt = job.quote || {};
+  if (qt.kind !== "long") return null;
+  const L = qt.ld || {}, d = job.d || {}, ld = d.ld && typeof d.ld === "object" ? d.ld : {}, w = job.wt || {};
+  const a = addrState(d.from), b = addrState(d.to), inter = ld.inter === true || ld.inter === false ? ld.inter : !!(a && b && a !== b);
+  return { est: L.est === "b" ? "b" : "nb", w0: String(ld.w0 || ""), w1: String(ld.w1 || ""), day: String(ld.day || ""), lbs: Number(L.lbs) || 0,
+    net: Number(w.net) > 0 ? Math.round(Number(w.net)) : 0, cap: r2(L.cap), inter, usdot: String((S && S.usdot) || ""), mc: String((S && S.mcNo) || "") };
+}
 export function custCopy(org: string, S: J, job: J, o: { company: string; phone: string; paidC: number; pages?: Record<string, string> }): J {
   const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [], kind = custKind(job);
   const totalC = jobTotalCents(job), dueC = Math.max(0, totalC - o.paidC);
@@ -3721,7 +3755,9 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     quote: { lines: (Array.isArray(qt.lines) ? qt.lines : []).map((l: J) => ({ label: String((l && l.label) || ""), amt: r2(l && l.amt) })), total: r2(qt.total),
       nte: !qt.flat && qt.capNte !== false ? r2(qt.nte) : 0, deposit: r2(qt.deposit), crew: Number(qt.crew) || 0, hours: Number(qt.hours) || 0, trucks: qt.nTrucks === 0 ? 0 : Number(qt.nTrucks) || 1, flat: !!qt.flat, until: quoteUntilOf(job) },
     items: (Array.isArray(job.items) ? job.items : []).map((it: J) => ({ name: String((it && it.name) || ""), qty: Number(it && it.qty) || 0 })),
-    bill: { total: totalC / 100, paid: o.paidC / 100, due: dueC / 100, deposit: depC / 100 },
+    bill: { total: totalC / 100, paid: o.paidC / 100, due: dueC / 100, deposit: depC / 100, now: ldNowC(job, dueC, o.paidC) / 100 },
+    // a long-distance move (batch 12): the window or the delivery day, the estimate, the weight
+    ldInfo: custLd(S, job),
     pays, forms,
     day: { startedAt: Number(job.startedAt) || 0, eta: (job.eta && Number(job.eta.at)) || 0, phases: job.phases && typeof job.phases === "object" ? job.phases : {}, finishedAt: Number(job.finishedAt) || 0 },
     crew: { lead: String(leadOf(S, job)).split(" ")[0], n: crew.length },
@@ -4037,7 +4073,7 @@ function custDueC(job: J, owedC: number, paidC: number): J {
     if (d.moveDate && String(d.moveDate) < today()) return { amt: 0, kind: "" };
     return { amt: Math.max(0, Math.min(owedC, cents(job.quote && job.quote.deposit) - paidC)), kind: "deposit" };
   }
-  if (job.status === "done") return { amt: owedC, kind: "bill" };
+  if (job.status === "done") return { amt: ldNowC(job, owedC, paidC), kind: "bill" };
   return { amt: 0, kind: "" };
 }
 // The customer pays on a Stripe page: what's owed now (worked out here, never taken from the app) and their tip,

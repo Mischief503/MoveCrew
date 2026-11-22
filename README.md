@@ -5,7 +5,7 @@ and a truck-down alert that tells the office where a broken-down truck is ([docs
 Local moves are billed by the hour and mileage moves by the mile plus loading and unloading time,
 from what really happened on the job ([docs/PRICING.md](docs/PRICING.md)); labor-only jobs, packing days and jobs
 billed on an invoice with terms are in [docs/JOBTYPES.md](docs/JOBTYPES.md), moves over more than one day
-in [docs/MULTIDAY.md](docs/MULTIDAY.md), and damage claims and truck reminders in [docs/CLAIMS.md](docs/CLAIMS.md). The owner turns parts of it
+in [docs/MULTIDAY.md](docs/MULTIDAY.md), damage claims and truck reminders in [docs/CLAIMS.md](docs/CLAIMS.md), and long-distance moves (by weight and distance, a delivery window, binding or non-binding estimates and weight tickets) in [docs/LONGDIST.md](docs/LONGDIST.md). The owner turns parts of it
 on and off in Setup › Options ([docs/OPTIONS.md](docs/OPTIONS.md)). Each company takes cards through its own
 Stripe account or its own Square account, whichever it connects in Setup › Payments
 ([docs/SETUP-stripe.md](docs/SETUP-stripe.md), [docs/SETUP-square.md](docs/SETUP-square.md)); someone who works for

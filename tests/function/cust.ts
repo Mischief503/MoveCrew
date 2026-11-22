@@ -642,7 +642,25 @@ ok(r.status === 404 && (Object.values(doc("jobs/d1").claims || {}) as any[]).len
 const old = doc("jobs/d1"); old.d.moveDate = "2026-01-02"; putDoc(ORG, "jobs/d1", old);
 r = await app("tok-priya", { action: "cust_claim", org: ORG, jobId: "d1", item: "Lamp", what: "Broken" });
 ok(!r.body.ok && /more than 30 days/.test(r.body.message), "more than 30 days after the move: " + r.body.message);
-DB.docs = DB.docs.filter((x) => x.path !== "jobs/lb1" && x.path !== "jobs/pk1" && x.path !== "jobs/md1");
+/* ---------- a long-distance move (batch 12, Nov 22) ---------- */
+ok(fn.addrState("4410 N 24th St, Phoenix, AZ 85016") === "AZ" && fn.addrState("Austin, TX") === "TX" && fn.addrState("1 Main St, Portland, OR 97201, USA") === "OR" && fn.addrState("Portland") === "",
+  "the state at the end of an address");
+const ldq = { kind: "long", total: 5000, deposit: 0, crew: 3, hours: 8, nTrucks: 1, truckId: "t26", nte: 0, flat: false, lines: [{ label: "Line haul: 7,000 lb at $70 per 100 lb, 1,000 mi", amt: 5000 }],
+  ld: { est: "nb", lbs: 7000, bill: 7000, min: 2000, rate: 70, fuel: 0, miles: 1000, cap: 5500 } };
+putDoc(ORG, "jobs/ld1", job("ld1", { status: "done", d: { ...job("x").d, email: "priyanair@gmail.com", moveDate: past, from: "1 Main St, Portland, OR 97201", to: "2 Elm St, Phoenix, AZ 85016",
+  ld: { est: "nb", w0: "2026-11-05", w1: "2026-11-10", day: "2026-11-06", crew: true }, days: [{ date: "2026-11-06", time: "08:00", ld: "deliver", set: true, back: 2, crew: true }] },
+  quote: ldq, wt: { net: 9000, tare: 26000, gross: 35000 }, extras: { weight: { id: "weight", label: "By the weight: 9,000 lb net (estimated 7,000 lb)", amt: 1400, ts: 1 }, x1: { id: "x1", label: "Stairs", amt: 100, ts: 2 } },
+  signed: { s1: { id: "s1", formId: "f_deliv" }, s2: { id: "s2", formId: "f_agree" }, s3: { id: "s3", formId: "f_scan" } } }));
+r = await app("tok-priya", { action: "cust_list" });
+const ldm = r.body.moves.find((m: any) => m.id === "ld1"), q1m = r.body.moves.find((m: any) => m.id === "q1");
+ok(ldm && ldm.ldInfo && ldm.ldInfo.est === "nb" && ldm.ldInfo.net === 9000 && ldm.ldInfo.lbs === 7000 && ldm.ldInfo.inter === true && ldm.ldInfo.day === "2026-11-06" && ldm.ldInfo.w0 === "2026-11-05" && ldm.ldInfo.cap === 5500,
+  "her copy of a long-distance move: non-binding, weighed 9,000 lb, interstate, delivered Nov 6");
+ok(ldm.bill.total === 6500 && ldm.bill.due === 6500 && ldm.bill.now === 5600 && q1m.ldInfo === null && q1m.bill.now === q1m.bill.due,
+  "at delivery she owes at most 110% of the estimate plus the stairs ($5,600 of $6,500); another move owes what's due");
+const ldj = doc("jobs/ld1");
+ok(fn.ldNowC(ldj, 650000, 0) === 560000 && fn.ldNowC(ldj, 90000, 560000) === 90000 && fn.ldNowC(ldj, 50000, 0) === 50000 && fn.ldNowC({ quote: { kind: "long", total: 5000, flat: true, ld: { est: "b" } } }, 600000, 0) === 600000,
+  "what's due now: the 110% part, then the rest once that's paid; a bill inside it, or a binding one, all of it");
+DB.docs = DB.docs.filter((x) => x.path !== "jobs/lb1" && x.path !== "jobs/pk1" && x.path !== "jobs/md1" && x.path !== "jobs/ld1");
 
 console.log(`\ncust: ${passes} passed, ${failures} failed`);
 if (failures) Deno.exit(1);

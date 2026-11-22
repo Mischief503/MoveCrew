@@ -2,6 +2,9 @@
 
 How MoveCrew prices a move, and how it works out the final bill from what really happened.
 
+A third kind, long distance (by weight and distance, with a delivery window, binding or non-binding estimates and
+weight tickets), is in [LONGDIST.md](LONGDIST.md).
+
 ## Which kind of move it is
 
 Each company sets its own **local radius** in **Setup › Rate card** (*Local radius (driving miles
