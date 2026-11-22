@@ -441,7 +441,9 @@ delete from public.docs s where s.collection = 'sched' and not exists (
 -- custom fields, the switches, the shop and its spot on the map), each truck's day (truckDay: its start,
 -- hours, most moves and the time between them), and how many movers there are and how many are off each
 -- day (movers: {n, off: {day: count}}, counts only), so the call center books a move where it fits on the
--- day's trucks and movers, how long a quote's price is good (quoteDays) and the call script (callScript);
+-- day's trucks and movers, how long a quote's price is good (quoteDays) and the call script (callScript),
+-- and (Nov 22) a packing day's boxes an hour and price a box (packRate, boxPrice) and the fee for a truck held
+-- overnight on a move over more than one day (nightFee);
 -- copied to ratecard/main on every save of the settings; never the crew's names, pay, costs, phones or
 -- anything else of the company's own.
 create or replace function public.ratecard_of(s jsonb) returns jsonb
@@ -458,7 +460,8 @@ language sql immutable set search_path = public as $$
             else '{}'::jsonb end
     from unnest(array['company','rates','minHours','prod','mph','shopAddress','shopTravel','shopGeo','includedMiles',
                       'mileRate','truckFee','stairFee','packPerBox','taxPct','depositPct','ntePct','nteCap','trucks',
-                      'catalog','sources','customFields','opt','truckDay','quoteDays','callScript']) as k
+                      'catalog','sources','customFields','opt','truckDay','quoteDays','callScript','packRate','boxPrice',
+                      'nightFee']) as k
    where s ? k
 $$;
 create or replace function public.ratecard_sync() returns trigger

@@ -203,6 +203,11 @@ check $JESS "false" "select (data ? 'movers')::text from docs where path='rateca
 # the sales tools (Nov 17): how long a quote's price is good, and the call script, reach the call center's copy
 as $OWN "update docs set data=data||'{\"quoteDays\":14,\"callScript\":[\"Get their name\",\"Ask for the booking\"]}'::jsonb where path='org/settings'" >/dev/null
 check $JESS "14|2|Ask for the booking" "select concat_ws('|', data->>'quoteDays', jsonb_array_length(data->'callScript'), data->'callScript'->>1) from docs where path='ratecard/main'" "how long quotes are good, and the call script, reach the rate card copy"
+# a packing day's boxes an hour and price a box, and the fee for a truck held overnight (Nov 22), reach it too
+as $OWN "update docs set data=data||'{\"packRate\":10,\"boxPrice\":4,\"nightFee\":150}'::jsonb where path='org/settings'" >/dev/null
+check $JESS "10|4|150" "select concat_ws('|', data->>'packRate', data->>'boxPrice', data->>'nightFee') from docs where path='ratecard/main'" "a packing day's numbers and the night fee reach the rate card copy"
+$P -d t -f supabase/sql/supabase-ratecard2.sql >/dev/null
+check $JESS "10|4|150|1" "select concat_ws('|', data->>'packRate', data->>'boxPrice', data->>'nightFee', (select count(*) from docs where path='ratecard/main')) from docs where path='ratecard/main'" "supabase-ratecard2.sql runs again on it: the same copy, one of it"
 
 # the service switched off, and a team member removed
 pg "delete from cc_orgs where org_id='$O'" >/dev/null
