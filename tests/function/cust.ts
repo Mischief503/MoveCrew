@@ -623,6 +623,25 @@ r = await app("tok-priya", { action: "cust_list" });
 const md = r.body.moves.find((m: any) => m.id === "md1");
 ok(md && JSON.stringify(md.d.days) === JSON.stringify([{ date: "2026-12-02", time: "09:00" }]) && qq.d && Array.isArray(r.body.moves.find((m: any) => m.id === "q1").d.days) && r.body.moves.find((m: any) => m.id === "q1").d.days.length === 0,
   "a move over two days: her copy has day 2 (and only the days with a date); a one-day move has none");
+/* ---------- damage reported in the customer app (batch 11, Nov 22) ---------- */
+r = await app("tok-priya", { action: "cust_claim", org: ORG, jobId: "q1", item: "Dresser", what: "Scratched" });
+ok(!r.body.ok && /once your move is done/.test(r.body.message), "not before the move is done: " + r.body.message);
+r = await app("tok-priya", { action: "cust_claim", org: ORG, jobId: "d1", item: "", what: "Scratched" });
+ok(!r.body.ok && r.body.message === "Say what was damaged.", "it needs what was damaged");
+const sentClaim = sent.length;
+r = await app("tok-priya", { action: "cust_claim", org: ORG, jobId: "d1", item: "  Dresser   (6-drawer) ", what: "Top scratched when they unloaded it.", amt: 250 });
+const d1c = Object.values(doc("jobs/d1").claims || {}) as any[];
+ok(r.body.ok && d1c.length === 1 && d1c[0].item === "Dresser (6-drawer)" && d1c[0].amt === 250 && d1c[0].from === "customer" && d1c[0].status === "open" && d1c[0].by === "Priya Nair" && logs("d1").indexOf("Damage claim from the customer app: Dresser (6-drawer), $250.00 claimed") >= 0,
+  "a claim from the customer on the moved job, in its activity");
+ok(sent.length > sentClaim && /reported damage in the customer app: Dresser \(6-drawer\), about \$250\.00/.test(sent[sent.length - 1].Body), "the office is texted: " + ((sent[sent.length - 1] || {}).Body || ""));
+r = await app("tok-priya", { action: "cust_list" });
+const d1m = r.body.moves.find((m: any) => m.id === "d1");
+ok(d1m.claimsOn === true && d1m.claims.length === 1 && d1m.claims[0].status === "open" && !("by" in d1m.claims[0]), "her copy shows it, without who on the office side");
+r = await app("tok-sam", { action: "cust_claim", org: ORG, jobId: "d1", item: "Lamp", what: "Broken" });
+ok(r.status === 404 && (Object.values(doc("jobs/d1").claims || {}) as any[]).length === 1, "Sam can't report damage on Priya's move");
+const old = doc("jobs/d1"); old.d.moveDate = "2026-01-02"; putDoc(ORG, "jobs/d1", old);
+r = await app("tok-priya", { action: "cust_claim", org: ORG, jobId: "d1", item: "Lamp", what: "Broken" });
+ok(!r.body.ok && /more than 30 days/.test(r.body.message), "more than 30 days after the move: " + r.body.message);
 DB.docs = DB.docs.filter((x) => x.path !== "jobs/lb1" && x.path !== "jobs/pk1" && x.path !== "jobs/md1");
 
 console.log(`\ncust: ${passes} passed, ${failures} failed`);

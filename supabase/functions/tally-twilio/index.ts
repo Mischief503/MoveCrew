@@ -3725,7 +3725,11 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     pays, forms,
     day: { startedAt: Number(job.startedAt) || 0, eta: (job.eta && Number(job.eta.at)) || 0, phases: job.phases && typeof job.phases === "object" ? job.phases : {}, finishedAt: Number(job.finishedAt) || 0 },
     crew: { lead: String(leadOf(S, job)).split(" ")[0], n: crew.length },
-    tips: !optOff(S, "custTips"), book: !optOff(S, "custBook"), review: custReviewUrl(S), reviewed: !!c.reviewAt, bookedBy: c.bookedAt ? "customer" : "",
+    tips: !optOff(S, "custTips"), book: !optOff(S, "custBook"),
+    // damage claims (batch 11): whether they can report one, and theirs with where it stands
+    claimsOn: !optOff(S, "claims"),
+    claims: vals(job.claims).filter((x: J) => x && x.id).sort((a: J, b: J) => (Number(a.at) || 0) - (Number(b.at) || 0))
+      .map((x: J) => ({ item: String(x.item || ""), what: String(x.what || ""), amt: r2(x.amt), status: String(x.status || "open"), paid: r2(x.paid), at: Number(x.at) || 0 })), review: custReviewUrl(S), reviewed: !!c.reviewAt, bookedBy: c.bookedAt ? "customer" : "",
     survey: custSurvey(job, org),
     req: job.req && typeof job.req === "object" ? { from: String(job.req.from || ""), to: String(job.req.to || ""), at: Number(job.req.at) || 0, note: String(job.req.note || ""), quoted: !!job.req.quotedAt } : null,
   };
@@ -3819,6 +3823,43 @@ export async function custRequest(user: J, org: string, jobId: string, b: J): Pr
     }
   } catch (e) { console.error("custreq text", e); }
   return { ok: true, jobId: id };
+}
+// a customer reports damage after the move (batch 11): within 30 days of its last day, five on a move at most; the
+// office is texted (Options > Texts > Damage reports from customers)
+export async function custClaim(user: J, org: string, jobId: string, b: J): Promise<J> {
+  const c = await custJob(user, org, jobId);
+  if (c.err) return { ok: false, message: c.err, status: c.status };
+  const S0 = c.S, co = company(S0);
+  if (optOff(S0, "claims")) return { ok: false, message: "Call or text " + co + " about it." };
+  const line1 = (v: unknown, n: number) => String(v || "").trim().replace(/\s+/g, " ").slice(0, n);
+  const item = line1(b.item, 80), what = String(b.what || "").trim().slice(0, 600), amt = Math.max(0, Math.min(1e6, Math.round((Number(b.amt) || 0) * 100) / 100));
+  if (!item) return { ok: false, message: "Say what was damaged." };
+  if (!what) return { ok: false, message: "Say what happened." };
+  const ts = Date.now(), id = "c" + randToken().slice(0, 10);
+  let name = "";
+  const w = await custWrite(user, org, jobId, (job) => {
+    if (job.status !== "done" && job.status !== "paid") return "You can report damage once your move is done.";
+    const ds = (Array.isArray(job.d && job.d.days) ? job.d.days : []).filter((x: J) => x && isoDay(String(x.date || "")));
+    const last = String((ds.length ? ds[ds.length - 1].date : job.d && job.d.moveDate) || "");
+    if (!isoDay(last) || dayGap(last, today()) > 30) return "It's been more than 30 days since your move. Call or text " + co + " about it.";
+    const cur = mapOf(job.claims);
+    if (Object.keys(cur).length >= 5) return co + " has your claims on this move. They'll get back to you.";
+    name = String((job.d && job.d.name) || "The customer");
+    job.claims = { ...cur, [id]: { id, at: ts, by: name, from: "customer", item, what, amt, status: "open" } };
+    addLog(job, ts, "Damage claim from the customer app: " + item + (amt ? ", $" + amt.toFixed(2) + " claimed" : ""));
+    return job;
+  });
+  if (!w.ok) return w;
+  try {
+    const line = await lineFor(org);
+    if (line && !(w.job && w.job.test) && alertOn(S0, "claim")) {
+      for (const n of ringNames(S0)) {
+        await sendText({ org, line, jobId, purpose: "claim", staff: n, to: contacts(S0)[n],
+          body: co + ": " + gsm(name) + " reported damage in the customer app: " + gsm(item) + (amt ? ", about $" + amt.toFixed(2) : "") + ". It's on the job in MoveCrew." });
+      }
+    }
+  } catch (e) { console.error("claim text", e); }
+  return { ok: true };
 }
 // the customer's own move: {job, S} or {err, status}
 async function custJob(user: J, org: string, jobId: string): Promise<J> {
@@ -4297,6 +4338,7 @@ async function handleCust(req: Request, b: J): Promise<Response> {
     const fns: Record<string, (u: J, o: string, j: string, x: J) => Promise<J>> = {
       cust_book: (u, o, j) => custBook(u, o, j), cust_sign: custSign, cust_pay: custPay, cust_reviewed: custReviewedOf, cust_check: (u, o, j) => custCheck(u, o, j),
       cust_request: custRequest,
+      cust_claim: custClaim,
     };
     const f = fns[String(b.action)];
     if (!f) return json({ ok: false, message: "Unknown action" }, 400);

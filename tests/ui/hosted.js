@@ -50,7 +50,7 @@ function seed(opts = {}) {
   const tg = $('[data-act="set:open"][data-sec="comms"]');
   ok(!!tg, 'Texts and calls sits in the Setup list like the other sections');
   click(tg); await sleep(20);
-  ok($$('input[data-s^="comms.alerts."]').length === 7 && $$('input[data-s^="comms.alerts."]').every((i) => i.checked) && !!$('input[data-s="comms.alerts.custReq"]') && !!$('input[data-s="comms.alerts.webLead"]'), 'seven alert switches, all on (Move requests from customers since Nov 7, New leads from your website since Nov 14)');
+  ok($$('input[data-s^="comms.alerts."]').length === 8 && $$('input[data-s^="comms.alerts."]').every((i) => i.checked) && !!$('input[data-s="comms.alerts.custReq"]') && !!$('input[data-s="comms.alerts.webLead"]') && !!$('input[data-s="comms.alerts.claim"]'), 'eight alert switches, all on (Move requests from customers since Nov 7, New leads from your website since Nov 14, Damage reports from customers since Nov 22)');
   ok(/No phone number for Luis/.test(text()), 'Setup warns who has no number');
   const ringChips = $$('[data-act="st:ring"]');
   ok(ringChips.length === 4 && ringChips.filter((c) => c.classList.contains('on')).map((c) => c.dataset.n).join() === 'Owner,Dispatch', 'office rings by default');

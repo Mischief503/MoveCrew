@@ -297,6 +297,7 @@ details.acc.card .acc-body{padding-bottom:14px}
 .qkind b{font-size:19px}
 .qkind small{color:var(--muted)}
 .qinv[hidden]{display:none}
+.claim+.claim{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
 .cm-kind{font-weight:600}
 .qco small.qco-on{color:var(--text);font-weight:var(--w-mid);margin-top:4px}
 .cm-until{flex-basis:100%;font-size:13px;color:var(--muted)}
@@ -2059,7 +2060,7 @@ function defaultSettings(){return {
     {id:'m_tape',name:'Packing tape',unit:'roll',price:5,cost:1.5},{id:'m_paper',name:'Packing paper',unit:'lb',price:3,cost:1},
     {id:'m_wrap',name:'Bubble wrap',unit:'10 ft',price:4,cost:1.5},{id:'m_stretch',name:'Stretch wrap',unit:'roll',price:16,cost:7},
     {id:'m_mbag',name:'Mattress bag',unit:'each',price:14,cost:4}
-  ],costCats:['Dump fee','Fuel','Tolls','Parking','Supplies bought','Other'],comms:{alerts:{assigned:true,moved:true,forms:true,tomorrow:true,short:true,custReq:true},ring:[],appUrl:''},opt:{},truckDay:{start:'07:00',hours:12,jobs:4,gap:60},daysOff:{},
+  ],costCats:['Dump fee','Fuel','Tolls','Parking','Supplies bought','Other'],comms:{alerts:{assigned:true,moved:true,forms:true,tomorrow:true,short:true,custReq:true,claim:true},ring:[],appUrl:''},opt:{},truckDay:{start:'07:00',hours:12,jobs:4,gap:60},daysOff:{},
   catalog:[
     {id:'sofa3',name:'Sofa (3-seat)',cf:55,cat:'Living room'},{id:'loveseat',name:'Loveseat',cf:38,cat:'Living room'},
     {id:'chair',name:'Armchair',cf:22,cat:'Living room'},{id:'recliner',name:'Recliner',cf:30,cat:'Living room'},
@@ -2154,9 +2155,12 @@ var OPTS=[
   {g:'texts',p:'comms.alerts.tomorrow',t:'Texts the evening before',h:'Everyone gets their jobs for tomorrow, and the office gets who hasn’t confirmed.'},
   {g:'texts',p:'comms.alerts.forms',t:'Unsigned forms alert',h:'Text the office when a finished job is still waiting on a signature.'},
   {g:'texts',p:'comms.alerts.short',t:'Short crew alert',h:'Text the office when a crew lead starts a job with fewer movers than quoted, or someone leaves and it drops below.'},
+  {g:'texts',p:'comms.alerts.claim',t:'Damage reports from customers',h:'Text the office when a customer reports damage in the customer app.'},
   {g:'texts',p:'comms.alerts.custReq',t:'Move requests from customers',h:'Text the office when a customer asks for another move in the customer app, with the days they can move and their phone.'},
   {g:'texts',p:'comms.alerts.webLead',t:'New leads from your website',h:'Text the office when someone asks for a quote on your website (Setup › Get a quote form).'},
   {g:'texts',k:'salesFollow',def:false,t:'Follow-up texts for quotes',h:'After a quote is texted from MoveCrew, the customer gets up to three check-in texts (about 1, 3 and 7 days later, in the evening) until they book, text back, or someone logs a call. Needs the company line and the evening texts (Supabase Cron).'},
+  {g:'office',k:'claims',t:'Damage claims',h:'Claims on the job sheet, Report damage on the crew lead’s card and in the customer app for 30 days after the move, and the open ones on Today and in Reports.'},
+  {g:'office',k:'truckDue',t:'Truck reminders',h:'Each truck’s registration, insurance, inspection and next service in Setup › Fleet, and on Today from 30 days before.'},
   {g:'office',k:'drivers',t:'A driver for every truck',h:'Dispatch picks who drives each truck on a job. A truck with no driver shows as needing scheduling. Off: no drivers to pick.'},
   {g:'office',k:'dispatchPay',t:'Dispatch can take payments',h:'Dispatch can collect payments and send pay links.'},
   {g:'office',k:'rqOffice',def:false,t:'Office approves new quotes from the crew',h:'A crew lead’s new quote waits for the owner or dispatch to approve it, then the customer signs. Off: the customer’s signature is enough.'},
@@ -3021,7 +3025,7 @@ function custMoveOf(j,S){
     forms:(custCrewForm(j)?[custCrewForm(j)]:[]).concat((opt('forms',S)?(S.forms||[]).filter(function(f){return f.required}):[]).map(function(f){return {id:f.id,title:String(f.title||''),kind:f.kind==='text'?'text':'pages',text:f.kind==='text'?String(f.text||''):'',pages:f.kind==='text'?[]:(f.pages||[]).slice(),ahead:!!f.ahead,signed:signed(f.id)}})),
     day:{startedAt:j.startedAt||0,eta:j.eta&&j.eta.at?j.eta.at:0,phases:Object.assign({},j.phases||{}),finishedAt:j.finishedAt||0},
     crew:{lead:String(ld).split(' ')[0],n:crew.length},
-    tips:opt('custTips',S),book:opt('custBook',S),review:custReviewUrl(S),reviewed:!!c.reviewAt,bookedBy:c.bookedAt?'customer':'',
+    tips:opt('custTips',S),book:opt('custBook',S),claimsOn:opt('claims',S),claims:claimsOf(j).map(function(c){return {item:c.item||'',what:c.what||'',amt:num(c.amt),status:c.status||'open',paid:num(c.paid),at:c.at||0}}),review:custReviewUrl(S),reviewed:!!c.reviewAt,bookedBy:c.bookedAt?'customer':'',
     survey:surveyOf(j)?{at:j.survey.at,kind:j.survey.kind==='voice'?'voice':'video',who:String(j.survey.who||'').split(' ')[0],w:walkOn()&&j.survey.room&&j.survey.kind!=='voice'?window.tallyWalk.org()+'.'+j.id+'.'+j.survey.room:''}:null,
     req:j.req?{from:String(j.req.from||''),to:String(j.req.to||''),at:num(j.req.at),note:String(j.req.note||''),quoted:!!j.req.quotedAt}:null};
 }
@@ -3239,7 +3243,7 @@ function renderMyMove(){
   var s=custStage(m),noEmail=!custLive()&&!emailKey(m.d.email);
   v.innerHTML=(noEmail?'<div class="note">This customer has no email on their move yet, so they can’t sign in to see this. Put it on the quote or the job.</div>':'')+
     '<div class="hero-day"><h1>'+esc(custHi(m.d.name))+'</h1><p class="sub">Your move with '+esc(m.company||'your moving company')+'</p></div>'+
-    custCardHtml(m)+(s==='today'?custDayHtml(m):'')+custNextHtml(m)+(s==='done'||s==='due'?custByHtml(m)+custDetailsHtml(m):custDetailsHtml(m)+custHelpHtml(m))+
+    custCardHtml(m)+(s==='today'?custDayHtml(m):'')+custNextHtml(m)+(s==='done'||s==='due'?custByHtml(m)+custClaimsHtml(m)+custDetailsHtml(m):custDetailsHtml(m)+custHelpHtml(m))+
     (L.length>1?'<h3 class="cm-h3">Your moves</h3>'+custMovesHtml(L,m):'');
   custAutoThanks(m);
 }
@@ -3655,6 +3659,7 @@ document.addEventListener('click',function(e){
     case 'cs:signgo':if(m)csSignGo(m,t.dataset.fid);break;
     case 'cs:pay':if(m)csOpen('pay',m);break;
     case 'cs:tip':if(ui.cs&&ui.cs.kind==='pay'){var tv=t.dataset.t;ui.cs.tip=tv==='other'?'other':num(tv);renderCs();if(tv==='other'){var oi=$('#csTipOther');if(oi)try{oi.focus()}catch(x){}}}break;
+    case 'cs:claimgo':if(m)csClaimGo(m);break;
     case 'cs:paygo':if(m&&ui.cs)csPayGo(m,ui.cs);break;
     case 'cs:close':csClose();break;
     case 'cs:norev':if(m)custReviewed(m,'not now');csClose();break;
@@ -3954,6 +3959,7 @@ function renderToday(){
     else if(bal>0&&invoiceJob(j)){if(invState(j)==='overdue')A.push(alertRow('bad',esc(invNoWords(j))+' is past due',esc(invBillTo(j))+' · '+money(bal)+' · was due '+esc(fmtDate(invDue(j))),'job:open',j.id))}
     else if(bal>0)A.push(alertRow('bad','<span class="money-due">'+money(bal)+'</span> still to collect',esc(j.d.name)+' finished '+(j.finishedAt?ago(j.finishedAt):''),'job:open',j.id));
   });
+  state.jobs.forEach(function(j){claimsOf(j).filter(claimOpen).forEach(function(c){A.push(alertRow('warn','Damage claim: '+esc(jobName(j)),esc((c.item||'An item')+(c.amt?' · '+money(c.amt)+' claimed':'')+' · '+claimFromWord(c.from)+' '+ago(c.at)),'job:open',j.id))})});
   // booked jobs whose deposit hasn't come in: one row, for whoever takes payments
   var noDep=canCollect()?state.jobs.filter(function(j){return depositDue(j,t)>0}).sort(function(a,b){return (a.d.moveDate||'9999')<(b.d.moveDate||'9999')?-1:1}):[];
   if(noDep.length===1){var nd=noDep[0];A.push(alertRow('warn','Deposit not paid yet',esc(nd.d.name||'Unnamed')+' · '+money(depositDue(nd,t))+(nd.d.moveDate?' · moves '+esc(relDay(nd.d.moveDate)):''),'job:open',nd.id))}
@@ -3963,6 +3969,7 @@ function renderToday(){
     if(no.length)A.push(alertRow('warn','Not confirmed yet',esc(no.join(', '))+' · '+esc(j.d.name)+' '+esc(relDay(j.d.moveDate)),'job:open',j.id));
   });
   if(role==='owner')empExpiryAlerts().forEach(function(x){A.push(x)});
+  if(role==='owner'||role==='dispatch')truckDueAlerts().forEach(function(x){A.push(x)});
   var mine=jobMsgsPending(myName());
   if(mine)A.push('<button class="alert" data-act="jm:open"><span class="ic warn">'+mine+'</span><span class="tx"><b>Confirm your jobs</b><small>You are on '+mine+' job'+(mine===1?'':'s')+' that need'+(mine===1?'s':'')+' your OK</small></span><span class="go">›</span></button>');
   var unread=chatUnread(myName());
@@ -4499,6 +4506,7 @@ function renderSheet(){
    (j.startedAt?'<div class="sec" data-meta="'+(j.status==='active'?esc(phaseNow(j)):(j.phases&&j.phases.unloadEnd?fmtDur(j.phases.unloadEnd-j.phases.loadStart)+' handling':''))+'"><h3>On-site times</h3>'+
      (j.status==='active'||(crewOnly(j)&&j.finishedAt)||(j.phases&&j.phases.loadStart)?'<div class="phz">'+phaseRows(j)+'</div>':'<p class="hint">The crew did not record load and unload times on this job.</p>')+crewOnRows(j)+
      (j.actualHours>0?'<p class="hint"'+(topUpFor(j)?' style="color:var(--text)"':'')+'>'+esc(payLine(j,false))+'.</p>':'')+'</div>':'')+
+   claimsSecHtml(j)+
    commsSection(j)+
    '<div class="sec"><h3>Activity</h3>'+acts+'</div>'+
    (state.ui.role==='owner'?'<button class="btn danger" data-act="sh:delete">'+(ui.armed==='sh:delete'?'Tap again to delete this job':'Delete job')+'</button>':'')+
@@ -6910,7 +6918,7 @@ function crewKit(me){
     var body='<div class="cc-sub">Crew: '+(crewLine||'none yet')+'</div>'+crewLeadLine(j)+crewHint+(asLead?mvLine(j,me)+crewLines(j,me,false):'')+truckLines+
       (j.actualHours>0&&(j.status==='done'||j.status==='paid')?'<div class="cc-sub"><b>'+esc(payLine(j,true,me))+'</b></div>':'')+
       '<div class="cc-route">'+addrRoles(j).map(function(r){return '<div><small>'+esc(r[1])+'</small>'+map(j.d[r[0]])+'</div>'}).join('')+'</div>'+
-      notesSec+matsSec+photoSec+runSec;
+      notesSec+matsSec+photoSec+crewClaimHtml(j,me,asLead)+runSec;
     var est=['booked','active'].indexOf(j.status)>=0?(multiDay(j)?'Est. '+(Math.round(dayHoursOf(j,(onDate(j,t)||{i:0}).i)*2)/2)+' h':estLine(j)):'';
     if(fold){var hk='h:'+j.id,fin=['done','paid'].indexOf(j.status)>=0,dayW=onDate(j,t)?'Today':fmtDate(j.d.moveDate);
       // finished (Richie, Oct 21: "the customer name, date and time on job"): the day and how long the job took
@@ -7064,7 +7072,7 @@ function renderReports(){
   var crewRows=Object.keys(cm).sort().map(function(k){var r=cm[k];return '<tr><td>'+esc(k)+(k==='No lead'?'':'’s crew')+'</td><td class="n">'+r.jobs+'</td><td class="n">'+money(r.billed)+'</td><td class="n">'+(r.th?money(r.tb/r.th):'—')+'</td></tr>'}).join('');
   var out='<div class="card" style="padding:10px 12px"><div class="grid2"><label class="f"><span>From</span><input type="date" id="rFrom" value="'+esc(from)+'"></label><label class="f"><span>To</span><input type="date" id="rTo" value="'+esc(to)+'"></label></div><div class="hint" style="margin-top:4px">Leave blank for all time.</div></div>'+
    '<div class="kpis"><div class="kpi paid"><b>'+money(collected)+'</b><span>Collected</span></div><div class="kpi'+(outstanding>0?' due':'')+'"><b>'+money(outstanding)+'</b><span>Still owed</span></div><div class="kpi"><b>'+money(avg)+'</b><span>Average job</span></div><div class="kpi"><b>'+win+'</b><span>Quote win rate</span></div></div>'+
-   invoicesCard()+
+   invoicesCard()+claimsCard(inR)+
    '<section class="card"><h2>Collected by month</h2>'+(bars?'<div class="bars">'+bars+'</div>':'<p class="hint">No payments in this range.</p>')+'</section>'+
    '<section class="card"><h2>Revenue by crew</h2><p class="sub">Finished jobs, grouped by the crew lead on the job.</p>'+(crewRows?'<table class="tbl"><tr><th>Crew</th><th class="n">Jobs</th><th class="n">Billed</th><th class="n">Per job hour</th></tr>'+crewRows+'</table>':'<p class="hint">No finished jobs in this range.</p>')+'</section>';
   var srcCard='<section class="card"><h2>Where jobs come from</h2><table class="tbl"><tr><th>Source</th><th class="n">Leads</th><th class="n">Won</th><th class="n">Collected</th></tr>'+(srcRows||'<tr><td colspan="4"><small>No jobs in this range.</small></td></tr>')+'</table></section>';
@@ -7233,7 +7241,7 @@ function setupSecs(){
   var rateSum=money(num(S.rates.r2))+'/h for 2 movers · '+(opt('mileage')?fmtMi(num(S.includedMiles))+'-mile local radius':'every move local')+' · '+num(S.minHours)+' h minimum';
   if(!owner){add('rates','price','Rate card',rateSum,rates);return out}
   var tcols='grid-template-columns:minmax(0,1fr) 88px 84px;align-items:center';
-  var trucks=(S.trucks.length?'<div class="grid3 colhead" style="'+tcols+'"><small>Truck</small><small>Cu ft</small><span></span></div>':'')+S.trucks.map(function(t,i){return '<div class="grid3" style="'+tcols+';margin-bottom:8px"><input aria-label="Truck name" data-s="trucks.'+i+'.name" value="'+esc(t.name)+'" '+inp+'><input aria-label="'+esc(t.name)+' cubic feet" type="number" inputmode="numeric" min="1" data-min="1" data-s="trucks.'+i+'.cf" data-t="num" value="'+t.cf+'" '+inp+'><button class="btn sm danger" data-act="st:rmtruck" data-i="'+i+'" aria-label="Remove '+esc(t.name)+'">Remove</button></div>'}).join('');
+  var trucks=(S.trucks.length?'<div class="grid3 colhead" style="'+tcols+'"><small>Truck</small><small>Cu ft</small><span></span></div>':'')+S.trucks.map(function(t,i){return '<div class="grid3" style="'+tcols+';margin-bottom:8px"><input aria-label="Truck name" data-s="trucks.'+i+'.name" value="'+esc(t.name)+'" '+inp+'><input aria-label="'+esc(t.name)+' cubic feet" type="number" inputmode="numeric" min="1" data-min="1" data-s="trucks.'+i+'.cf" data-t="num" value="'+t.cf+'" '+inp+'><button class="btn sm danger" data-act="st:rmtruck" data-i="'+i+'" aria-label="Remove '+esc(t.name)+'">Remove</button></div>'+truckDueHtml(t,i,inp)}).join('');
   var formsList=(S.forms||[]).map(function(f){return '<details class="grp"><summary>'+esc(f.title)+' <small>'+(f.required?'required':'optional')+'</small></summary><div class="formbox">'+(f.kind==='text'?'<div class="formtext">'+esc(f.text)+'</div>':(f.pages||[]).map(function(pg,i){return pg?'<img src="'+pg+'" alt="'+esc(f.title)+' page '+(i+1)+'">':'<p class="hint">Loading page '+(i+1)+'…</p>'}).join(''))+'</div><div class="row" style="margin:8px 0"><button class="chip'+(f.required?' on':'')+'" data-act="st:reqform" data-id="'+f.id+'" aria-pressed="'+!!f.required+'">Required before payment</button><button class="chip'+(f.ahead?' on':'')+'" data-act="st:aheadform" data-id="'+f.id+'" aria-pressed="'+!!f.ahead+'">Customer signs ahead</button><button class="btn sm danger" data-act="st:rmform" data-id="'+f.id+'">Remove</button></div></details>'}).join('')||'<p class="hint">No forms yet.</p>';
   // a card kept for a customer without a phone belongs to the job it was kept on
   var vaultWho=function(x){if(!/^job:/.test(x.cust||'')){var cj=state.jobs.filter(function(j){return custKey(j)===x.cust}).pop();return 'Customer: '+(cj&&cj.d.name?esc(cj.d.name)+' · ':'')+esc(/^\d{10,11}$/.test(x.cust||'')?fmtPhone(x.cust):x.cust)}var kj=byId(x.cust.slice(4));return kj?'Kept on '+esc(kj.d.name||'a job')+'’s job':'Kept on a job that is no longer here'};
@@ -8765,6 +8773,7 @@ function jobDoc(j){
   o.photos=toMap((j.photos||[]).map(function(p){return {id:p.id,kind:p.kind,ts:p.ts}}),function(x){return x.id});
   o.materials=toMap(j.materials,function(x){return x.id});
   o.costs=toMap(j.costs,function(x){return x.id});
+  if(claimsOf(j).length)o.claims=toMap(claimsOf(j),function(x){return x.id});
   o.confirm=JSON.parse(JSON.stringify(j.confirm||{}));
   o.crewOn=JSON.parse(JSON.stringify(j.crewOn||{}));
   o.crewAdj=toMap(j.crewAdj,function(x){return x.id});
@@ -8785,6 +8794,7 @@ function docToJob(v){
     crewOn:(v.crewOn&&typeof v.crewOn==='object')?v.crewOn:undefined,crewAdj:mapArr(v.crewAdj,'ts'),
     log:mapArr(v.log,'ts').slice(-60)};
   if(v.walkVids&&typeof v.walkVids==='object')j.walkVids=mapArr(v.walkVids,'at');
+  if(v.claims&&typeof v.claims==='object')j.claims=mapArr(v.claims,'at');
   ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales','quotedBy','quotedTeam','survey','tipSplit','inv','pauses'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
   return j;
 }
@@ -9445,6 +9455,117 @@ function docDelete(path){
   window.tallyPeople.removeDoc(path).then(function(){people.docs[E.id]=(people.docs[E.id]||[]).filter(function(f){return f.path!==path});renderEmp();toast('Document deleted.')},function(){toast('Could not delete that document.')});
 }
 /* ---- Today: licenses and DOT medical cards that have run out or will within 30 days ---- */
+/* ---------- damage claims (batch 11, Nov 22) ----------
+   From Richie's list of what MoveCrew is missing (Nov 21): damage claims. A claim is on its job (j.claims, a map in
+   the database like the payments): {id, at, by, from 'customer' | 'crew' | 'office', item, what, amt (claimed),
+   status 'open' | 'review' | 'paid' | 'repaired' | 'denied', paid, closedAt, closedBy}. The office adds and settles
+   them on the job sheet; the crew lead reports one from the job card; the customer reports one in their app for 30
+   days after the move (the Edge Function's cust_claim, which texts the office). Open ones are on Today, and Reports
+   has them by crew. Options › Damage claims. */
+var CLAIM_ST=[['open','Open'],['review','Reviewing'],['paid','Paid'],['repaired','Repaired'],['denied','Denied']];
+var CLAIM_DAYS=30;
+function claimsOf(j){return ((j&&j.claims)||[]).filter(function(c){return c&&c.id})}
+function claimOpen(c){return !c.status||c.status==='open'||c.status==='review'}
+function claimStWord(s){var x=CLAIM_ST.filter(function(y){return y[0]===s})[0];return x?x[1]:'Open'}
+function claimFromWord(f){return f==='customer'?'from the customer':f==='crew'?'from the crew':'from the office'}
+// released value, the coverage the law sets when nothing more was bought: $0.60 a pound, the item at 7 lb a cu ft
+function releasedOf(j,item){var it=(j.items||[]).filter(function(i){return i.name===item})[0];return it?Math.round(num(it.cf)*7*0.6*100)/100:0}
+function claimAdd(j,o){
+  var c={id:uid(),at:Date.now(),by:o.by||'',from:o.from==='customer'||o.from==='crew'?o.from:'office',item:String(o.item||'').trim().slice(0,80),what:String(o.what||'').trim().slice(0,600),amt:Math.max(0,round2(num(o.amt))),status:'open'};
+  j.claims=claimsOf(j).concat([c]);
+  logEv(j,'Damage claim '+claimFromWord(c.from)+': '+(c.item||'an item')+(c.amt?', '+money(c.amt)+' claimed':'')+(c.by?' ('+c.by+')':''));
+  return c;
+}
+function claimSet(j,id,st,paid,who){
+  var out=null;
+  j.claims=claimsOf(j).map(function(c){if(c.id!==id)return c;out=Object.assign({},c,{status:st});if(st==='paid')out.paid=Math.max(0,round2(num(paid)));else delete out.paid;
+    if(claimOpen(out)){delete out.closedAt;delete out.closedBy}else{out.closedAt=Date.now();out.closedBy=who||''}return out});
+  if(out)logEv(j,'Claim for '+(out.item||'an item')+': '+claimStWord(st)+(st==='paid'?' '+money(out.paid||0):'')+(who?' ('+who+')':''));
+  return out;
+}
+// the job sheet's Damage claims: each claim and where it stands, then New damage claim
+function claimsSecHtml(j){
+  var L=claimsOf(j),on=opt('claims');
+  if(!L.length&&!(on&&['active','done','paid'].indexOf(j.status)>=0))return '';
+  var open=L.filter(claimOpen),names=(j.items||[]).map(function(i){return i.name});
+  var rows=L.map(function(c){
+    var rv=releasedOf(j,c.item);
+    return '<div class="who claim" style="display:block"><div class="row between"><b>'+esc(c.item||'An item')+'</b><span class="pill'+(claimOpen(c)?' warn':'')+'">'+esc(claimStWord(c.status)+(c.status==='paid'?' '+money(c.paid||0):''))+'</span></div>'+
+      '<small>'+esc(claimFromWord(c.from)+' · '+fmtStamp(c.at)+(c.by?' · '+c.by:''))+'</small>'+(c.what?'<div style="white-space:pre-wrap;margin-top:4px">'+esc(c.what)+'</div>':'')+
+      '<small>'+(c.amt?'Claimed '+money(c.amt):'No amount claimed')+(rv?' · released value about '+money(rv)+' ($0.60 a pound)':'')+'</small>'+
+      '<div class="chips" style="margin:8px 0 0">'+CLAIM_ST.map(function(s){return '<button class="chip'+(c.status===s[0]||(!c.status&&s[0]==='open')?' on':'')+'" data-act="cl:st" data-cid="'+c.id+'" data-v="'+s[0]+'" aria-pressed="'+(c.status===s[0])+'">'+s[1]+'</button>'}).join('')+'</div>'+
+      (c.status==='paid'?fld('Paid to them ($)','<input data-clpaid="'+c.id+'" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+esc(fmtCents(Math.round(num(c.paid)*100)))+'">'):'')+'</div>';
+  }).join('');
+  var form=on?'<details class="acc" data-k="cl:new"'+(ui.open['cl:new']?' open':'')+'><summary><span>New damage claim</span></summary><div class="acc-body"><div class="grid2 stack">'+
+    fld('Item','<input id="clItem" list="clItems" autocomplete="off" placeholder="Dresser, wall, floor">','span2')+'<datalist id="clItems">'+names.map(function(n){return '<option value="'+esc(n)+'">'}).join('')+'</datalist>'+
+    fld('What happened','<textarea id="clWhat" placeholder="Top scratched when unloading"></textarea>','span2')+
+    fld('Amount claimed ($)','<input id="clAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" placeholder="0.00">')+
+    fld('From','<select id="clFrom"><option value="customer">The customer</option><option value="crew">The crew</option><option value="office">The office</option></select>')+
+    '</div><button class="btn" style="margin-top:8px" data-act="cl:add">Add the claim</button></div></details>':'';
+  return '<div class="sec" data-meta="'+esc(open.length?open.length+' open · '+money(open.reduce(function(a,c){return a+num(c.amt)},0))+' claimed':L.length?L.length+' closed':'')+'"><h3>Damage claims</h3>'+
+    (rows||'<p class="hint" style="margin:0 0 6px">No claims. The customer can report damage in their app for '+CLAIM_DAYS+' days after the move.</p>')+form+'</div>';
+}
+// the crew lead's card: Report damage, to the office
+function crewClaimHtml(j,me,asLead){
+  if(!asLead||!opt('claims')||['active','done'].indexOf(j.status)<0)return '';
+  var n=claimsOf(j).filter(function(c){return c.from==='crew'}).length;
+  return '<details class="acc cc-claim"><summary><span>Report damage</span>'+(n?'<small>'+n+' reported</small>':'')+'</summary><div class="acc-body"><div class="grid2 stack">'+
+    fld('What was damaged','<input id="ccl_i_'+j.id+'" autocomplete="off" placeholder="Dresser, wall, floor">','span2')+fld('What happened','<textarea id="ccl_w_'+j.id+'"></textarea>','span2')+'</div>'+
+    '<button class="btn" style="margin-top:8px" data-act="cr:claim" data-id="'+j.id+'" data-who="'+esc(me)+'">Tell the office</button><p class="hint" style="margin:6px 0 0">Take a Damage photo of it too.</p></div></details>';
+}
+// Reports: the open claims, the ones closed in the dates picked, and how many by crew
+function claimsCard(inR){
+  var L=[];state.jobs.forEach(function(j){if(j.test)return;claimsOf(j).forEach(function(c){L.push({j:j,c:c})})});
+  if(!L.length&&!opt('claims'))return '';
+  var open=L.filter(function(x){return claimOpen(x.c)}),closed=L.filter(function(x){return !claimOpen(x.c)&&inR(iso(new Date(x.c.closedAt||x.c.at)))});
+  var paid=closed.reduce(function(a,x){return a+(x.c.status==='paid'?num(x.c.paid):0)},0),by={};
+  L.forEach(function(x){var k=leadOf(x.j)||'No lead';by[k]=(by[k]||0)+1});
+  var rows=Object.keys(by).sort().map(function(k){return '<tr><td>'+esc(k)+(k==='No lead'?'':'’s crew')+'</td><td class="n">'+by[k]+'</td></tr>'}).join('');
+  return '<section class="card" id="claimsCard"><h2>Damage claims</h2><p class="sub">'+(open.length?'Open now: '+open.length+' · '+money(open.reduce(function(a,x){return a+num(x.c.amt)},0))+' claimed':'No open claims.')+
+    (closed.length?' Closed in these dates: '+closed.length+(paid?', '+money(paid)+' paid':''):'')+'</p>'+(rows?'<table class="tbl"><tr><th>Crew</th><th class="n">Claims</th></tr>'+rows+'</table>':'')+'</section>';
+}
+// the customer app: their claims, and Report damage for 30 days after the move
+function custClaimOk(m){var D=(m.d&&Array.isArray(m.d.days)?m.d.days:[]).filter(function(x){return x&&x.date}),last=D.length?D[D.length-1].date:m.d.moveDate;return !!m.claimsOn&&(m.status==='done'||m.status==='paid')&&!!last&&addDays(last,CLAIM_DAYS)>=todayISO()}
+function custClaimWord(c){return c.status==='paid'?'Paid '+money(c.paid||0):c.status==='repaired'?'Repaired':c.status==='denied'?'Closed':c.status==='review'?'Being looked at':'Sent'}
+function custClaimsHtml(m){
+  var L=m.claims||[];if(!L.length&&!custClaimOk(m))return '';
+  var co=esc(m.company||'your mover');
+  var rows=L.map(function(c){return '<div class="who" style="display:block"><div class="row between"><b>'+esc(c.item||'An item')+'</b><span class="pill">'+esc(custClaimWord(c))+'</span></div>'+(c.what?'<small>'+esc(c.what)+'</small>':'')+'</div>'}).join('');
+  return '<section class="card cm-claims"><h3>Damage</h3>'+rows+(custClaimOk(m)?'<details class="acc"'+(L.length?'':' open')+'><summary><span>Report damage</span></summary><div class="acc-body"><div class="grid2 stack">'+
+    fld('What was damaged','<input id="csClItem" autocomplete="off" placeholder="Dresser, wall, floor">','span2')+fld('What happened','<textarea id="csClWhat"></textarea>','span2')+
+    fld('About how much ($, if you know)','<input id="csClAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" placeholder="0.00">','span2')+'</div>'+
+    '<p class="hint">'+co+' looks at it and gets back to you. You can report damage for '+CLAIM_DAYS+' days after your move.</p><p class="hint" id="csClErr" role="alert"></p>'+custBtn(m,'cs:claimgo','Send to '+co,true)+'</div></details>':'')+'</section>';
+}
+function csClaimGo(m){
+  var item=String(($('#csClItem')||{}).value||'').trim(),what=String(($('#csClWhat')||{}).value||'').trim(),amt=moneyVal($('#csClAmt'));
+  var err=function(s){var e=$('#csClErr');if(e)e.textContent=s};
+  if(!item)return err('Say what was damaged.');
+  if(!what)return err('Say what happened.');
+  var key=custKeyOf(m),done=function(){toast('Sent. '+(m.company||'Your mover')+' will get back to you.')};
+  if(custLive()){var b=$('[data-act="cs:claimgo"]');if(b){b.disabled=true;b.textContent='Sending…'}custAct('claim',m,{item:item,what:what,amt:amt}).then(function(r){if(!r||!r.ok){if(b){b.disabled=false;b.textContent='Try again'}return err((r&&r.message)||'Could not send it. Try again.')}custAfter(key,done)});return}
+  var j=byId(m.id);if(!j)return;
+  claimAdd(j,{item:item,what:what,amt:amt,from:'customer',by:j.d.name||'The customer'});save();render();done();
+}
+/* ---------- truck reminders (batch 11, Nov 22) ----------
+   From Richie's list (Nov 21): truck and driver reminders. The drivers' were there (a license and a DOT medical card
+   on the employee's profile, on Today 30 days before); these are the trucks': each truck's registration, insurance,
+   inspection and next service, as dates in Setup › Fleet (settings.trucks[i].regDue, insDue, inspDue, svcDue), on
+   Today for the owner and dispatch from 30 days before, past due in red. Options › Truck reminders. */
+var TRUCK_DUE=[['regDue','Registration renews','registration'],['insDue','Insurance renews','insurance'],['inspDue','Inspection due','inspection'],['svcDue','Next service','service']];
+function truckDueSummary(t){var due=TRUCK_DUE.filter(function(f){return t[f[0]]}).map(function(f){return {f:f,d:t[f[0]]}}).sort(function(a,b){return a.d<b.d?-1:1});return due.length?(due[0].d<todayISO()?'Past due: ':'Next: ')+due[0].f[2]+', '+fmtDayShort(due[0].d):'Registration, insurance, inspection, service'}
+function truckDueHtml(t,i,inp){
+  if(!opt('truckDue'))return '';
+  var k='td:'+(t.id||i);
+  return '<details class="acc tdue" data-k="'+esc(k)+'"'+(ui.open[k]?' open':'')+' style="margin:-2px 0 10px"><summary><span>'+esc(truckDueSummary(t))+'</span></summary><div class="acc-body"><div class="grid2 stack">'+
+    TRUCK_DUE.map(function(f){return fld(f[1],'<input type="date" data-s="trucks.'+i+'.'+f[0]+'" value="'+esc(t[f[0]]||'')+'" '+inp+'>')}).join('')+'</div><p class="hint" style="margin:6px 0 0">Today shows each one from 30 days before.</p></div></details>';
+}
+function truckDueAlerts(){
+  if(!opt('truckDue'))return [];
+  var t=todayISO(),soon=addDays(t,30),out=[];
+  (state.settings.trucks||[]).forEach(function(tr){TRUCK_DUE.forEach(function(f){var d=tr[f[0]];if(!d||!/^\d{4}-\d\d-\d\d$/.test(d)||d>soon)return;
+    out.push('<button class="alert" data-act="go:fleet"><span class="ic '+(d<t?'bad':'warn')+'">!</span><span class="tx"><b>'+esc(tr.name)+': '+esc(f[2])+(d<t?' is past due':' is due soon')+'</b><small>'+(d<t?'Was due ':'Due ')+esc(relDay(d))+'</small></span><span class="go">›</span></button>')})});
+  return out;
+}
 function empExpiryAlerts(){
   if(!people.loaded){if(!people.loading)loadPeople();return []}
   var t=todayISO(),soon=addDays(t,30),out=[];
@@ -11544,6 +11665,10 @@ document.addEventListener('click',function(e){
     case 'day':ui.day=t.dataset.d;renderDispatch();break;
     case 'sh:packday':{var pmj=byId(ui.jobId);if(!pmj||!canEditJobs()||jobTypeOf(pmj))break;var pkj=packDayFrom(pmj);state.jobs.push(pkj);save();openJob(pkj.id);toast(pkj.d.moveDate?'Packing day added for '+fmtDate(pkj.d.moveDate)+'. Check the boxes and hours, then book it.':'Packing day added. Pick its day, check the boxes and hours, then book it.');break}
     case 'inv:sent':{var ivj=byId(ui.jobId);if(!ivj||!canEditJobs()||!invoiceJob(ivj))break;var ivOn=t.dataset.v==='1',ivw=myName()||'Office';ivj.inv=Object.assign({},ivj.inv||{});if(ivOn){ivj.inv.sent=Date.now();ivj.inv.sentBy=ivw}else{ivj.inv.sent=null;ivj.inv.sentBy=null}logEv(ivj,invNoWords(ivj)+(ivOn?' marked as sent':' marked as not sent')+' by '+ivw);save();renderSheet();break}
+    case 'cl:add':{var clj=byId(ui.jobId);if(!clj||!canEditJobs())break;var cit=String(($('#clItem')||{}).value||'').trim(),cwh=String(($('#clWhat')||{}).value||'').trim();if(!cit&&!cwh){toast('Say what was damaged.');break}claimAdd(clj,{item:cit,what:cwh,amt:moneyVal($('#clAmt')),from:($('#clFrom')||{}).value,by:myName()||'Office'});save();renderSheet();toast('Claim added.');break}
+    case 'cl:st':{var csj=byId(ui.jobId);if(!csj||!canEditJobs())break;var ccur=claimsOf(csj).filter(function(c){return c.id===t.dataset.cid})[0];if(!ccur)break;claimSet(csj,ccur.id,t.dataset.v,t.dataset.v==='paid'?(ccur.paid!=null?ccur.paid:ccur.amt||0):0,myName()||'Office');save();renderSheet();break}
+    case 'cr:claim':{var ckj=byId(t.dataset.id);if(!ckj)break;var cki=String(($('#ccl_i_'+ckj.id)||{}).value||'').trim(),ckw=String(($('#ccl_w_'+ckj.id)||{}).value||'').trim();if(!cki&&!ckw){toast('Say what was damaged.');break}claimAdd(ckj,{item:cki,what:ckw,from:'crew',by:t.dataset.who||''});save();renderTab();toast('The office has it. Take a Damage photo too.');break}
+    case 'go:fleet':ui.tab='settings';ui.setSec='fleet';render();window.scrollTo(0,0);break;
     case 'sh:next':j=byId(ui.jobId);if(!j)break;
       if(j.status==='booked'){openStart(j.id,myName(),true);break}
       if(j.status==='active'){finishJob(j,myName(),true);break}
@@ -12079,6 +12204,7 @@ document.addEventListener('change',function(e){
     return}
   if(t.id==='rFrom'){ui.from=t.value;renderReports();return}
   if(t.id==='rTo'){ui.to=t.value;renderReports();return}
+  if(j&&t.dataset.clpaid){var cpc=claimsOf(j).filter(function(c){return c.id===t.dataset.clpaid})[0];if(cpc){claimSet(j,cpc.id,'paid',moneyVal(t),myName()||'Office');save();renderSheet()}return}
   if(j&&t.id==='shDays'){var shn=setDays(j.d,t.value);logEv(j,'Days: '+daysWords(j)+' ('+(myName()||'Office')+')');save();renderSheet();return}
   if(j&&t.dataset.jday!==undefined){var jk=+t.dataset.jday;j.d.days=(Array.isArray(j.d.days)?j.d.days:[]).map(function(x){return Object.assign({},x)});if(j.d.days[jk]){j.d.days[jk][t.dataset.k]=t.value;logEv(j,'Day '+(jk+2)+': '+(j.d.days[jk].date?fmtDate(j.d.days[jk].date):'no date')+(j.d.days[jk].time?' at '+fmtTime(j.d.days[jk].time):''));save();renderSheet()}return}
   if(j&&t.dataset.re){j.d[t.dataset.j]=t.value;save();renderSheet()}
@@ -12141,7 +12267,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow};
 })();
 </script>
 </body>
