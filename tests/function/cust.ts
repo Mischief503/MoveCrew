@@ -688,6 +688,16 @@ ok(cpP.monthly === 330 && cpP.units[0].name === "Unit #2" && cpP.units[0].price 
 ok(stm.sto.bills.length === 2 && stm.sto.bills[0].from === "2026-09-02" && stm.sto.bills[1].to === "2026-11-01" && stm.sto.next === fn.stoNextC(stoStart, todayUtc) && stm.bill.total === 600 && stm.bill.due === 300 && stm.forms.length === 0,
   "her copy: the bills, the next one (" + stm.sto.next + "), $300 owed, no forms");
 ok(fn.custSto(settings, job("q9")) === null && r.body.moves.find((m: any) => m.id === "q1").sto === null, "a move has no storage part");
+// a move into storage (batch 13d): before it goes in, the customer sees its units and a month
+const tsJ = job("ts1", { status: "booked", d: { name: "Priya Nair", phone: "512-555-0142", email: "priyanair@gmail.com", moveDate: "2026-12-03", time: "08:00", from: "418 Oak St", to: "9 Dock Rd", toSto: true,
+    stoPlan: { units: ["v1", "v3"], prices: { v1: 150, v3: 190 }, hand: false } } });
+const tsP = fn.custStoPlan(settings, tsJ);
+ok(tsP && tsP.monthly === 340 && tsP.units[0].name === "Unit #1" && tsP.units[1].name === "Unit #3" && tsP.units[1].size === "10x10 ft" && tsP.units[1].price === 190 && tsP.addr === "9 Dock Rd",
+  "a move into storage: Unit #1 (the first version's Vault 1) and Unit #3 at the prices quoted, $340 a month, at the warehouse");
+ok(fn.custStoPlan(settings, Object.assign({}, tsJ, { d: Object.assign({}, tsJ.d, { stoIn: { id: "sits1", words: "Unit #1, Unit #3" } }) })) === null &&
+  fn.custStoPlan(settings, Object.assign({}, tsJ, { status: "lost" })) === null && fn.custStoPlan(settings, job("q9")) === null &&
+  fn.custStoPlan(settings, Object.assign({}, tsJ, { d: Object.assign({}, tsJ.d, { jobType: "labor" }) })) === null && r.body.moves.find((m: any) => m.id === "q1").stoPlan === null,
+  "not once it's in storage (its account shows instead), lost, a plain move or a labor job");
 r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "st1", kind: "bill", amount: 20000, tip: 0 });
 ok(!r.body.ok && r.body.changed && /What's owed now is \$300\.00/.test(r.body.message), "paying storage: what's owed is the account's balance: " + r.body.message);
 r = await app("tok-priya", { action: "cust_pay", org: ORG, jobId: "st1", kind: "bill", amount: 30000, tip: 1000 });

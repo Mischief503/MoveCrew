@@ -3770,6 +3770,21 @@ export function custSto(S: J, job: J): J | null {
     monthly: r2(vaults.reduce((a: number, id: string) => a + price(id), 0)), next: open ? stoNextC(start, today()) : "", out: String(s.out || ""), addr,
     units: vaults.map((id: string) => ({ name: name(id), size: String((unitOf(id) || {}).size || ""), price: price(id) })), bills };
 }
+// A move into storage (batch 13d, Nov 22): a move with d.toSto ends at the warehouse, and d.stoPlan {units, prices}
+// is the units it goes into, each at the price it was quoted at. Until its storage account opens (d.stoIn), the
+// customer sees them on the move: the app's stoPlanCust.
+export function custStoPlan(S: J, job: J): J | null {
+  const d = (job && job.d) || {};
+  if (!d.toSto || stoIsC(job) || d.jobType === "labor" || d.jobType === "packing" || d.stoIn || job.status === "lost") return null;
+  const p = d.stoPlan || {}, ids: string[] = Array.isArray(p.units) ? p.units.filter((x: J) => typeof x === "string" && x) : [];
+  if (!ids.length) return null;
+  const units: J[] = S && S.sto && Array.isArray(S.sto.units) ? S.sto.units : [], prices: J = p.prices && typeof p.prices === "object" ? p.prices : {};
+  const unitOf = (id: string): J => units.find((x: J) => x && x.id === id) || null;
+  const name = (id: string) => { const u = unitOf(id); if (!u) return "A removed unit"; const n = String(u.name || "Unit"), m = /^Vault (\d+)$/.exec(n); return m && u.id === "v" + m[1] ? "Unit #" + m[1] : n; };
+  const list = ids.map((id: string) => { const u = unitOf(id), x = prices[id]; return { name: name(id), size: String((u && u.size) || ""), price: r2(x != null && x !== "" ? x : u ? u.rate : 0) }; });
+  const addr = String((S && S.sto && S.sto.addr) || "").trim() || String((S && S.shopAddress) || "").trim();
+  return { units: list, monthly: r2(list.reduce((a: number, u: J) => a + u.price, 0)), addr };
+}
 export function custCopy(org: string, S: J, job: J, o: { company: string; phone: string; paidC: number; pages?: Record<string, string> }): J {
   const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [], kind = custKind(job);
   const totalC = jobTotalCents(job), dueC = Math.max(0, totalC - o.paidC);
@@ -3797,6 +3812,8 @@ export function custCopy(org: string, S: J, job: J, o: { company: string; phone:
     ldInfo: custLd(S, job),
     // a storage account (batch 13): the vaults, a month, the bills, the next one
     sto: custSto(S, job),
+    // a move into storage, before it goes in (batch 13d): its units and a month
+    stoPlan: custStoPlan(S, job),
     pays, forms,
     day: { startedAt: Number(job.startedAt) || 0, eta: (job.eta && Number(job.eta.at)) || 0, phases: job.phases && typeof job.phases === "object" ? job.phases : {}, finishedAt: Number(job.finishedAt) || 0 },
     crew: { lead: String(leadOf(S, job)).split(" ")[0], n: crew.length },

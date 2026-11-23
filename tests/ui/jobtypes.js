@@ -50,11 +50,11 @@ const H = 36e5;
   /* ---------------- the quote screen ---------------- */
   click('#fab'); await sleep(15);
   const chips = () => $$('#view [data-act="q:jt"]').map((b) => b.textContent + (b.classList.contains('on') ? '*' : '')).join(',');
-  ok(chips() === 'Move*,Labor only,Packing' && /^The move/.test($('#view section.card:nth-of-type(3) h2') ? $$('#view section.card h2').map((h) => h.textContent).find((t) => /^The (move|job)/.test(t)) : ''), L('a new quote: Kind of job, Move on'));
+  ok(chips() === 'Move*,Into storage,Labor only,Packing' && /^The move/.test($('#view section.card:nth-of-type(3) h2') ? $$('#view section.card h2').map((h) => h.textContent).find((t) => /^The (move|job)/.test(t)) : ''), L('a new quote: Kind of job, Move on (Into storage too, with Options › Storage on: tests/ui/stoin.js)'));
   type('[data-d="name"]', 'Harbor Storage Co');
   click('[data-act="q:jt"][data-v="labor"]'); await sleep(10);
   const labels = () => $$('#view label.f > span').map((s) => s.textContent);
-  ok(st().draft.jobType === 'labor' && st().draft.laborKind === 'both' && chips() === 'Move,Labor only*,Packing' && labels().indexOf('Where we load') >= 0 && labels().indexOf('Where we unload') >= 0 && labels().indexOf('Job date') >= 0 && !$('[data-d="miles"]') && !$('#distNote') && !$('[data-d="pack"]'),
+  ok(st().draft.jobType === 'labor' && st().draft.laborKind === 'both' && chips() === 'Move,Into storage,Labor only*,Packing' && labels().indexOf('Where we load') >= 0 && labels().indexOf('Where we unload') >= 0 && labels().indexOf('Job date') >= 0 && !$('[data-d="miles"]') && !$('#distNote') && !$('[data-d="pack"]'),
     L('Labor only: “The job”, Where we load and Where we unload, no miles and no packing'));
   ok($$('#view [data-act="q:lk"]').map((b) => b.textContent).join() === 'Load and unload,Load only,Unload only' && /No truck goes out/.test($('#qMeter').textContent) && /Labor only: loading and unloading/.test($('#qMeter').textContent),
     L('loading, unloading or both; the top card says no truck goes out'));
@@ -180,13 +180,13 @@ const H = 36e5;
   const pr = $('[data-s="packRate"]'), bp = $('[data-s="boxPrice"]');
   ok(pr && bp && pr.value === '8' && bp.value === '3', L('Packing days has two numbers: boxes an hour per packer (8), and the price a box (3)'));
   const flip = (k, on) => { const i = sw(k); i.checked = on; i.dispatchEvent(new w.Event('input', { bubbles: true })); };
-  flip('labor', false); flip('packDays', false); await sleep(10);
+  flip('labor', false); flip('packDays', false); S().opt.storage = false; await sleep(10);
   ok(S().opt.labor === false && !T.opt('labor') && !T.opt('packDays'), L('switched off'));
   click('#fab'); await sleep(15);
-  ok(!$('[data-act="q:jt"]'), L('with both off, a new quote has no Kind of job'));
+  ok(!$('[data-act="q:jt"]'), L('with both off (and Storage), a new quote has no Kind of job'));
   st().draft.jobType = 'labor'; T.render(); await sleep(10);
   ok(chips() === 'Move,Labor only*', L('a labor job being changed still shows its kind'));
-  st().draft = T.blankDraft(); S().opt.labor = true; S().opt.packDays = true;
+  st().draft = T.blankDraft(); S().opt.labor = true; S().opt.packDays = true; S().opt.storage = true;
 
   ok(!A.errors.length, L('no errors: ' + A.errors.join(' | ')));
   process.exit(summary(label) ? 1 : 0);

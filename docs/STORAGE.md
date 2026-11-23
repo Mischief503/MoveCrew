@@ -39,6 +39,37 @@ storage: Unit #3, Unit #4** under the addresses.
 **Someone already in storage** (Setup › Storage): for customers who were in the warehouse before MoveCrew. Their
 name, phone and email, their units, and the **Next bill** (the bills start that day; none before).
 
+## Moves into storage
+
+Richie, Nov 22: "Can we add a type of job, a storage in option. This auto puts your storage location as the last
+stop, and will auto suggest storage units to fit the cubic foot of stuff in the estimate."
+
+- **On a quote**, Kind of job has **Into storage** (with Options › Storage on): a move whose last stop is your
+  warehouse. Tapping it puts the warehouse address (Setup › Storage, or the shop's) in as the delivery, called
+  **Storage warehouse**; tapping Move again takes it back off. The move is priced like any move.
+- **The units for it** are under the price (Price and book), from the estimate's cubic feet: "About 407 cu ft. Unit
+  #1, Unit #2 hold 560 cu ft: $300 a month, billed from the move day." It picks the units that cost the least a
+  month and still hold it all, then the fewest, then the least room left over, then the first in Setup's list. Tap
+  the units to change them; **Pick for me** goes back to the suggestion. The price says **Then storage: Unit #1, Unit
+  #2, $300/mo** under the total.
+- **How much a unit holds** comes from its size in Setup › Storage: 5×7×8 ft is 280 cu ft, a floor size like 10×10
+  ft counts 8 ft high (800 cu ft), or put the cubic feet ("250 cu ft"). A unit with no size it can read isn't
+  picked by itself (Setup › Storage says so under it), but it can be tapped.
+- **Held for it**: once the move is booked, its units are held for it until it goes in. They aren't free on the
+  Storage screen (a blue tile, "Held · in Dec 3", which opens the move), they aren't picked for another move, and
+  they can't be given to someone already in storage or removed in Setup. The Storage screen lists the moves
+  **Coming in**.
+- **Its job sheet** (Storage, near the end): "Into storage after this move: Unit #1, Unit #2 · $300 a month. They
+  hold 560 cu ft, for about 407 cu ft of things." Tap the units to change them; it goes in the job's activity. If a
+  unit was taken meanwhile, it says so and the unit comes off.
+- **When the move is done** (Complete or Paid), it goes into storage by itself: an office phone or computer opens
+  its storage account with its units at the prices quoted, billed from the move's last day, and the move points to
+  it. Every office phone gives it the same id, so it opens once. If every unit was taken, it waits until units are
+  tapped on its job sheet.
+- **The crew's card** says **Into storage: Unit #1, Unit #2** under the addresses, and the Jobs list tags it **Into
+  storage**. **The customer app** says "Into storage after the move: Unit #1 (5×7×8 ft), Unit #2 (5×7×8 ft), $300 a
+  month" under the day, until the account opens and shows instead.
+
 ## The account's job sheet
 
 - At the top: **Billed**, **Paid**, and **Owed** (**Past due** once a bill is 10 days old, or **Paid up**), with
