@@ -3735,9 +3735,11 @@ function custLd(S: J, job: J): J | null {
     net: Number(w.net) > 0 ? Math.round(Number(w.net)) : 0, cap: r2(L.cap), inter, usdot: String((S && S.usdot) || ""), mc: String((S && S.mcNo) || "") };
 }
 // Storage (batch 13, Nov 22): a customer's things in the company's warehouse are a storage account, a job with
-// d.jobType "storage" and status "storage" while they're in it (then "done" or "paid"). d.sto has the vaults, the rate
-// a vault a month and the first bill (the bills come on that day of each month, the 28th at the latest); each month's
-// bill is an extra "sm_<date>". The customer's copy (sto) is the app's stoCustInfo.
+// d.jobType "storage" and status "storage" while they're in it (then "done" or "paid"). The warehouse has units
+// (S.sto.units [{id, name "Unit #3", size, rate $ a month}]); d.sto has the account's units (vaults: their ids), each
+// one's price from the day it went in (prices), the rate an account from before unit prices pays for each, and the
+// first bill (the bills come on that day of each month, the 28th at the latest); each month's bill is an extra
+// "sm_<date>". The customer's copy (sto) is the app's stoCustInfo.
 export function stoIsC(job: J): boolean { return !!(job && job.d && job.d.jobType === "storage"); }
 const STO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 function stoDateKC(start: string, k: number): string {
@@ -3754,12 +3756,19 @@ export function custSto(S: J, job: J): J | null {
   if (!stoIsC(job)) return null;
   const s = (job.d && job.d.sto) || {}, units: J[] = S && S.sto && Array.isArray(S.sto.units) ? S.sto.units : [];
   const vaults: string[] = Array.isArray(s.vaults) ? s.vaults.map(String) : [], rate = r2(s.rate), start = String(s.start || ""), open = job.status === "storage";
-  const name = (id: string) => { const u = units.find((x: J) => x && x.id === id); return u ? String(u.name || "Vault") : "A removed vault"; };
+  const unitOf = (id: string): J => units.find((x: J) => x && x.id === id) || null;
+  // the first version's "Vault 3" is "Unit #3" (Richie, Nov 22: "Stop calling them vaults and call them units")
+  const name = (id: string) => { const u = unitOf(id); if (!u) return "A removed unit"; const n = String(u.name || "Unit"), m = /^Vault (\d+)$/.exec(n); return m && u.id === "v" + m[1] ? "Unit #" + m[1] : n; };
+  // what a unit costs them a month: its price from the day it went in; an account from before unit prices pays its
+  // rate; else the unit's price now (the app's stoPriceOf)
+  const prices: J = s.prices && typeof s.prices === "object" ? s.prices : {};
+  const price = (id: string) => { const p = prices[id]; if (p != null && p !== "") return r2(p); if (rate > 0) return rate; const u = unitOf(id); if (!u) return 0; const dflt = S.sto.rate != null && S.sto.rate !== "" ? S.sto.rate : 150; return r2(u.rate != null && u.rate !== "" ? u.rate : dflt); };
   const addr = String((S && S.sto && S.sto.addr) || "").trim() || String((S && S.shopAddress) || "").trim();
   const bills = vals(job.extras).filter((e: J) => e && /^sm_\d{4}-\d{2}-\d{2}$/.test(String(e.id || ""))).sort((a: J, b: J) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((e: J) => ({ from: String((e.sto && e.sto.from) || String(e.id).slice(3)), to: String((e.sto && e.sto.to) || ""), amt: r2(e.amt) }));
   return { since: String(s.since || start), start, day: Math.min(28, Number(start.slice(8, 10)) || 0), n: vaults.length, names: vaults.map(name).join(", "), rate,
-    monthly: r2(vaults.length * rate), next: open ? stoNextC(start, today()) : "", out: String(s.out || ""), addr, bills };
+    monthly: r2(vaults.reduce((a: number, id: string) => a + price(id), 0)), next: open ? stoNextC(start, today()) : "", out: String(s.out || ""), addr,
+    units: vaults.map((id: string) => ({ name: name(id), size: String((unitOf(id) || {}).size || ""), price: price(id) })), bills };
 }
 export function custCopy(org: string, S: J, job: J, o: { company: string; phone: string; paidC: number; pages?: Record<string, string> }): J {
   const d = job.d || {}, qt = job.quote || {}, c = job.cust || {}, crew: string[] = (job.assign && job.assign.crew) || [], kind = custKind(job);

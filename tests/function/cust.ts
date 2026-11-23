@@ -666,7 +666,7 @@ DB.docs = DB.docs.filter((x) => x.path !== "jobs/lb1" && x.path !== "jobs/pk1" &
 const todayUtc = new Date().toISOString().slice(0, 10);
 ok(fn.stoNextC("2026-01-31", "2026-02-28") === "2026-03-28" && fn.stoNextC("2026-12-02", "2026-12-02") === "2027-01-02" && fn.stoNextC("2026-12-02", "2026-12-01") === "2026-12-02" && fn.stoNextC("", "2026-12-01") === "",
   "the next storage bill: that day each month, the 28th at the latest, over the new year");
-settings.sto = { units: [{ id: "v1", name: "Vault 1" }, { id: "v2", name: "Vault 2" }, { id: "v3", name: "Vault 3" }], rate: 150, fee: 0, addr: "9 Dock Rd" };
+settings.sto = { units: [{ id: "v1", name: "Vault 1" }, { id: "v2", name: "Unit #2", size: "5x7x8 ft", rate: 150 }, { id: "v3", name: "Unit #3", size: "10x10 ft", rate: 200 }], rate: 150, fee: 0, addr: "9 Dock Rd" };
 putDoc(ORG, "org/settings", settings);
 const stoStart = "2026-09-02";
 putDoc(ORG, "jobs/st1", job("st1", { status: "storage", d: { name: "Priya Nair", phone: "512-555-0142", email: "priyanair@gmail.com", moveDate: "", time: "", from: "9 Dock Rd", to: "", jobType: "storage",
@@ -677,8 +677,14 @@ putDoc(ORG, "jobs/st1", job("st1", { status: "storage", d: { name: "Priya Nair",
   payments: { p1: { id: "p1", amt: 300, method: "Cash", date: "2026-09-03", ts: 3 } } }));
 r = await app("tok-priya", { action: "cust_list" });
 const stm = r.body.moves.find((m: any) => m.id === "st1");
-ok(stm && stm.status === "storage" && stm.sto && stm.sto.n === 2 && stm.sto.names === "Vault 1, Vault 2" && stm.sto.monthly === 300 && stm.sto.rate === 150 && stm.sto.since === "2026-09-01" && stm.sto.start === stoStart && stm.sto.day === 2 && stm.sto.addr === "9 Dock Rd",
-  "her storage account is in her app: Vault 1 and Vault 2, $300 a month, at the warehouse");
+ok(stm && stm.status === "storage" && stm.sto && stm.sto.n === 2 && stm.sto.names === "Unit #1, Unit #2" && stm.sto.monthly === 300 && stm.sto.rate === 150 && stm.sto.units[1].size === "5x7x8 ft" && stm.sto.units[0].price === 150 && stm.sto.since === "2026-09-01" && stm.sto.start === stoStart && stm.sto.day === 2 && stm.sto.addr === "9 Dock Rd",
+  "her storage account is in her app: Unit #1 (the first version's Vault 1) and Unit #2, $300 a month (from before unit prices, $150 each), at the warehouse");
+const stP = job("st2", { status: "storage", d: { name: "Priya Nair", phone: "512-555-0142", email: "priyanair@gmail.com", moveDate: "", time: "", from: "9 Dock Rd", to: "", jobType: "storage",
+    sto: { vaults: ["v2", "v3"], prices: { v3: 180 }, start: stoStart, since: stoStart, from: "", out: "", outJob: "" } },
+  quote: { total: 0, deposit: 0, crew: 0, hours: 0, nTrucks: 0, nte: 0, flat: true, kind: "storage", lines: [] }, costs: {}, crewNotes: {}, extras: {}, payments: {} });
+const cpP = fn.custSto(settings, stP);
+ok(cpP.monthly === 330 && cpP.units[0].name === "Unit #2" && cpP.units[0].price === 150 && cpP.units[1].size === "10x10 ft" && cpP.units[1].price === 180,
+  "each unit at its price: Unit #3 kept at $180 for her (it's $200 now), Unit #2 at its $150: $330 a month");
 ok(stm.sto.bills.length === 2 && stm.sto.bills[0].from === "2026-09-02" && stm.sto.bills[1].to === "2026-11-01" && stm.sto.next === fn.stoNextC(stoStart, todayUtc) && stm.bill.total === 600 && stm.bill.due === 300 && stm.forms.length === 0,
   "her copy: the bills, the next one (" + stm.sto.next + "), $300 owed, no forms");
 ok(fn.custSto(settings, job("q9")) === null && r.body.moves.find((m: any) => m.id === "q1").sto === null, "a move has no storage part");
