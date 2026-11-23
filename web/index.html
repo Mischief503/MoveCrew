@@ -183,6 +183,7 @@ button.vt{cursor:pointer}
 .vt em{font-style:normal;font-size:11.5px;line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vt em.vp{font-weight:600}
 .vt small{color:var(--text)}
+.refundbox{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:12px}.refundbox h3{font-size:16px;margin:0 0 4px}
 .vt.held{border-style:dotted;background:var(--infoSoft)}.vdot.held{border-style:dotted;background:var(--infoSoft)}
 .stoq{margin:14px 0 4px}.stoq h3{font-size:16px}.stoq .chips{margin-bottom:8px}
 .linkbtn{background:none;border:0;padding:8px 2px;margin:-8px 0;min-width:36px;color:inherit;font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
@@ -1836,6 +1837,10 @@ window.tallyPay={
   saved:function(id,vaultId,amount,nonce,tip){var b={action:'pay_saved',jobId:id,vaultId:vaultId,amount:amount,nonce:nonce};if(tip>0)b.tip=tip;return commsPost(b)},
   check:function(id,pi){return commsPost({action:'pay_check',jobId:id,pi:pi||''})},
   forget:function(vaultId){return commsPost({action:'pay_forget',vaultId:vaultId})},
+  // a refund from the app (batch 15): the payment's ledger id, the amount, why, and this tap's id (one refund however many times it's sent)
+  refund:function(id,pi,amount,reason,nonce){return commsPost({action:'pay_refund',jobId:id,pi:pi,amount:amount,reason:reason,nonce:nonce})},
+  // autopay (batch 15): charge a storage account's card on file for this bill, once
+  auto:function(id,bill){return commsPost({action:'pay_auto',jobId:id,bill:bill})},
   refresh:function(){Object.keys(watchers).forEach(function(k){if(k.indexOf('jobs|')===0||k.indexOf('vault|')===0)bump(k)})}
 };
 /* ---------- the membership each company pays MoveCrew, and MoveCrew admin (MoveCrew's own admins only) ---------- */
@@ -2193,6 +2198,7 @@ var OPTS=[
   {g:'office',k:'storage',t:'Storage',h:'Customers’ things in your warehouse between moves: Into storage on a quote (the move ends at your warehouse, with units picked to hold what’s moving), Put in storage on a move’s job sheet, a bill every month for their units, and Deliver from storage later. The units, their sizes and prices are in Setup › Storage.'},
   {g:'office',k:'drivers',t:'A driver for every truck',h:'Dispatch picks who drives each truck on a job. A truck with no driver shows as needing scheduling. Off: no drivers to pick.'},
   {g:'office',k:'dispatchPay',t:'Dispatch can take payments',h:'Dispatch can collect payments and send pay links.'},
+  {g:'office',k:'dispatchRefund',t:'Dispatch can give refunds',h:'Dispatch can refund a card payment from a job’s Payments. Off: only you do.',def:false},
   {g:'office',k:'rqOffice',def:false,t:'Office approves new quotes from the crew',h:'A crew lead’s new quote waits for the owner or dispatch to approve it, then the customer signs. Off: the customer’s signature is enough.'},
   {g:'office',k:'dispatchMoney',t:'Dispatch sees revenue',h:'The Revenue screen and what’s still owed. Off: dispatch schedules without the company’s totals.'}
 ];
@@ -3536,7 +3542,39 @@ function stoSweep(){
   });
   return ch;
 }
-function stoTick(){if(stoSweep())save()}
+function stoTick(){if(stoSweep())save();stoAutoTick()}
+/* ---------- autopay (batch 15): a card on file pays each storage bill by itself, turned on by the office with the
+   customer's OK (d.sto.autopay {vault, label}). It starts with the next bill: what's owed when it's turned on is
+   collected the usual way. An office phone or computer asks the server for each new bill (stoAutoTick); the server
+   charges what's owed then, once per bill however many ask, and writes how it went on the account (d.sto.autoTry). ---------- */
+function stoCardName(v){return v?(v.type==='bank'?'Bank':String(v.brand||'Card'))+' ending '+String(v.last4||''):'The card on file'}
+var STO_AUTO_ASKED={};
+function stoAutoTick(){
+  if(!window.tallyPay||!stoCanBill()||!opt('payVault')||!canCharge()||sync.mode!=='shared')return;
+  var t=todayISO();
+  state.jobs.forEach(function(j){
+    if(!stoIs(j))return;
+    var s=j.d.sto||{},ap=s.autopay;if(!ap||!ap.vault||balOf(j)<=0.004)return;
+    var b=stoBills(j).filter(function(e){return String(e.id).slice(3)<=t}).pop(),k=b&&j.id+'|'+b.id;
+    if(!b||(s.autoTry&&s.autoTry.bill===b.id)||STO_AUTO_ASKED[k])return;
+    STO_AUTO_ASKED[k]=1;
+    window.tallyPay.auto(j.id,b.id).then(function(r){if(r&&r.ok&&!r.nothing)window.tallyPay.refresh()}).catch(function(){delete STO_AUTO_ASKED[k]});
+  });
+}
+function stoAutoHtml(j){
+  if(!window.tallyPay||!opt('payVault')||!canCharge()||isCC()||!stoIs(j))return '';
+  var s=j.d.sto||{},ap=s.autopay,tr=s.autoTry,cards=stripeCards(j);
+  if(ap&&ap.vault){
+    var card=cards.filter(function(v){return v.id===ap.vault})[0],bad=tr&&tr.bill&&!tr.ok&&!tr.skip;
+    var last=tr&&tr.bill?(tr.skip?'It starts with the next bill.':tr.ok?'Paid the '+stoShort(String(tr.bill).slice(3))+' bill.':'Didn’t go through for the '+stoShort(String(tr.bill).slice(3))+' bill: '+String(tr.msg||'').replace(/\.$/,'')+'.'):'';
+    return '<div class="f" style="margin-top:10px"><span>Autopay</span><p style="margin:0"><b>'+esc(ap.label||stoCardName(card))+'</b> pays each bill by itself.'+(card?'':' <span style="color:var(--due)">That card isn’t on file now: turn autopay off, then pick another.</span>')+'</p>'+
+      (last?'<p class="hint" style="margin:4px 0 0'+(bad?';color:var(--due)':'')+'">'+esc(last)+'</p>':'')+
+      '<button class="btn sm ghost" style="margin-top:6px" data-act="sto:autooff">Turn autopay off</button></div>';
+  }
+  if(!cards.length)return '<p class="hint" style="margin:10px 0 0">Autopay: no card on file for '+esc(jobName(j))+'. Send a pay link with Keep the card on file, and that card can pay each bill by itself.</p>';
+  return '<div class="f" style="margin-top:10px"><span>Autopay: a card on file pays each bill by itself, with the customer’s OK</span><div class="chips" style="margin:0">'+
+    cards.map(function(v){var a=ui.armed==='auto:'+v.id;return '<button class="chip'+(a?' on':'')+'" data-act="sto:autoon" data-v="'+esc(v.id)+'">'+esc(a?'Tap again: '+stoCardName(v)+' pays each bill':stoCardName(v))+'</button>'}).join('')+'</div></div>';
+}
 // out of storage: no bills from that day on (the first month stays); 'done' while something's owed, else 'paid'
 function stoClose(j,out,why){
   var s=j.d.sto=Object.assign({},j.d.sto||{});s.out=out||todayISO();
@@ -3633,7 +3671,7 @@ function stoSheetHtml(j){
   return '<div class="sec" data-meta="'+esc(meta)+'"><h3>Storage account</h3>'+head+
     '<div class="f"><span>Units</span><div class="chips" style="margin:0">'+(chips||'<small>Every unit is in use. Add units in Setup › Storage.</small>')+'</div></div>'+
     (open?form:'')+billLine+
-    (rows?'<table class="lines" style="margin-top:8px">'+rows+'</table>':'<p class="hint" style="margin:8px 0 0">No bills yet.</p>')+
+    (rows?'<table class="lines" style="margin-top:8px">'+rows+'</table>':'<p class="hint" style="margin:8px 0 0">No bills yet.</p>')+stoAutoHtml(j)+
     '<details class="grp" style="margin-top:10px"><summary>Add a charge or credit</summary><div class="grid2 stack" style="margin-top:8px">'+fld('What it’s for','<input id="stoChL" placeholder="A late fee, a box taken out">','span2')+fld('Amount','<input id="stoChA" data-money="1" type="text" inputmode="numeric" autocomplete="off" placeholder="0.00">')+fld('Type','<select id="stoChT"><option value="charge">Charge</option><option value="credit">Credit</option></select>')+'</div><button class="btn" style="margin-top:6px" data-act="sto:charge">Add to the account</button></details>'+out+'</div>';
 }
 // a move's job sheet: Put in storage, or where its things went (or came from)
@@ -3704,8 +3742,15 @@ function stoCrewLine(j){var d=j.d||{},a=d.stoIn,b=d.stoOut;if(a&&a.words)return 
 // Today: storage bills past due (two on their own rows, more on one)
 function stoAlerts(){
   var L=stoAccounts().filter(function(j){return !j.test&&stoLate(j)}).sort(function(a,b){return stoDueSince(a)<stoDueSince(b)?-1:1});
+  // autopay that didn't go through on its newest bill, while it's still owed (and not past due: that row says it)
+  var A=state.jobs.filter(function(j){return !j.test&&stoAutoFailed(j)&&balOf(j)>0.004&&L.indexOf(j)<0})
+    .map(function(j){return alertRow('warn','Autopay didn’t go through: '+esc(jobName(j)),esc(String(j.d.sto.autoTry.msg||'The card wasn’t charged').replace(/\.$/,''))+' · <span class="money-due">'+money(balOf(j))+'</span> owed','job:open',j.id)});
+  return A.concat(stoLateAlerts(L));
+}
+function stoAutoFailed(j){var s=(stoIs(j)&&j.d.sto)||{},tr=s.autoTry;return !!s.autopay&&!!tr&&!tr.ok&&!tr.skip}
+function stoLateAlerts(L){
   if(!L.length)return [];
-  if(L.length<=2)return L.map(function(j){return alertRow('bad','Storage bill past due: '+esc(jobName(j)),'<span class="money-due">'+money(balOf(j))+'</span> owed · since '+esc(fmtDayShort(stoDueSince(j))),'job:open',j.id)});
+  if(L.length<=2)return L.map(function(j){return alertRow('bad','Storage bill past due: '+esc(jobName(j)),'<span class="money-due">'+money(balOf(j))+'</span> owed · since '+esc(fmtDayShort(stoDueSince(j)))+(stoAutoFailed(j)?' · autopay didn’t go through':''),'job:open',j.id)});
   return ['<button class="alert" data-act="tab" data-tab="jobs" data-f="storage"><span class="ic bad">$</span><span class="tx"><b>'+L.length+' storage accounts are past due</b><small>'+esc(namesLine(L))+' · '+money(L.reduce(function(a,j){return a+balOf(j)},0))+' owed</small></span><span class="go">›</span></button>'];
 }
 // Reports › Storage
@@ -3726,7 +3771,8 @@ function stoCustInfo(j,S){
   var s=stoOf(j),open=j.status==='storage';
   return {since:s.since,start:s.start,day:stoDayOf(s.start),n:s.vaults.length,names:stoWords(s.vaults,S),rate:s.rate,monthly:stoMonthly(j),next:open?stoNext(s.start,todayISO()):'',out:s.out,addr:stoAddr(S),
     units:s.vaults.map(function(id){var u=stoUnit(id,S);return {name:stoUnitName(id,S),size:u?String(u.size||''):'',price:stoPriceOf(j,id,S)}}),
-    bills:stoBills(j).map(function(e){return {from:stoBillFrom(e),to:String((e.sto||{}).to||''),amt:num(e.amt)}})};
+    bills:stoBills(j).map(function(e){return {from:stoBillFrom(e),to:String((e.sto||{}).to||''),amt:num(e.amt)}}),
+    autopay:j.d.sto&&j.d.sto.autopay&&j.d.sto.autopay.vault?{label:String(j.d.sto.autopay.label||'Your card on file')}:null};
 }
 /* ---------- the Storage screen (batch 13; Richie, Nov 22: "a storage tab that tells you what is available and what is
    taken. Who is paid and who owes") ----------
@@ -3839,7 +3885,8 @@ function custStoCard(m){
   var when=open?'<h2 class="cm-when">'+(o.since>todayISO()?'Going into storage ':'In storage since ')+esc(custLong(o.since))+'</h2>':'<h2 class="cm-when">Out of storage '+esc(custLong(o.out))+'</h2>';
   var where='<p class="cm-sub">'+esc(custStoUnits(o)+(o.addr?' at '+o.addr:''))+'</p>';
   var price=open?'<div class="cm-price"><b>'+money(o.monthly)+'</b><span>a month'+(o.n>1?' · '+stoUnitsWord(o.n):'')+(o.next?' · next bill '+esc(fmtDayShort(o.next)):'')+'</span></div>':'';
-  return '<section class="card cm-card">'+top+when+where+price+'</section>';
+  var auto=open&&o.autopay?'<p class="cm-sub" style="margin-top:6px">Autopay: '+esc(o.autopay.label)+' pays each bill.</p>':'';
+  return '<section class="card cm-card">'+top+when+where+price+auto+'</section>';
 }
 function custStoNext(m,due){
   var o=m.sto||{},open=m.status==='storage',out=[],add=function(st,t,sub,b){out.push(custStepHtml(st,t,sub,b))};
@@ -5189,7 +5236,7 @@ function renderSheet(){
   var bb=billBody(j);
   var lines=q.lines.map(function(l){return '<tr><td>'+esc(l.label)+'</td><td>'+(l.amt<0?'−':'')+money(Math.abs(l.amt))+'</td></tr>'}).join('')+(bb.it?'<tr class="sub"><td>Quote</td><td>'+money(q.total)+'</td></tr>':'')+bb.html+'<tr class="total"><td>'+(bb.it?'Bill':'Total')+'</td><td>'+money(totalOf(j))+'</td></tr>';
   var items=j.items.map(function(i){return esc(i.name)+' × '+i.qty}).join(', ')||'No items yet';
-  var pays=j.payments.map(function(p){return '<tr><td>'+esc(p.method)+' · '+esc(/^\d{4}-\d\d-\d\d$/.test(p.date||'')?fmtDate(p.date):p.date||'')+(p.pending?' · pending':'')+'</td><td>'+(p.amt||!(p.tip>0)?money(p.amt):'')+(p.tip>0?(p.amt?'<br>':'')+'<small>'+money(p.tip)+' tip for the crew</small>':'')+'</td></tr>'}).join('')||'<tr><td><small>No payments yet.</small></td><td></td></tr>';
+  var pays=j.payments.map(function(p){return '<tr><td>'+esc(p.method)+' · '+esc(/^\d{4}-\d\d-\d\d$/.test(p.date||'')?fmtDate(p.date):p.date||'')+(p.pending?' · pending':'')+(canRefund()&&refundLeft(j,p)>0?' <button class="linkbtn" data-act="sh:refund" data-pid="'+esc(p.id)+'">Refund</button>':'')+'</td><td>'+(p.amt||!(p.tip>0)?money(p.amt):'')+(p.tip>0?(p.amt?'<br>':'')+'<small>'+money(p.tip)+' tip for the crew</small>':'')+'</td></tr>'}).join('')||'<tr><td><small>No payments yet.</small></td><td></td></tr>';
   var photos=j.photos.map(function(p){return '<figure>'+(p.data?'<img src="'+p.data+'" alt="'+esc(p.kind)+' photo">':'<div class="phold">Loading photo</div>')+'<figcaption>'+esc(p.kind)+' · '+fmtStamp(p.ts)+'<br><button class="btn sm ghost" data-act="sh:rmphoto" data-pid="'+p.id+'">Remove</button></figcaption></figure>'}).join('');
   var acts=j.log.slice(-6).reverse().map(function(l){return '<div><small>'+fmtStamp(l.ts)+' · '+esc(l.ev)+'</small></div>'}).join('');
   var pend=formsPending(j);
@@ -5198,7 +5245,7 @@ function renderSheet(){
   var freq=formsRequired(j),fsec='<div class="sec" data-meta="'+(freq.length?(freq.length-pend.length)+' of '+freq.length+' signed':'')+'"><h3>Forms</h3>'+(signedRows+pendRows||'<small>No forms are required. Add them in Setup.</small>')+'</div>';
   // who takes payments follows Options (Dispatch can take payments; the ways to pay)
   var coll=canCollect(),recOk=coll&&opt('payCash');
-  var payHtml='<div class="sec" data-meta="'+money(paid)+' paid"><h3>Payments</h3><table class="lines">'+pays+'</table>'+
+  var payHtml='<div class="sec" data-meta="'+money(paid)+' paid"><h3>Payments</h3><table class="lines">'+pays+'</table>'+refundFormHtml(j)+
      (coll?'<button class="btn" style="margin-top:8px;width:100%" data-act="flow:open" data-id="'+j.id+'" data-who="Office">'+(['lead','quoted','booked'].indexOf(j.status)>=0?'Take a payment':pend.length?'Sign forms and collect payment':'Collect payment')+'</button>'+(opt('payLink')?officeLinkHtml(j):'')
        :'<p class="hint">The owner takes payments on this job.</p>')+
      (recOk?'<h3 style="margin:16px 0 6px;font-size:16px">Record a deposit, cash or check</h3>'+
@@ -5331,6 +5378,27 @@ function renderDispatch(){
 // who can take a customer's payment: the owner, and dispatch and crew leads unless Options turns it off
 function canCollect(){var r=state.ui.role;return r==='owner'||(r==='dispatch'&&opt('dispatchPay'))||(r==='lead'&&opt('leadPay'))}
 function canCharge(){var r=state.ui.role;return r==='owner'||r==='dispatch'||(r==='lead'&&opt('leadCharges'))}
+/* ---------- refunds from the app (batch 15, Nov 22; until then they were made on Stripe's or Square's own page and came
+   back by themselves): the owner, or dispatch with Options › Dispatch can give refunds, on a card payment's line ---------- */
+function canRefund(){var r=state.ui.role;return !!window.tallyPay&&!isCC()&&!previewing()&&(r==='owner'||(r==='dispatch'&&opt('dispatchRefund')))}
+// what of a card payment can still go back: it and its tip, less what the server's lines say was refunded or disputed
+// (its ledger has the last word)
+function refundLeft(j,p){
+  if(!p||!p.stripe||p.id!=='st_'+p.stripe||p.pending)return 0;
+  var get=function(pre){return (j.payments||[]).filter(function(x){return x.id===pre+p.stripe})[0]},rf=get('rf_'),dp=get('dp_'),rt=get('rt_');
+  return Math.max(0,round2(num(p.amt)+num(p.tip)+(rf?num(rf.amt):0)+(dp?num(dp.amt):0)+(rt?num(rt.tip):0)));
+}
+function refundTipLeft(j,p){var rt=(j.payments||[]).filter(function(x){return x.id==='rt_'+p.stripe})[0];return Math.max(0,round2(num(p.tip)+(rt?num(rt.tip):0)))}
+function refundFormHtml(j){
+  var R=ui.refund;if(!R||R.job!==j.id||!canRefund())return '';
+  var p=(j.payments||[]).filter(function(x){return x.id===R.pid})[0],left=refundLeft(j,p);if(!(left>0))return '';
+  var tipL=Math.min(left,refundTipLeft(j,p)),billL=round2(left-tipL),amt=R.amt!=null?R.amt:(billL>0?billL:left),go=ui.armed==='refund',why=R.why||'requested_by_customer';
+  return '<div class="refundbox" id="refundBox"><h3>Refund '+esc(String(p.method||'the card').replace(/ · test$/,''))+'</h3>'+
+    '<p class="hint" style="margin:0 0 8px">'+esc(money(left)+' of it can go back'+(tipL>0?', '+money(tipL)+' of that the crew’s tip. Past '+money(billL)+', a refund comes off their tip':'')+'. It goes back to the card and shows on their statement in 5 to 10 days.')+'</p>'+
+    '<div class="grid2">'+fld('Amount','<input id="rfAmt" data-money="1" type="text" inputmode="numeric" autocomplete="off" value="'+esc(num(amt).toFixed(2))+'">')+
+    fld('Why','<select id="rfWhy">'+[['requested_by_customer','Customer asked'],['duplicate','Charged twice'],['fraudulent','Fraud']].map(function(o){return '<option value="'+o[0]+'"'+(why===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>')+'</div>'+
+    '<div class="row" style="margin-top:8px"><button class="btn'+(go?' danger':'')+' grow" data-act="sh:refundgo" data-busy="1">'+esc(go?'Tap again to refund '+money(amt):'Refund')+'</button><button class="btn ghost" data-act="sh:refundx">Cancel</button></div></div>';
+}
 // Options › Photos before finishing: what's still missing ('' when nothing is, or the switch is off)
 function photosMissing(j){
   if(!opt('photosReq'))return '';
@@ -12529,6 +12597,27 @@ document.addEventListener('click',function(e){
     case 'sh:addpay':j=byId(ui.jobId);if(!j||!canCollect()||!$('#payMethod'))break;var amt=round2(moneyVal($('#payAmt')));if(addPayment(j,amt,$('#payMethod').value)){save();renderSheet();toast('Payment recorded.')}else toast(payLocked(j)?'Sign the required forms first.':'Enter an amount first.');break;
     case 'sh:rmphoto':j=byId(ui.jobId);j.photos=j.photos.filter(function(p){return p.id!==t.dataset.pid});save();renderSheet();break;
     case 'sto:f':ui.stoF=t.dataset.f;renderStorage();break;
+    case 'sh:refund':{var rfj=byId(ui.jobId);if(!rfj||!canRefund())break;ui.refund={job:rfj.id,pid:t.dataset.pid,nonce:'r'+uid()+uid()};ui.armed='';ui.open['sh:Payments']=true;renderSheet();
+      var rfb=$('#refundBox');if(rfb&&rfb.scrollIntoView)rfb.scrollIntoView({block:'nearest'});break}
+    case 'sh:refundx':ui.refund=null;ui.armed='';renderSheet();break;
+    case 'sh:refundgo':{var rgj=byId(ui.jobId),RF=ui.refund;if(!rgj||!RF||RF.job!==rgj.id||!canRefund()||pay.busy)break;
+      var rgp=(rgj.payments||[]).filter(function(x){return x.id===RF.pid})[0],rgl=refundLeft(rgj,rgp),rga=round2(moneyVal($('#rfAmt')));RF.amt=rga;RF.why=($('#rfWhy')||{}).value||'requested_by_customer';
+      if(!(rga>0)){toast('Enter an amount.');break}
+      if(rga>rgl+0.004){toast('That is more than the '+money(rgl)+' left of that payment.');break}
+      if(!armed('refund')){renderSheet();break}
+      payBusy(true,'Refunding…');
+      window.tallyPay.refund(rgj.id,rgp.stripe,rga,RF.why,RF.nonce).then(function(r){payBusy(false);toast((r&&r.message)||(r&&r.ok?'Refunded.':'The refund didn’t go through.'));if(r&&r.ok){ui.refund=null;window.tallyPay.refresh();renderSheet()}})
+        .catch(function(e){payBusy(false);toast('The refund didn’t go through: '+((e&&e.message)||'check the connection')+'.')});break}
+    case 'sto:autoon':{var aoj=byId(ui.jobId);if(!aoj||!stoIs(aoj)||!canCharge())break;var aov=state.vault.filter(function(x){return x.id===t.dataset.v})[0];if(!aov)break;
+      if(!armed('auto:'+aov.id)){renderSheet();break}
+      var aob=stoBills(aoj).filter(function(e){return String(e.id).slice(3)<=todayISO()}).pop();
+      aoj.d.sto=Object.assign({},aoj.d.sto,{autopay:{vault:aov.id,label:stoCardName(aov),by:myName()||'the office',at:Date.now()}});
+      // it starts with the next bill: what's owed now is collected the usual way
+      if(aob)aoj.d.sto.autoTry={bill:aob.id,at:Date.now(),ok:true,skip:true,msg:''};else delete aoj.d.sto.autoTry;
+      logEv(aoj,'Autopay on: '+stoCardName(aov)+' pays each bill'+(myName()?' · '+myName():''));save();renderSheet();
+      var aon=stoOpen(aoj)?stoNext(stoOf(aoj).start,todayISO()):'';toast('Autopay is on. '+stoCardName(aov)+' pays the next bill'+(aon?', '+fmtDayShort(aon):'')+'.');break}
+    case 'sto:autooff':{var afj=byId(ui.jobId);if(!afj||!stoIs(afj)||!canCharge())break;var afw=((afj.d.sto||{}).autopay||{}).label||'the card on file';afj.d.sto=Object.assign({},afj.d.sto);delete afj.d.sto.autopay;delete afj.d.sto.autoTry;
+      logEv(afj,'Autopay off ('+afw+')'+(myName()?' · '+myName():''));save();renderSheet();toast('Autopay is off.');break}
     case 'sto:plan':{var plj=byId(ui.jobId);if(!plj||!stoToIs(plj)||plj.d.stoIn||!canEditJobs())break;var plp=stoPlanOf(plj),plu=t.dataset.u,pli=plp.units.indexOf(plu);
       if(pli>=0){plp.units.splice(pli,1);delete plp.prices[plu]}
       else{if(stoUsedBy()[plu]||stoHeldBy(plj.id)[plu]){toast(stoUnitName(plu)+' was just taken.');renderSheet();break}plp.units.push(plu);plp.prices[plu]=round2(num((stoUnit(plu)||{}).rate))}
@@ -13150,7 +13239,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow,ldSync:ldSync,ldRateFor:ldRateFor,addrState:addrState,ldInter:ldInter,roadDays:roadDays,ldNow:ldNow,ldWeigh:ldWeigh,ldWeightBill:ldWeightBill,ldBilledLater:ldBilledLater,ldCustInfo:ldCustInfo,custLdHtml:custLdHtml,ldDayAlerts:ldDayAlerts,flowAmtNow:flowAmtNow,stoIs:stoIs,stoOf:stoOf,stoCfg:stoCfg,stoSweep:stoSweep,stoFrom:stoFrom,stoClose:stoClose,stoReopen:stoReopen,stoBills:stoBills,stoDueSince:stoDueSince,stoLate:stoLate,stoMonthly:stoMonthly,stoCustInfo:stoCustInfo,stoBillDates:stoBillDates,stoNext:stoNext,stoOutJob:stoOutJob,stoNewAcct:stoNewAcct,stoAlerts:stoAlerts,stoUsedBy:stoUsedBy,stoReportCard:stoReportCard,stoSetVaults:stoSetVaults,stoPriceOf:stoPriceOf,stoLock:stoLock,stoUnitLine:stoUnitLine,stoCap:stoCap,stoSuggest:stoSuggest,stoPlanFor:stoPlanFor,stoPlanOf:stoPlanOf,stoHeldBy:stoHeldBy,stoOpenFor:stoOpenFor,stoToIs:stoToIs,stoPlanCust:stoPlanCust,stoSweep:stoSweep,sheetKindLine:sheetKindLine,stoCrewLine:stoCrewLine,stoNewJob:stoNewJob,stoFree:stoFree,custDetailsHtml:custDetailsHtml,newJob:newJob,ldSheetSet:ldSheetSet,paidOf:paidOf,addPayment:addPayment};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow,ldSync:ldSync,ldRateFor:ldRateFor,addrState:addrState,ldInter:ldInter,roadDays:roadDays,ldNow:ldNow,ldWeigh:ldWeigh,ldWeightBill:ldWeightBill,ldBilledLater:ldBilledLater,ldCustInfo:ldCustInfo,custLdHtml:custLdHtml,ldDayAlerts:ldDayAlerts,flowAmtNow:flowAmtNow,stoIs:stoIs,stoOf:stoOf,stoCfg:stoCfg,stoSweep:stoSweep,stoFrom:stoFrom,stoClose:stoClose,stoReopen:stoReopen,stoBills:stoBills,stoDueSince:stoDueSince,stoLate:stoLate,stoMonthly:stoMonthly,stoCustInfo:stoCustInfo,stoBillDates:stoBillDates,stoNext:stoNext,stoOutJob:stoOutJob,stoNewAcct:stoNewAcct,stoAlerts:stoAlerts,stoUsedBy:stoUsedBy,stoReportCard:stoReportCard,stoSetVaults:stoSetVaults,stoPriceOf:stoPriceOf,stoLock:stoLock,stoUnitLine:stoUnitLine,stoCap:stoCap,stoSuggest:stoSuggest,canRefund:canRefund,refundLeft:refundLeft,stoAutoTick:stoAutoTick,stoCardName:stoCardName,custStoCard:custStoCard,stoTick:stoTick,stripeCards:stripeCards,stoPlanFor:stoPlanFor,stoPlanOf:stoPlanOf,stoHeldBy:stoHeldBy,stoOpenFor:stoOpenFor,stoToIs:stoToIs,stoPlanCust:stoPlanCust,stoSweep:stoSweep,sheetKindLine:sheetKindLine,stoCrewLine:stoCrewLine,stoNewJob:stoNewJob,stoFree:stoFree,custDetailsHtml:custDetailsHtml,newJob:newJob,ldSheetSet:ldSheetSet,paidOf:paidOf,addPayment:addPayment};
 })();
 </script>
 </body>

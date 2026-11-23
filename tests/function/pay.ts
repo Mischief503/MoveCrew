@@ -67,6 +67,18 @@ function restMock(method: string, u: URL, body: any, prefer: string) {
     const name = parts[parts.length - 1];
     if (name === "pay_record") return { status: 200, body: payRecord(body) };
     if (name === "pay_reopen") return { status: 200, body: payReopen(body) };
+    // doc_patch: a JSON merge patch onto a document (RFC 7386: null takes a key out), as supabase-payments.sql does it
+    if (name === "doc_patch") {
+      const row = DB.docs.find((r) => r.org_id === body.o && r.path === body.p);
+      if (!row) return { status: 200, body: false };
+      const merge = (t: any, p: any): any => {
+        const r = t && typeof t === "object" && !Array.isArray(t) ? clone(t) : {};
+        Object.keys(p).forEach((k) => { const v = p[k]; if (v && typeof v === "object" && !Array.isArray(v)) r[k] = merge(r[k], v); else if (v === null) delete r[k]; else r[k] = clone(v); });
+        return r;
+      };
+      row.data = merge(row.data, body.patch);
+      return { status: 200, body: true };
+    }
     return { status: 404, body: { message: "no function" } };
   }
   const table = parts.pop()!;
@@ -226,6 +238,22 @@ function stripeApi(method: string, path: string, p: Record<string, string>, h: a
     return reply(200, piView(pi, exp));
   }
   if (method === "GET" && path === "/v1/disputes") return reply(200, { data: clone(ST.disputes.filter((d: any) => d.payment_intent === p.payment_intent)) });
+  if (method === "POST" && path === "/v1/refunds") {
+    const key = h["Idempotency-Key"];
+    if (key && ST.idem[key]) return clone(ST.idem[key]);
+    const pi = ST.intents[p.payment_intent];
+    if (!pi || !!pi.livemode !== live) return reply(404, { error: { type: "invalid_request_error", message: "No such payment_intent: '" + p.payment_intent + "'" } });
+    const ch = ST.charges[pi.latest_charge];
+    if (!ch) return reply(400, { error: { type: "invalid_request_error", message: "This PaymentIntent does not have a successful charge to refund." } });
+    const left = ch.amount - ch.amount_refunded, amt = p.amount ? +p.amount : left;
+    if (amt > left) return reply(400, { error: { type: "invalid_request_error", code: "amount_too_large", message: "Refund amount is greater than unrefunded amount on charge." } });
+    ch.amount_refunded += amt;
+    const rf = { id: "re_" + id(), object: "refund", amount: amt, payment_intent: pi.id, charge: ch.id, status: "succeeded", reason: p.reason || null, metadata: unflat(p, "metadata") };
+    ST.refunds = (ST.refunds || []).concat([rf]);
+    const out = reply(200, rf);
+    if (key) ST.idem[key] = clone(out);
+    return out;
+  }
   if (method === "POST" && (m = /^\/v1\/payment_methods\/(\w+)\/detach$/.exec(path))) {
     const pm = PMS[m[1]];
     if (!pm || !pm.customer) return reply(400, { error: { type: "invalid_request_error", message: "The payment method you provided is not attached to a customer so detachment is impossible." } });
@@ -994,6 +1022,98 @@ const stray = { id: "pi_stray", object: "payment_intent", amount: 500, currency:
 ST.intents.pi_stray = stray;
 h = await hook(piEvent(stray));
 ok(h.status === 200 && !DB.pay_log.some((x) => x.pi === "pi_stray"), "a payment naming a company that doesn't exist is ignored, not retried forever");
+
+/* ---------- refunds from the app (batch 15) ---------- */
+{
+  putDoc(ORG, "jobs/j30", job("j30", { payments: {} }));
+  r = await app("tok-owner", { action: "pay_link", org: ORG, jobId: "j30", amount: 500 });
+  const pi30 = customerPays(sessionOf(r.body.url).id, "pm_apple");
+  await hook(piEvent(pi30));
+  ok(doc("jobs/j30").payments["st_" + pi30.id]?.amt === 500, "a $500 card payment on j30 to refund");
+  const refund = (tok: string, x: any) => app(tok, { action: "pay_refund", org: ORG, jobId: "j30", pi: pi30.id, reason: "requested_by_customer", nonce: "tap-r000001", ...x });
+  r = await refund("tok-owner", { amount: 100, reason: "duplicate" });
+  let jr = doc("jobs/j30"), led = DB.pay_log.find((x) => x.pi === pi30.id);
+  ok(r.body.ok && /^Refunded \$100\.00 to .+\. It shows on their statement in 5 to 10 days\.$/.test(r.body.message) && !/ · test/.test(r.body.message), "the owner refunds $100: " + r.body.message);
+  ok((ST.refunds || []).length === 1 && ST.refunds[0].amount === 10000 && ST.refunds[0].reason === "duplicate" && ST.refunds[0].metadata.tally_by === "Owner" && ST.refunds[0].metadata.tally_job === "j30",
+    "Stripe gives back $100 of that payment, why, and who");
+  ok(jr.payments["rf_" + pi30.id]?.amt === -100 && led.refunded_cents === 10000 && logs("j30").some((e) => /^Refunded \$100\.00 of the \$500\.00 payment/.test(e)),
+    "on the bill at once: its own line taking $100 off, in the ledger and the job's activity");
+  r = await refund("tok-owner", { amount: 100, reason: "duplicate" });
+  ok(r.body.ok && ST.refunds.length === 1 && DB.pay_log.find((x) => x.pi === pi30.id).refunded_cents === 10000, "the same tap sent again gives nothing back twice");
+  r = await refund("tok-owner", { amount: 450, nonce: "tap-r000002" });
+  ok(!r.body.ok && r.body.message === "That is more than the $400.00 left of that payment." && ST.refunds.length === 1, "more than is left: refused");
+  r = await refund("tok-dispatch", { amount: 50, nonce: "tap-r000003" });
+  ok(r.status === 403 && r.body.message === "Only the owner gives refunds in this company.", "dispatch: no refunds to start");
+  putDoc(ORG, "org/settings", { ...doc("org/settings"), opt: { ...(doc("org/settings").opt || {}), dispatchRefund: true } });
+  r = await refund("tok-dispatch", { amount: 50, nonce: "tap-r000003" });
+  ok(r.body.ok && DB.pay_log.find((x) => x.pi === pi30.id).refunded_cents === 15000 && ST.refunds[1].metadata.tally_by === "Dispatch", "with Options › Dispatch can give refunds on, dispatch can");
+  r = await refund("tok-marcus", { amount: 10, nonce: "tap-r000004" });
+  ok(r.status === 403, "a crew lead can't");
+  r = await refund("tok-owner", { amount: 10, nonce: "x" });
+  ok(!r.body.ok && r.body.message === "Try again.", "a tap without its id is refused");
+  r = await refund("tok-owner", { amount: 10, pi: "pi_999999", nonce: "tap-r000005" });
+  ok(!r.body.ok && r.body.message === "That payment isn't on this job.", "a payment that isn't on this job");
+  DB.pay_log.push({ pi: "pi_clearing", org_id: ORG, job_id: "j30", amount_cents: 20000, refunded_cents: 0, disputed_cents: 0, status: "processing", source: "link", method: "Bank ••6789", livemode: false, account: "" });
+  r = await refund("tok-owner", { amount: 10, pi: "pi_clearing", nonce: "tap-r000006" });
+  ok(!r.body.ok && /hasn't cleared yet/.test(r.body.message), "a bank payment still clearing waits");
+  r = await refund("tok-owner", { amount: 350, nonce: "tap-r000007" });
+  ok(r.body.ok && DB.pay_log.find((x) => x.pi === pi30.id).refunded_cents === 50000 && doc("jobs/j30").payments["rf_" + pi30.id]?.amt === -500, "the rest: all $500 back");
+  r = await refund("tok-owner", { amount: 1, nonce: "tap-r000008" });
+  ok(!r.body.ok && r.body.message === "That payment has been given back already.", "nothing left to give back");
+  putDoc(ORG, "org/settings", { ...doc("org/settings"), opt: { ...(doc("org/settings").opt || {}), dispatchRefund: false } });
+}
+
+/* ---------- autopay for storage (batch 15) ---------- */
+{
+  const yday = new Date(Date.now() - 864e5).toISOString().slice(0, 10), tmr = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
+  // one of Priya's cards still on file (not the test cards that ask for approval or are declined)
+  const pc = DB.pay_cards.find((x) => x.customer_id === PRIYA() && x.pm_id && ["pm_auth", "pm_decline"].indexOf(x.pm_id) < 0 && doc("vault/" + x.id));
+  ok(!!pc, "Priya has a card on file for autopay");
+  const acct = (id: string, over: any = {}) => ({ id, status: "storage", createdAt: Date.now() - 40 * 864e5,
+    d: { name: "Priya Nair", phone: "512-555-0142", email: "priya@example.com", jobType: "storage", moveDate: "", time: "",
+      sto: { vaults: ["v1"], prices: { v1: 150 }, start: yday, since: yday, from: "", out: "", outJob: "", autopay: { vault: pc.id, label: "Visa ending 4242", by: "Owner", at: 1 } } },
+    quote: { total: 0 }, assign: { truckId: "", crew: [] }, signed: {}, payments: {}, materials: {}, log: {},
+    extras: { ["sm_" + yday]: { id: "sm_" + yday, label: "Storage: Unit #1", amt: 150, ts: 1 } }, ...over });
+  putDoc(ORG, "jobs/s30", acct("s30"));
+  const auto = (tok: string, jobId: string, bill: string) => app(tok, { action: "pay_auto", org: ORG, jobId, bill });
+  const autoIntents = () => Object.values(ST.intents).filter((x: any) => /^auto:/.test(String(x.metadata && x.metadata.tally_src || ""))).length;
+  r = await auto("tok-owner", "s30", "sm_" + yday);
+  let a = doc("jobs/s30"), row = DB.pay_log.find((x) => x.job_id === "s30");
+  ok(r.body.ok && r.body.tried === true && /^Charged \$150\.00 to /.test(r.body.message), "the bill: the card on file is charged what's owed, $150: " + r.body.message);
+  ok(row && row.source === "auto:sm_" + yday && row.status === "succeeded" && row.amount_cents === 15000, "the ledger knows it was autopay, for that bill");
+  const line: any = Object.values(a.payments).find((x: any) => x && x.stripe);
+  ok(line && line.amt === 150 && / \(autopay\) · test$/.test(line.method) && a.status === "storage", "on the account: $150 paid, (autopay) — and it stays in storage");
+  ok(a.d.sto.autoTry && a.d.sto.autoTry.bill === "sm_" + yday && a.d.sto.autoTry.ok === true && !("skip" in a.d.sto.autoTry) && a.d.sto.autopay.vault === pc.id && a.d.sto.vaults[0] === "v1",
+    "how it went is on the account (and the rest of its storage is as it was)");
+  const n1 = autoIntents();
+  r = await auto("tok-dispatch", "s30", "sm_" + yday);
+  ok(r.body.tried === true && /already ran/.test(r.body.message) && autoIntents() === n1, "another office phone asking for the same bill: no second charge");
+  r = await auto("tok-marcus", "s30", "sm_" + yday);
+  ok(r.status === 403, "only the office runs autopay");
+  r = await auto("tok-owner", "s30", "sm_" + tmr);
+  ok(!r.body.ok && r.body.message === "That bill isn't due.", "a bill that isn't there yet");
+  r = await auto("tok-owner", "j30", "sm_" + yday);
+  ok(!r.body.ok && r.body.message === "That isn't a storage account.", "a move isn't a storage account");
+  putDoc(ORG, "jobs/s31", acct("s31", { d: { ...acct("s31").d, sto: { ...acct("s31").d.sto, autopay: undefined } } }));
+  r = await auto("tok-owner", "s31", "sm_" + yday);
+  ok(!r.body.ok && r.body.message === "Autopay is off on this account.", "autopay off: nothing");
+  // a declined card: said once, on the account and in its activity, and not tried again for that bill
+  PMS["pm_decline"].customer = PRIYA();
+  putDoc(ORG, "vault/st_pm_decline", { id: "st_pm_decline", cust: "5125550142", type: "card", brand: "Visa", last4: PMS["pm_decline"].card.last4, via: "stripe", live: false });
+  putDoc(ORG, "jobs/s32", acct("s32", { d: { ...acct("s32").d, sto: { ...acct("s32").d.sto, autopay: { vault: "st_pm_decline", label: "Visa ending 0002" } } } }));
+  r = await auto("tok-owner", "s32", "sm_" + yday);
+  a = doc("jobs/s32");
+  ok(!r.body.ok && r.body.tried === true && /declined: not enough money on the card/.test(r.body.message) && a.d.sto.autoTry.ok === false && /declined/.test(a.d.sto.autoTry.msg) &&
+    logs("s32").some((e) => e.indexOf("Autopay didn't go through for the " + yday + " bill: The card was declined: not enough money on the card") === 0), "declined: said on the account and in its activity");
+  const n2 = autoIntents();
+  r = await auto("tok-owner", "s32", "sm_" + yday);
+  ok(r.body.tried === true && !r.body.ok && autoIntents() === n2, "and not tried again for that bill");
+  putDoc(ORG, "jobs/s33", acct("s33", { payments: { c1: { id: "c1", amt: 150, method: "Cash", date: yday, ts: 2 } } }));
+  r = await auto("tok-owner", "s33", "sm_" + yday);
+  ok(r.body.ok && r.body.nothing === true && !DB.pay_log.some((x) => x.job_id === "s33"), "paid already: nothing to charge");
+  const cs = fn.custSto(doc("org/settings"), doc("jobs/s30"));
+  ok(cs && cs.autopay && cs.autopay.label === "Visa ending 4242" && fn.custSto(doc("org/settings"), doc("jobs/s31")).autopay === null, "the customer's copy says which card pays");
+}
 
 /* ---------- routing ---------- */
 const post = await fn.handle(new Request(BASE + "/stripe", { method: "GET" }));

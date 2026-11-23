@@ -127,10 +127,27 @@ units: 12 to start, Unit #1 to Unit #12, each 5×7×8 ft at $150 a month. Each r
 is the unit's name, size and price, changed right in the list; **Add** a unit with its name (Unit #13 when left
 blank), size and price; remove one (×) while it's free. A unit in use says whose it is.
 
+## Autopay
+
+Batch 15 (Nov 22). A storage account's card on file can pay each bill by itself, with the customer's OK. On the
+account (Storage account, under the bills): **Autopay: a card on file pays each bill by itself**, then the customer's
+card (tap twice). It starts with the next bill: what's owed when it's turned on is collected the usual way (Collect
+payment). From then on, when a bill is made, the office's phone or computer asks the server to charge that card what's
+owed, and the server does it once for that bill, however many office phones ask. The payment shows on the account as
+"Visa ending 4242 (autopay)".
+
+- No card on file yet: send a pay link with **Keep the card on file** (or the customer pays in their app and keeps it).
+- It didn't go through (a declined card, an expired one): the account says why, Today shows **Autopay didn't go
+  through** (or says so on the past-due row), and it isn't tried again for that bill. Collect payment, or send a pay
+  link. The next bill is tried as usual.
+- **Turn autopay off** on the account any time. The customer app says "Autopay: Visa ending 4242 pays each bill."
+- It needs the hosted MoveCrew (the website, Android or Windows) with Stripe or Square, and Options › Cards on file.
+  Until the nightly run comes with messages (batch 14), a bill is made, and charged, when someone in the office opens
+  MoveCrew that day or after.
+
 ## Not in this batch
 
 - The bills aren't texted or emailed to the customer on their own yet: they see them and pay in the customer app,
   and the office can send a pay link from the account. Monthly bill texts and emails come with messages (batch 14).
 - Storage by the cubic foot or by the pallet, late fees, and partial pickups (some things out, the rest stays) are
   done by hand for now: the units, a customer's prices, and Add a charge or credit on the account.
-- Card on file charged every month (autopay) comes with payments (batch 15).

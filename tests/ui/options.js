@@ -28,7 +28,7 @@ const dayISO = (n) => { const d = new Date(); d.setDate(d.getDate() + (n || 0));
   const rows = $$('#setList [data-act="set:open"]').map((b) => b.dataset.sec);
   ok(rows[0] === 'options' && ['company', 'rates', 'mats', 'catalog', 'fleet', 'employees', 'roles', 'clock', 'forms', 'fields', 'sources', 'bid', 'pay', 'vault', 'comms', 'data'].every((s) => rows.includes(s)), L('Setup lists Options first, then every section: ' + rows.join(', ')));
   ok(['Your company', 'Pricing', 'People', 'Jobs and paperwork', 'Payments and texts', 'Data'].every((g) => $$('#setList .glabel').some((x) => x.textContent === g)), L('in groups'));
-  ok(/52 of 56 switches on/.test($('[data-sec="options"]').textContent) && /\$140\/h for 2 movers · 20-mile local radius · 3 h minimum/.test($('[data-sec="rates"]').textContent), L('each row says how it is set: "52 of 56 switches on", the rate card in a line'));
+  ok(/52 of 57 switches on/.test($('[data-sec="options"]').textContent) && /\$140\/h for 2 movers · 20-mile local radius · 3 h minimum/.test($('[data-sec="rates"]').textContent), L('each row says how it is set: "52 of 57 switches on", the rate card in a line'));
   ok(!$('details.acc.card') && !$('input[data-s="rates.r2"]'), L('no section is open on the list itself'));
   const q = $('#setQ'); q.value = 'deposit'; q.dispatchEvent(new w.Event('input', { bubbles: true })); await sleep(5);
   ok(!!$('#setList input[role="switch"][data-s="opt.deposit"]') && !!$('#setList [data-act="set:open"][data-sec="rates"]') && !$('#setList [data-sec="fleet"]'), L('search "deposit" shows the Deposit switch itself and the Rate card, nothing else'));
@@ -43,12 +43,12 @@ const dayISO = (n) => { const d = new Date(); d.setDate(d.getDate() + (n || 0));
   /* ---------------- Options: every switch, its number, the count ---------------- */
   click('[data-act="set:open"][data-sec="options"]'); await sleep(10);
   const sws = $$('#view input[role="switch"]');
-  ok(sws.length === 56 && $$('#view .optgrp h3').map((h) => h.textContent).join('|') === 'Crew and field|Billing out|Time clock|Quotes and pricing|Paperwork|Payments|Customer app|Texts|Office', L('56 switches in 9 groups (Move requests from customers under Texts since Nov 7; Follow-up texts for quotes and New leads from your website since Nov 14; Labor-only jobs, Packing days and Invoices since Nov 21; Moves over more than one day since Nov 22; Damage claims, Truck reminders and Damage reports from customers since Nov 22; Long-distance moves since Nov 22, later; Storage since Nov 22, evening)'));
-  ok(sws.filter((i) => !i.checked).map((i) => i.dataset.s).join() === 'opt.photosReq,opt.tax,opt.salesFollow,opt.rqOffice', L('all on to start except Photos before finishing, Sales tax (no tax % set), Follow-up texts for quotes and Office approves new quotes from the crew'));
+  ok(sws.length === 57 && $$('#view .optgrp h3').map((h) => h.textContent).join('|') === 'Crew and field|Billing out|Time clock|Quotes and pricing|Paperwork|Payments|Customer app|Texts|Office', L('57 switches in 9 groups (Move requests from customers under Texts since Nov 7; Follow-up texts for quotes and New leads from your website since Nov 14; Labor-only jobs, Packing days and Invoices since Nov 21; Moves over more than one day since Nov 22; Damage claims, Truck reminders and Damage reports from customers since Nov 22; Long-distance moves since Nov 22, later; Storage since Nov 22, evening; Dispatch can give refunds since Nov 22, night)'));
+  ok(sws.filter((i) => !i.checked).map((i) => i.dataset.s).join() === 'opt.photosReq,opt.tax,opt.salesFollow,opt.dispatchRefund,opt.rqOffice', L('all on to start except Photos before finishing, Sales tax (no tax % set), Follow-up texts for quotes, Dispatch can give refunds and Office approves new quotes from the crew'));
   const dep = $('input[data-s="depositPct"]');
   ok(dep && !dep.closest('.optn').hidden && dep.value === '25', L('a switch that needs a number shows it under it (Deposit 25%)'));
   flip('opt.deposit', false); await sleep(5);
-  ok(S.opt.deposit === false && dep.closest('.optn').hidden && dep.closest('.opt').classList.contains('off') && /51 of 56 on/.test($('#optCount').textContent), L('switched off: saved, its number hides, and the count drops'));
+  ok(S.opt.deposit === false && dep.closest('.optn').hidden && dep.closest('.opt').classList.contains('off') && /51 of 57 on/.test($('#optCount').textContent), L('switched off: saved, its number hides, and the count drops'));
   flip('opt.deposit', true); await sleep(5);
   ok(S.opt.deposit === true && !dep.closest('.optn').hidden, L('and back on'));
   ok(!!$('input[role="switch"][data-s="comms.alerts.tomorrow"]') && !!$('input[role="switch"][data-s="payMin"]') && !!$('input[role="switch"][data-s="nteCap"]'), L('older settings sit here too (texts, minimum pay, not-to-exceed)'));
@@ -61,7 +61,7 @@ const dayISO = (n) => { const d = new Date(); d.setDate(d.getDate() + (n || 0));
   click('[data-act="more:open"]'); await sleep(5);
   ok($$('#more .glabel').map((g) => g.textContent).join('|') === 'Work|Company|You' && !!$('#more .sosrow'), L('More: Work, Company, You, and Truck down apart'));
   click('#more [data-act="more:go"][data-sec="options"]'); await sleep(15);
-  ok(T.ui.tab === 'settings' && T.ui.setSec === 'options' && $$('#view input[role="switch"]').length === 56, L('More › Options opens Setup › Options'));
+  ok(T.ui.tab === 'settings' && T.ui.setSec === 'options' && $$('#view input[role="switch"]').length === 57, L('More › Options opens Setup › Options'));
 
   /* ---------------- the quote's switches ---------------- */
   const base = blank({ miles: '8', flights: '2', pack: true, items: { boxm: 40, sofa3: 1 } });

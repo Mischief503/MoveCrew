@@ -12,7 +12,8 @@ through Square without anyone choosing anything:
 - **Pay links** (the QR code and the text) open Square's own payment page, with the ways to pay the company has
   turned on in Square (Apple Pay and Google Pay among them).
 - **The customer app's** Pay opens Square's page too, with the tip for the crew as its own line.
-- **Refunds and disputes** made in Square come back onto the job by themselves.
+- **Refunds and disputes** made in Square come back onto the job by themselves. Refunds can be given from MoveCrew too
+  (the job's Payments, **Refund** on the card payment), through the same Square account.
 
 The money goes to the company's Square account; MoveCrew takes no cut, and Square's own fees apply. The
 owner can switch back to Stripe in Setup › Payments (**Use Stripe instead**) without disconnecting Square, and

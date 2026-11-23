@@ -1509,7 +1509,7 @@ export async function recordIntent(pi0: J, acct = ""): Promise<J> {
   const pm = pi.payment_method && typeof pi.payment_method === "object" ? pi.payment_method : null;
   const ch = pi.latest_charge && typeof pi.latest_charge === "object" ? pi.latest_charge : null;
   const status = String(pi.status || ""), live = !!pi.livemode, paidNow = status === "succeeded" || status === "processing";
-  const label = methodLabel(pm) + (md.tally_src === "link" ? " (pay link)" : md.tally_src === "cust" ? " (customer app)" : "") + (live ? "" : " · test");
+  const label = methodLabel(pm) + (md.tally_src === "link" ? " (pay link)" : md.tally_src === "cust" ? " (customer app)" : /^auto:/.test(String(md.tally_src || "")) ? " (autopay)" : "") + (live ? "" : " · test");
   const amtC = status === "succeeded" ? (Number(pi.amount_received) || Number(pi.amount) || 0) : (Number(pi.amount) || 0);
   const refunded = paidNow && ch ? Math.min(amtC, Number(ch.amount_refunded) || 0) : 0;
   const dispute = paidNow && ch && ch.disputed ? await disputeOf(pi.id, acct) : { cents: 0, lost: false };
@@ -2121,7 +2121,7 @@ export async function sqRecord(p: J, row: J, o: J = {}): Promise<J> {
   // a payment on a company's Square account only ever lands on that company's jobs
   if (row.org_id !== org) return { ok: false, skipped: "other-account" };
   const status = SQ_STATUS[String(p.status || "")] || "canceled", live = !!row.livemode;
-  const label = sqLabel(p) + (ctx.src === "link" ? " (pay link)" : ctx.src === "cust" ? " (customer app)" : "") + (live ? "" : " · test");
+  const label = sqLabel(p) + (ctx.src === "link" ? " (pay link)" : ctx.src === "cust" ? " (customer app)" : /^auto:/.test(String(ctx.src || "")) ? " (autopay)" : "") + (live ? "" : " · test");
   const tot = p.total_money && p.total_money.amount != null ? Number(p.total_money.amount) : (Number(p.amount_money && p.amount_money.amount) || 0) + (Number(p.tip_money && p.tip_money.amount) || 0);
   const amtC = Math.max(0, Math.round(tot || 0)), refunded = Math.max(0, Math.round(Number(p.refunded_money && p.refunded_money.amount) || 0));
   const look = status === "succeeded" && (o.disputes || Number(ctx.held) > 0);
@@ -2967,8 +2967,88 @@ export async function payIntent(org: string, me: J, jobId: string, b: J): Promis
   return res || { ok: false, message: BUSY };
 }
 
-// Charge a card kept on file for this job's customer.
-export async function paySaved(org: string, me: J, jobId: string, b: J): Promise<J> {
+// Refunds from the app (batch 15, Nov 22; until then they were made on Stripe's or Square's own page and came back by
+// themselves). The owner, or dispatch with Options › Dispatch can give refunds, gives back all or part of a card payment
+// on this job, through whichever processor took it, the payment's own account. It comes back through writeDown the
+// way one made there does: its own line on the bill taking money off (the bill's part first, then the crew's tip),
+// and a Paid job is owed again. One refund however many times a tap is sent: the key names the payment, the amount
+// and the tap.
+export const REFUND_WHY: Record<string, string> = { requested_by_customer: "The customer asked", duplicate: "Charged twice", fraudulent: "Fraud" };
+export async function payRefund(org: string, me: J, jobId: string, b: J): Promise<J> {
+  const S = await getDoc(org, "org/settings");
+  if (!(me.role === "owner" || (me.role === "dispatch" && optOn(S, "dispatchRefund")))) {
+    return { ok: false, status: 403, message: "Only the owner gives refunds in this company." };
+  }
+  const pi = String(b.pi || ""), amt = cents(b.amount), nonce = String(b.nonce || "");
+  if (!/^(pi_[A-Za-z0-9_]{1,80}|sq_[A-Za-z0-9_-]{4,80})$/.test(pi)) return { ok: false, message: "Pick a card payment." };
+  if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
+  if (!/^[A-Za-z0-9_-]{6,40}$/.test(nonce)) return { ok: false, message: "Try again." };
+  const why = REFUND_WHY[String(b.reason || "")] ? String(b.reason) : "requested_by_customer", by = who(me);
+  if (await tooManyPays(org, by)) return { ok: false, message: TOO_MANY };
+  const res = await withJobLock(org, jobId, async (): Promise<J> => {
+    const row = ((await rest("GET", "pay_log?select=*&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&pi=eq." + q(pi) + "&limit=1")) || [])[0];
+    if (!row) return { ok: false, message: "That payment isn't on this job." };
+    if (row.status !== "succeeded") {
+      return { ok: false, message: row.status === "processing" ? "That payment hasn't cleared yet. Refund it once it has." : "That payment didn't go through, so there's nothing to give back." };
+    }
+    const left = (Number(row.amount_cents) || 0) - (Number(row.refunded_cents) || 0) - (Number(row.disputed_cents) || 0);
+    if (left <= 0) return { ok: false, message: "That payment has been given back already." };
+    if (amt > left) return { ok: false, message: "That is more than the " + money(left) + " left of that payment." };
+    const key = "tally-refund-" + await sha([org, jobId, pi, amt, nonce].join("|")), card = String(row.method || "the card").replace(/ · test$/, "");
+    if (isSq(row.account)) {
+      const sr = await sqRowFor(org, row.account);
+      if (!sr || sr.status === "revoked") return { ok: false, message: "The Square account that took this payment isn't connected now. Refund it on Square's own page." };
+      try {
+        await sq(sr, "POST", "/v2/refunds", { idempotency_key: "r" + (await sha(key)).slice(0, 40), payment_id: sqPid(pi), amount_money: { amount: amt, currency: "USD" },
+          reason: (REFUND_WHY[why] + " · " + by).slice(0, 190) });
+      } catch (e) {
+        if (sqNo(e)) return { ok: false, message: "Square didn't give it back: " + String((e as Error).message || "").slice(0, 200) };
+        throw e;
+      }
+      await sqSettleRow(org, row);
+    } else {
+      if (!stripeMode()) return { ok: false, message: "Card payments are not set up." };
+      if (!!row.livemode !== modeLive(row.account || "")) return { ok: false, message: "That payment was made in Stripe's " + (row.livemode ? "live" : "test") + " mode. Refund it on Stripe's own page." };
+      const r = await stripe("POST", "refunds", { payment_intent: pi, amount: amt, reason: why, metadata: { tally_org: org, tally_job: jobId, tally_by: by } }, key, row.account || "");
+      if (r && (r.status === "failed" || r.status === "canceled")) return { ok: false, message: "The refund didn't go through." };
+      await recordIntent({ id: pi }, row.account || "");
+    }
+    return { ok: true, message: "Refunded " + money(amt) + " to " + card + ". It shows on their statement in 5 to 10 days." };
+  });
+  return res || { ok: false, message: BUSY };
+}
+// Autopay (batch 15): a storage account whose customer's card on file pays each bill by itself (the office turns it on
+// with the customer's OK: d.sto.autopay {vault, label}). An office phone or computer asks when a bill is made (the
+// app's stoAutoTick); this charges what's owed then, once for that bill however many ask: the key names the bill and
+// the card, and a try for that bill already in the ledger (source "auto:<bill>", gone through or not) ends it. How it
+// went goes on the account (d.sto.autoTry) for the office: the account, and Today when it didn't go through.
+export async function payAuto(org: string, me: J, jobId: string, b: J): Promise<J> {
+  if (me.role !== "owner" && me.role !== "dispatch") return { ok: false, status: 403, message: "The office runs autopay." };
+  const bill = String(b.bill || "");
+  if (!/^sm_\d{4}-\d{2}-\d{2}$/.test(bill)) return { ok: false, message: "Which bill?" };
+  const job = await getDoc(org, "jobs/" + jobId);
+  if (!job || !stoIsC(job)) return { ok: false, message: "That isn't a storage account." };
+  const ap = ((job.d && job.d.sto) || {}).autopay || {};
+  if (!ap.vault || !/^[A-Za-z0-9_-]{1,80}$/.test(String(ap.vault))) return { ok: false, message: "Autopay is off on this account." };
+  if (!vals(job.extras).some((e: J) => e && e.id === bill) || bill.slice(3) > today()) return { ok: false, message: "That bill isn't due." };
+  const src = "auto:" + bill;
+  const tried = ((await rest("GET", "pay_log?select=pi,status&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&source=eq." + q(src) + "&limit=1")) || [])[0];
+  if (tried) return { ok: tried.status === "succeeded" || tried.status === "processing", tried: true, message: "Autopay already ran for this bill." };
+  const owed = await owedCents(org, jobId, job);
+  if (owed <= 0) return { ok: true, nothing: true, message: "Nothing is owed." };
+  const idem = "tally-auto-" + await sha([org, jobId, bill, ap.vault].join("|"));
+  let out: J;
+  try { out = await paySaved(org, me, jobId, { vaultId: String(ap.vault), amount: owed / 100 }, { src, idem }); } catch (e) { console.error("autopay", e); out = { ok: false, message: stripeTrouble(e) }; }
+  delete out.status;
+  const at = Date.now(), msg = String(out.message || "").slice(0, 200);
+  const patch: J = { d: { sto: { autoTry: { bill, at, ok: !!out.ok, msg, skip: null } } } };
+  if (!out.ok) { const ev = "Autopay didn't go through for the " + bill.slice(3) + " bill: " + msg.replace(/\.$/, ""); patch.log = { [logKey(at, ev)]: { ts: at, ev } }; }
+  await rest("POST", "rpc/doc_patch", { o: org, p: "jobs/" + jobId, patch });
+  return { ...out, tried: true };
+}
+// Charge a card kept on file for this job's customer. `auto` (autopay, batch 15): {src: "auto:<bill>", idem}, the ledger's
+// source for it and the one key for that bill.
+export async function paySaved(org: string, me: J, jobId: string, b: J, auto?: J): Promise<J> {
   const c = await payContext(org, me, jobId);
   if (c.err) return { ok: false, message: c.err, status: c.status };
   const amt = cents(b.amount), by = who(me), acct = c.acct, live = modeLive(acct);
@@ -3011,18 +3091,18 @@ export async function paySaved(org: string, me: J, jobId: string, b: J): Promise
     // to the estimated top price.)
     // one charge however many times this is sent: the key names the job, the card, the amount, the bill so far
     const tries = ((await rest("GET", "pay_log?select=pi,source&org_id=eq." + q(org) + "&job_id=eq." + q(jobId))) || []).filter(isSaved);
-    const idem = "tally-saved-" + await sha([org, jobId, card.pm_id, amt, jobTotalCents(job) - ready.owed, tries.length, live, acct].concat(tipC ? ["tip", tipC] : []).join("|"));
+    const idem = auto ? String(auto.idem) : "tally-saved-" + await sha([org, jobId, card.pm_id, amt, jobTotalCents(job) - ready.owed, tries.length, live, acct].concat(tipC ? ["tip", tipC] : []).join("|"));
     const and = tipC ? ", with a " + money(tipC) + " tip for the crew" : "";
     if (c.sq) {
       const r = await sqPay(c.sq, { source: card.pm_id, amt, tipC, customer: card.customer_id, jobId, job, S: c.S, key: "s" + (await sha(idem)).slice(0, 40) });
-      if (r.payment) await sqRecord(r.payment, c.sq, { org, jobId, src: "saved", by, cust: jc.key, tipC });
+      if (r.payment) await sqRecord(r.payment, c.sq, { org, jobId, src: auto ? String(auto.src) : "saved", by, cust: jc.key, tipC });
       if (r.err) return { ok: false, message: r.err, needLink: r.code === "CARD_DECLINED_VERIFICATION_REQUIRED" };
       const p = r.payment;
       if (p.status === "COMPLETED") return { ok: true, message: "Charged " + money(tot) + " to " + sqLabel(p) + and + "." };
       if (p.status === "APPROVED" || p.status === "PENDING") return { ok: true, message: "Payment of " + money(tot) + " is processing." };
       return { ok: false, message: "The card was not charged." };
     }
-    const md = payMeta(org, jobId, job, by, "saved", me.uid);
+    const md = payMeta(org, jobId, job, by, auto ? String(auto.src) : "saved", me.uid);
     if (tipC) md.tally_tip = String(tipC);
     try {
       const pi = await stripe("POST", "payment_intents", {
@@ -3290,7 +3370,7 @@ function optOn(S: J, k: string): boolean {
   const o = (S && S.opt) || {};
   if (o[k] === true || o[k] === false) return o[k];
   if (k === "tax") return numP(S.taxPct) > 0;
-  return ["photosReq", "rqOffice", "salesFollow"].indexOf(k) < 0;
+  return ["photosReq", "rqOffice", "salesFollow", "dispatchRefund"].indexOf(k) < 0;
 }
 // the settings a price is worked out from: what the company saved, over the app's defaults
 export function priceSettings(saved: J): J {
@@ -3562,7 +3642,7 @@ async function handleApp(req: Request): Promise<Response> {
       return json(out, typeof st === "number" ? st : 200);
     }
     const pay: Record<string, (o: string, m: J, j: string, x: J) => Promise<J>> = {
-      pay_link: payLink, pay_intent: payIntent, pay_saved: paySaved, pay_check: payCheck,
+      pay_link: payLink, pay_intent: payIntent, pay_saved: paySaved, pay_check: payCheck, pay_refund: payRefund, pay_auto: payAuto,
       pay_forget: (o: string, m: J, _j: string, x: J) => payForget(o, m, x),
     };
     if (b.action !== "pay_forget" && !/^[A-Za-z0-9_-]{1,40}$/.test(jobId)) return json({ ok: false, message: "Missing job" }, 400);
@@ -3768,7 +3848,9 @@ export function custSto(S: J, job: J): J | null {
     .map((e: J) => ({ from: String((e.sto && e.sto.from) || String(e.id).slice(3)), to: String((e.sto && e.sto.to) || ""), amt: r2(e.amt) }));
   return { since: String(s.since || start), start, day: Math.min(28, Number(start.slice(8, 10)) || 0), n: vaults.length, names: vaults.map(name).join(", "), rate,
     monthly: r2(vaults.reduce((a: number, id: string) => a + price(id), 0)), next: open ? stoNextC(start, today()) : "", out: String(s.out || ""), addr,
-    units: vaults.map((id: string) => ({ name: name(id), size: String((unitOf(id) || {}).size || ""), price: price(id) })), bills };
+    units: vaults.map((id: string) => ({ name: name(id), size: String((unitOf(id) || {}).size || ""), price: price(id) })), bills,
+    // autopay (batch 15): the card on file that pays each bill
+    autopay: s.autopay && s.autopay.vault ? { label: String(s.autopay.label || "Your card on file").slice(0, 60) } : null };
 }
 // A move into storage (batch 13d, Nov 22): a move with d.toSto ends at the warehouse, and d.stoPlan {units, prices}
 // is the units it goes into, each at the price it was quoted at. Until its storage account opens (d.stoIn), the

@@ -98,9 +98,15 @@ whose deposit hasn't come in shows under **Needs you** on Today and as **No depo
 
 ## Refunds and disputes
 
-Refund in Stripe (**Payments** › the payment › **Refund**). The refund shows on the job by itself
+Refund from MoveCrew (Nov 22): on the job's **Payments**, **Refund** on the card payment's line, then the amount (the
+bill's part to start; past it, a refund comes off the crew's tip) and why (the customer asked, charged twice, fraud),
+and tap twice. Only the owner, or dispatch with Setup › Options › **Dispatch can give refunds**. It goes back to the
+card on the account that took it, and shows on their statement in 5 to 10 days.
+
+Or refund in Stripe (**Payments** › the payment › **Refund**). Either way the refund shows on the job by itself
 as a line taking money off the bill. If that leaves money owed on a job marked **Paid**, it goes
-back to **Complete**.
+back to **Complete**. A cash or check refund is made outside MoveCrew; if it was for a discount, take it off the
+bill with a credit.
 
 A dispute (a chargeback) shows the same way while the customer's bank decides. If you win it, the
 line comes off again. Answer disputes in Stripe (**Payments › Disputes**).
@@ -170,6 +176,7 @@ again and a job marked Paid goes back to Complete. The card box on the crew's ph
    - Customers: **Write**
    - PaymentMethods: **Write** (to take a card off file)
    - Charges: **Read** (to see refunds)
+   - Refunds: **Write** (to refund from MoveCrew)
    - Disputes: **Read**
    - Webhook Endpoints: **Write**
 3. In Supabase, replace `STRIPE_SECRET_KEY` with the restricted key (`rk_live_…`) and

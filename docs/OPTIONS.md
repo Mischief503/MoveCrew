@@ -96,6 +96,7 @@ The number under a switch (radius, %, $) shows only while the switch is on. See
 | A driver for every truck | No driver boxes on jobs, no Who drives list in Setup › Fleet and drivers, and a truck without a driver doesn't make a job need scheduling. The texts just name the truck. |
 | Office approves new quotes from the crew (starts off) | On: a crew lead's new quote waits for the owner or dispatch to approve it (Today: *New quote to approve*), then the customer signs it. Off: the customer's signature is enough, and the office is told. |
 | Dispatch can take payments | Dispatch has no payment buttons (*The owner takes payments on this job*); the server refuses dispatch's payments too. |
+| Dispatch can give refunds (starts off) | On: dispatch can refund a card payment from a job's Payments, as the owner can (Nov 22). Off: only the owner; the server refuses dispatch's refunds too. |
 | Dispatch sees revenue | No Revenue screen for dispatch; Today shows what's to schedule instead of what's owed. |
 
 ## Where it's kept
