@@ -183,6 +183,7 @@ button.vt{cursor:pointer}
 .vt em{font-style:normal;font-size:11.5px;line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vt em.vp{font-weight:600}
 .vt small{color:var(--text)}
+.tapbox{display:flex;gap:12px;align-items:center;margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px}.tapbox p{margin:0}.tapico{color:var(--focus);flex:none;display:flex}
 .refundbox{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:12px}.refundbox h3{font-size:16px;margin:0 0 4px}
 .vt.held{border-style:dotted;background:var(--infoSoft)}.vdot.held{border-style:dotted;background:var(--infoSoft)}
 .stoq{margin:14px 0 4px}.stoq h3{font-size:16px}.stoq .chips{margin-bottom:8px}
@@ -1841,6 +1842,10 @@ window.tallyPay={
   refund:function(id,pi,amount,reason,nonce){return commsPost({action:'pay_refund',jobId:id,pi:pi,amount:amount,reason:reason,nonce:nonce})},
   // autopay (batch 15): charge a storage account's card on file for this bill, once
   auto:function(id,bill){return commsPost({action:'pay_auto',jobId:id,bill:bill})},
+  // tap to pay (batch 15b): the phone's reader signing in, a payment it takes the tap for, and calling one off that didn't happen
+  tapToken:function(){return commsPost({action:'pay_tap_token'})},
+  tap:function(id,amount,tip){var b={action:'pay_tap',jobId:id,amount:amount};if(tip>0)b.tip=tip;return commsPost(b)},
+  tapCancel:function(id,pi){return commsPost({action:'pay_tap_cancel',jobId:id,pi:pi})},
   refresh:function(){Object.keys(watchers).forEach(function(k){if(k.indexOf('jobs|')===0||k.indexOf('vault|')===0)bump(k)})}
 };
 /* ---------- the membership each company pays MoveCrew, and MoveCrew admin (MoveCrew's own admins only) ---------- */
@@ -2180,6 +2185,7 @@ var OPTS=[
   {g:'forms',k:'forms',t:'Signatures before payment',h:'The customer signs the forms marked Required before paying. Off: no forms are asked for.'},
   {g:'pay',k:'payLink',t:'Pay links and QR codes',h:'The customer pays on their own phone.'},
   {g:'pay',k:'payCard',t:'Typing a card in',h:'The lead types the customer’s card in.'},
+  {g:'pay',k:'payTap',t:'Tap to pay',h:'The customer taps their card or phone on the back of the crew’s Android phone: the MoveCrew app, on Android 13 or later with NFC. Stripe only.'},
   {g:'pay',k:'payVault',t:'Cards on file',h:'Keep a customer’s card to charge later.'},
   {g:'pay',k:'payCash',t:'Cash, checks and Zelle',h:'Record payments taken outside the app. With every other way off, this stays on.'},
   {g:'cust',k:'custBook',t:'Customers book their own quote',h:'In the customer app they accept the quote and book it. It shows in Needs scheduling for dispatch to add the truck and crew.'},
@@ -11570,6 +11576,7 @@ function cardFits(j,v){return (v.jobs||[]).indexOf(j.id)>=0}
 function stripeWays(j){
   var cards=stripeCards(j),w=[];
   if(cards.length&&opt('payVault'))w.push('vault');
+  if(tapOn())w.push('tap');
   if(opt('payLink'))w.push('link');
   if(payCardOn()&&opt('payCard'))w.push('card');
   if(opt('payCash')||!w.length)w.push('other');
@@ -11579,6 +11586,7 @@ function flowMethodStripe(j){
   var w=stripeWays(j),cards=stripeCards(j),m=ui.flow&&ui.flow.method;
   if(w.indexOf(m)>=0)return m;
   if(w.indexOf('vault')>=0&&cards.some(function(v){return cardFits(j,v)}))return 'vault';
+  if(w.indexOf('tap')>=0)return 'tap';
   return w.indexOf('link')>=0?'link':w[0];
 }
 function stripeJs(){
@@ -11726,6 +11734,58 @@ function payBySaved(j){
     flowFail((r&&r.message)||'The card was not charged.');
   }).then(function(){payBusy(false)});
 }
+/* ---------- tap to pay (batch 15b, Nov 25): the customer taps their card or phone on the back of this phone. MoveCrew's
+   Android app has Stripe Terminal's Tap to Pay in it (TallyNative.tapCheck, tapPay); its reader asks the page for a
+   connection token when it connects (window.__tallyTapToken, answered with TallyNative.tapToken), and the server makes
+   each payment (tallyPay.tap) on the company's Stripe account and location. Stripe test mode: a pretend reader, which
+   taps a test Visa by itself. ---------- */
+var TAP_SVG='<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7.5 9.5a4 4 0 0 1 0 5"/><path d="M11 7.5a7 7 0 0 1 0 9"/><path d="M14.5 5.5a10 10 0 0 1 0 13"/><path d="M18 3.5a13 13 0 0 1 0 17"/></svg>';
+var tapSeen=null;
+// this phone can take a tap: MoveCrew's Android app, Android 13 or later, with NFC (the app says)
+function tapCan(){if(tapSeen===null){try{var r=window.TallyNative&&typeof window.TallyNative.tapCheck==='function'?JSON.parse(window.TallyNative.tapCheck()):null;tapSeen=!!(r&&r.ok)}catch(e){tapSeen=false}}return tapSeen}
+function tapOn(){return payOn()&&!sqOn()&&opt('payTap')&&tapCan()}
+window.__tallyTapToken=function(id){
+  var done=function(sec,msg){try{window.TallyNative.tapToken(String(id),sec||'',msg||'')}catch(e){}};
+  if(!window.tallyPay||!window.tallyPay.tapToken){done('','Sign in again.');return true}
+  window.tallyPay.tapToken().then(function(r){if(r&&r.ok&&r.secret)done(r.secret,'');else done('',(r&&r.message)||'The reader could not sign in.')},function(){done('','Could not reach the server.')});
+  return true;
+};
+// the phone's reader takes the tap: {ok, pi} once it went through, else {canceled} or {code, message}
+function tapNative(o){
+  return new Promise(function(res){
+    var id=uid();nativeWait[id]=res;
+    setTimeout(function(){if(nativeWait[id]){delete nativeWait[id];res({ok:false,lost:true,message:'The phone stopped answering. Check the bill before trying again.'})}},5*60e3);
+    try{window.TallyNative.tapPay(id,JSON.stringify(o))}catch(e){delete nativeWait[id];res({ok:false,message:'Tap to pay is not in this copy of the app. Update MoveCrew.'})}
+  });
+}
+// why a tap didn't go through, in words for the person holding the phone (the codes are Stripe Terminal's)
+function tapWhy(t){
+  var c=String((t&&t.code)||''),m=String((t&&t.message)||'').trim();
+  if(/NFC_DISABLED/.test(c))return 'Turn on NFC in the phone’s settings, then try again.';
+  if(/DEBUG_NOT_SUPPORTED/.test(c))return 'Tap to pay won’t run while the phone’s Developer options are on. Turn them off in Settings, then try again.';
+  if(/LOCATION/.test(c))return 'Tap to pay needs the phone’s location: turn it on for MoveCrew, then try again.';
+  if(/UNSUPPORTED|TAMPERED|PROCESSOR/.test(c))return 'This phone can’t take tap to pay'+(m?': '+m.replace(/\.$/,''):'')+'. Send a pay link instead.';
+  if(/INSECURE/.test(c))return 'Tap to pay stopped because something on the phone could see the screen (screen recording, an overlay or an accessibility app). Close it and try again.';
+  if(/DECLINED/.test(c))return !m||/declin/i.test(m)?'The card was declined. Try another card or way to pay.':'The card was declined: '+m.replace(/\.$/,'')+'. Try another card or way to pay.';
+  return m||'The card was not charged.';
+}
+function payByTap(j){
+  var amt=flowAmt(),bad=payAmtCheck(j,amt);
+  if(bad)return flowFail(bad);
+  if(!flowTipPicked(j))return flowFail('Pick a tip first (or No tip).');
+  var tip=flowTipAmt(j),tot=round2(amt+tip),started=null;
+  payBusy(true,'Starting…');flowFail('');
+  window.tallyPay.tap(j.id,amt,tip).then(function(r){
+    if(!r||!r.ok)throw {msg:(r&&r.message)||'The payment did not start.'};
+    started=r;payBusy(true,'Waiting for the tap…');
+    return tapNative({secret:r.clientSecret,location:r.location,live:!!r.live,account:r.account||'',merchant:r.merchant||''});
+  }).then(function(t){
+    if(t&&t.ok)return window.tallyPay.check(j.id,t.pi||started.pi).then(function(c){payDone(j,c&&c.piStatus==='processing'?'Payment processing.':'Paid '+money(tot)+' by tap'+(tip>0?', with a '+money(tip)+' tip for the crew':'')+'.',tip)});
+    // it didn't happen: called off on the server at once (one that went through after all is written down instead)
+    if(!(t&&t.lost))window.tallyPay.tapCancel(j.id,started.pi);
+    throw {msg:t&&t.canceled?'Canceled. Nothing was charged.':tapWhy(t)};
+  }).catch(function(e){flowFail((e&&e.msg)||'The card was not charged.')}).then(function(){payBusy(false)});
+}
 // a link for amt toward the bill (and the crew's tip on top, when one was picked: one payment)
 function linkFor(j,amt,save,tip){var l=pay.links[j.id];return l&&Math.abs(l.amount-amt)<0.004&&Math.abs((l.tip||0)-(tip||0))<0.004&&l.save===!!save&&Date.now()-l.at<20*3600e3?l:null}
 function payLinkText(amt,url){return (state.settings.company||'Your movers')+': Here is your secure payment link for '+money(amt)+': '+url}
@@ -11763,7 +11823,7 @@ function payQuick(j){
 function payStepStripe(j){
   var bal=balOf(j),cards=stripeCards(j),m=flowMethodStripe(j),f=ui.flow;
   var amt=flowAmtNow(j),tipQ=flowTipAsk(j),off=tipQ&&!flowTipPicked(j)?' disabled':'';
-  var WAY={vault:'Card on file',link:'Pay link',card:'Card',other:'Cash or check'},methods=stripeWays(j).map(function(k){return [k,WAY[k]]});
+  var WAY={vault:'Card on file',tap:'Tap to pay',link:'Pay link',card:'Card',other:'Cash or check'},methods=stripeWays(j).map(function(k){return [k,WAY[k]]});
   var chips=methods.map(function(x){return '<button class="chip'+(m===x[0]?' on':'')+'" data-act="flow:method" data-m="'+x[0]+'" aria-pressed="'+(m===x[0])+'">'+x[1]+'</button>'}).join('');
   var panel='',btn='',pb=function(plain,tmpl,busy){return '<button class="btn primary bigbtn" data-act="flow:pay"'+(busy?' data-busy="1"':'')+(tipQ?' data-tipword="'+esc(tmpl)+'"':'')+off+'>'+esc(tipQ?flowPayLabel(j,tmpl,amt):plain)+'</button>'};
   if(m==='vault'){
@@ -11772,7 +11832,10 @@ function payStepStripe(j){
       (pick?'':'<p class="hint">Check with '+esc(j.d.name||'the customer')+' that this is their card before charging it.</p>');
     btn=pb('Charge the card on file','Charge {t} to the card on file',1);
   }else if(m==='link')panel=payLinkPanel(j,amt);
-  else if(m==='card'){
+  else if(m==='tap'){
+    panel='<div class="tapbox"><span class="tapico" aria-hidden="true">'+TAP_SVG+'</span><p>'+(pay.cfg.test?'Stripe test mode: this phone pretends a Visa was tapped, so nothing needs to touch it.':'When it asks, '+esc(j.d.name||'the customer')+' holds their card or phone flat against the back of this phone.')+'</p></div>';
+    btn=pb('Tap to pay','Tap to pay {t}',1);
+  }else if(m==='card'){
     panel='<div id="stripeCard" class="stripe-box"><p class="hint">Loading the card form…</p></div>'+(opt('payVault')?'<label class="check"><input type="checkbox" id="saveCard"> Keep this card on file for this customer</label>':'');
     btn=pb('Charge the card','Charge {t} to the card',1);
   }else{
@@ -13012,7 +13075,7 @@ document.addEventListener('click',function(e){
       else if(fc)toast('Signed: '+sn+' agrees to '+fm.n+' movers at '+money(fm.rate)+'/hr.');
       renderFlow();break}
     case 'flow:pay':{var pj=byId(ui.flow.jobId);if(!pj)break;
-      if(payOn()){var spm=flowMethodStripe(pj);if(spm==='card'){if(!pay.busy)payByCard(pj);break}if(spm==='vault'){if(!pay.busy)payBySaved(pj);break}}
+      if(payOn()){var spm=flowMethodStripe(pj);if(spm==='card'){if(!pay.busy)payByCard(pj);break}if(spm==='vault'){if(!pay.busy)payBySaved(pj);break}if(spm==='tap'){if(!pay.busy)payByTap(pj);break}}
       var pbal=balOf(pj),pamt=round2(moneyVal($('#flowAmt'))),pm=window.tallyPay?'other':flowMethod(pj);
       if(!(pamt>0)){flowFail('Enter an amount.');break}
       if(pamt>pbal+0.004){flowFail('That is more than the balance of '+money(pbal)+'.');break}
@@ -13239,7 +13302,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow,ldSync:ldSync,ldRateFor:ldRateFor,addrState:addrState,ldInter:ldInter,roadDays:roadDays,ldNow:ldNow,ldWeigh:ldWeigh,ldWeightBill:ldWeightBill,ldBilledLater:ldBilledLater,ldCustInfo:ldCustInfo,custLdHtml:custLdHtml,ldDayAlerts:ldDayAlerts,flowAmtNow:flowAmtNow,stoIs:stoIs,stoOf:stoOf,stoCfg:stoCfg,stoSweep:stoSweep,stoFrom:stoFrom,stoClose:stoClose,stoReopen:stoReopen,stoBills:stoBills,stoDueSince:stoDueSince,stoLate:stoLate,stoMonthly:stoMonthly,stoCustInfo:stoCustInfo,stoBillDates:stoBillDates,stoNext:stoNext,stoOutJob:stoOutJob,stoNewAcct:stoNewAcct,stoAlerts:stoAlerts,stoUsedBy:stoUsedBy,stoReportCard:stoReportCard,stoSetVaults:stoSetVaults,stoPriceOf:stoPriceOf,stoLock:stoLock,stoUnitLine:stoUnitLine,stoCap:stoCap,stoSuggest:stoSuggest,canRefund:canRefund,refundLeft:refundLeft,stoAutoTick:stoAutoTick,stoCardName:stoCardName,custStoCard:custStoCard,stoTick:stoTick,stripeCards:stripeCards,stoPlanFor:stoPlanFor,stoPlanOf:stoPlanOf,stoHeldBy:stoHeldBy,stoOpenFor:stoOpenFor,stoToIs:stoToIs,stoPlanCust:stoPlanCust,stoSweep:stoSweep,sheetKindLine:sheetKindLine,stoCrewLine:stoCrewLine,stoNewJob:stoNewJob,stoFree:stoFree,custDetailsHtml:custDetailsHtml,newJob:newJob,ldSheetSet:ldSheetSet,paidOf:paidOf,addPayment:addPayment};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow,ldSync:ldSync,ldRateFor:ldRateFor,addrState:addrState,ldInter:ldInter,roadDays:roadDays,ldNow:ldNow,ldWeigh:ldWeigh,ldWeightBill:ldWeightBill,ldBilledLater:ldBilledLater,ldCustInfo:ldCustInfo,custLdHtml:custLdHtml,ldDayAlerts:ldDayAlerts,flowAmtNow:flowAmtNow,stoIs:stoIs,stoOf:stoOf,stoCfg:stoCfg,stoSweep:stoSweep,stoFrom:stoFrom,stoClose:stoClose,stoReopen:stoReopen,stoBills:stoBills,stoDueSince:stoDueSince,stoLate:stoLate,stoMonthly:stoMonthly,stoCustInfo:stoCustInfo,stoBillDates:stoBillDates,stoNext:stoNext,stoOutJob:stoOutJob,stoNewAcct:stoNewAcct,stoAlerts:stoAlerts,stoUsedBy:stoUsedBy,stoReportCard:stoReportCard,stoSetVaults:stoSetVaults,stoPriceOf:stoPriceOf,stoLock:stoLock,stoUnitLine:stoUnitLine,stoCap:stoCap,stoSuggest:stoSuggest,canRefund:canRefund,refundLeft:refundLeft,tapOn:tapOn,tapCan:tapCan,tapWhy:tapWhy,stripeWays:stripeWays,flowMethodStripe:flowMethodStripe,stoAutoTick:stoAutoTick,stoCardName:stoCardName,custStoCard:custStoCard,stoTick:stoTick,stripeCards:stripeCards,stoPlanFor:stoPlanFor,stoPlanOf:stoPlanOf,stoHeldBy:stoHeldBy,stoOpenFor:stoOpenFor,stoToIs:stoToIs,stoPlanCust:stoPlanCust,stoSweep:stoSweep,sheetKindLine:sheetKindLine,stoCrewLine:stoCrewLine,stoNewJob:stoNewJob,stoFree:stoFree,custDetailsHtml:custDetailsHtml,newJob:newJob,ldSheetSet:ldSheetSet,paidOf:paidOf,addPayment:addPayment};
 })();
 </script>
 </body>

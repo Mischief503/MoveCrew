@@ -55,6 +55,7 @@ const REPLIES = { member_status: ST(), pay_config: PAY.none, admin_list: { ok: t
 const init = (cfg) => `(function(){ ${SB}
   var db=${JSON.stringify(cfg.db)}, me=${JSON.stringify(cfg.me)}, calls={fn:[],writes:[],rpc:[],storage:[]};
   window.__calls=calls; window.__TALLY_TEST=true; window.open=function(){return null};
+  ${cfg.tap ? "window.TallyNative={tapCheck:function(){return '{\"ok\":true}'},tapPay:function(){},tapToken:function(){},hasGoogle:function(){return false}};" : ''}   // MoveCrew's Android app on a phone that takes taps (batch 15b)
   Object.defineProperty(window,'supabase',{configurable:true,get:function(){return {createClient:function(){return (window.__sb=makeSupabase(db,me,calls))}}},set:function(){}});
   var R=${JSON.stringify(cfg.replies)}, of=window.fetch;
   window.fetch=function(url,init){ if(/\\/functions\\/v1\\//.test(String(url))){ var b={}; try{b=JSON.parse(init.body)}catch(e){} calls.fn.push(b); var r=R[b.action]||{ok:true,sent:0}; return Promise.resolve({ok:true,status:200,json:function(){return Promise.resolve(JSON.parse(JSON.stringify(r)))}}) } return of?of(url,init):Promise.reject(new Error('offline')) };
@@ -88,6 +89,9 @@ const SCREENS = {
   'a job sheet with cards on': [{ replies: R({ pay_config: PAY.ready }) }, async (p) => { await tap(p, '#tabs [data-act="tab"][data-tab="jobs"]', 300); await tap(p, '[data-act="job:open"][data-id="j1"]', 500); await p.evaluate(() => document.querySelectorAll('#sheet details').forEach((d) => { d.open = true; })); }],
   'a card on Square': [{ replies: R({ pay_config: PAY.sqOn }) }, async (p) => { await tap(p, '#tabs [data-act="tab"][data-tab="jobs"]', 300); await tap(p, '[data-act="job:open"][data-id="j1"]', 500); await p.evaluate(() => { const b = Array.from(document.querySelectorAll('#sheet [data-act="flow:open"]')).find((x) => /Take a payment/.test(x.textContent)); b.click(); }); await sleep(600); await p.evaluate(() => { const c = document.querySelector('#flow [data-act="flow:method"][data-m="card"]'); if (c) c.click(); }); await sleep(500); }],
   'taking a deposit by card': [{ replies: R({ pay_config: PAY.ready }) }, async (p) => { await tap(p, '#tabs [data-act="tab"][data-tab="jobs"]', 300); await tap(p, '[data-act="job:open"][data-id="j1"]', 500); await p.evaluate(() => { const b = Array.from(document.querySelectorAll('#sheet [data-act="flow:open"]')).find((x) => /Take a payment/.test(x.textContent)); b.click(); }); await sleep(600); }],
+  // tap to pay on MoveCrew's Android app (batch 15b): the way to pay, in test mode and live
+  'taking a tap on an Android phone': [{ tap: true, replies: R({ pay_config: PAY.ready }) }, async (p) => { await tap(p, '#tabs [data-act="tab"][data-tab="jobs"]', 300); await tap(p, '[data-act="job:open"][data-id="j1"]', 500); await p.evaluate(() => { const b = Array.from(document.querySelectorAll('#sheet [data-act="flow:open"]')).find((x) => /Take a payment/.test(x.textContent)); b.click(); }); await sleep(600); }],
+  'taking a tap, live': [{ tap: true, replies: R({ pay_config: Object.assign({}, PAY.ready, { test: false, publishableKey: 'pk_live_x' }) }) }, async (p) => { await tap(p, '#tabs [data-act="tab"][data-tab="jobs"]', 300); await tap(p, '[data-act="job:open"][data-id="j1"]', 500); await p.evaluate(() => { const b = Array.from(document.querySelectorAll('#sheet [data-act="flow:open"]')).find((x) => /Take a payment/.test(x.textContent)); b.click(); }); await sleep(600); }],
   'crew lead Jobs': [{ me: lead }, async () => {}],
   'crew lead More': [{ me: lead }, async (p) => { await tap(p, '[data-act="more:open"]', 400); }],
   'crew lead My profile': [{ me: lead }, async (p) => { await tap(p, '[data-act="more:open"]'); await tap(p, '#more [data-act="me:open"]', 700); }],
@@ -95,8 +99,8 @@ const SCREENS = {
   'which company today': [{ twoOrgs: true }, async () => {}],
   'Switch company, two companies': [{ twoOrgs: true, today: true }, async (p) => { await tap(p, '#brandCo button.cosw', 400); }],
 };
-const NARROW = ['Setup › Membership, paying with a discount', 'Setup › Payments, ready', 'Setup › Payments, on Square', 'a card on Square', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker', 'which company today', 'Switch company, two companies'];
-const AXE_ON = ['Setup › Membership, on trial', 'Setup › Payments, ready', 'Setup › Payments, Square offered', 'Setup › Payments, on Square', 'a card on Square', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'the company picker', 'which company today', 'Switch company, two companies'];
+const NARROW = ['Setup › Membership, paying with a discount', 'Setup › Payments, ready', 'Setup › Payments, on Square', 'a card on Square', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'taking a tap on an Android phone', 'the company picker', 'which company today', 'Switch company, two companies'];
+const AXE_ON = ['Setup › Membership, on trial', 'Setup › Payments, ready', 'Setup › Payments, Square offered', 'Setup › Payments, on Square', 'a card on Square', 'Setup › App access, someone asking', 'an employee’s file', 'MoveCrew admin', 'taking a deposit by card', 'taking a tap on an Android phone', 'the company picker', 'which company today', 'Switch company, two companies'];
 
 (async () => {
   const b = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});

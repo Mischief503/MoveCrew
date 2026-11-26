@@ -465,6 +465,15 @@ sqOn();
   ok(!r.body.ok, "and it can't be charged again");
 }
 
+/* ======================= tap to pay is Stripe's (batch 15b) ======================= */
+{
+  const before = stripeCalls.length;
+  let r = await app("tok-marcus", { action: "pay_tap_token" });
+  ok(!r.body.ok && /^Tap to pay works with Stripe, and this company's cards go through Square\./.test(r.body.message) && !r.body.secret, "a company on Square: no tap-to-pay reader");
+  r = await app("tok-marcus", { action: "pay_tap", jobId: "j1", amount: 100 });
+  ok(!r.body.ok && /^Tap to pay works with Stripe/.test(r.body.message) && stripeCalls.length === before, "and no tap payments, with nothing sent to Stripe");
+}
+
 /* ======================= a pay link ======================= */
 {
   const owed0 = await fn.owedCents(ORG, "j2");

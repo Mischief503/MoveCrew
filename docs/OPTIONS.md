@@ -77,6 +77,7 @@ The number under a switch (radius, %, $) shows only while the switch is on. See
 | Signatures before payment | No forms are asked for before paying, on the phone or on the server. |
 | Pay links and QR codes | No pay link. |
 | Typing a card in | No card box. |
+| Tap to pay | No Tap to pay on the crew's Android phone; the server refuses one too. See [SETUP-stripe.md](SETUP-stripe.md#tap-to-pay-on-the-crews-phone). |
 | Cards on file | Cards aren't kept or charged later. |
 | Cash, checks and Zelle | Not offered, unless every other way is off: then it stays, so a payment can always be recorded. |
 | Customers book their own quote | The customer app shows the quote but no **Book my move**: "Call or text us to book it." The server refuses a customer's booking too. See [CUSTOMERS.md](CUSTOMERS.md). |

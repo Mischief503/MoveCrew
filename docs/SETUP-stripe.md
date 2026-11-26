@@ -111,6 +111,32 @@ bill with a credit.
 A dispute (a chargeback) shows the same way while the customer's bank decides. If you win it, the
 line comes off again. Answer disputes in Stripe (**Payments › Disputes**).
 
+## Tap to pay on the crew's phone
+
+Tap to pay (Nov 25): the customer taps their card, or Apple Pay or Google Pay on their phone, on the back of the
+crew's Android phone. In **Collect payment** it's the first way to pay on a phone that can take a tap (after a card
+already on file for the job), then the tip, then **Tap to pay $1,150**. Stripe's own screen takes the tap, and the
+payment lands on the bill like any card payment, marked *(tap to pay)*: refunds, disputes and the crew's tip work
+the same. It is Stripe Terminal's Tap to Pay on Android, built into MoveCrew's Android app.
+
+What it needs:
+
+- **MoveCrew's Android app**, updated since Nov 25, on **Android 13 or newer** with **NFC** turned on and Google
+  Play. Stripe also refuses a phone that's rooted or has **Developer options** on (Settings › System › Developer
+  options, off). iPhones and computers don't take taps; they still send pay links and take typed cards.
+- **The phone's location.** Android asks the first time; Stripe takes a tap only where it knows where the phone is.
+- **The shop's address** in **Setup › Company**, written as street, city, state and ZIP (`418 Oak St, Portland, OR
+  97201`). The first tap registers it with Stripe as the company's Terminal location.
+- Cards through **Stripe** (not Square), and Setup › Options › **Tap to pay** on (it starts on).
+
+With test keys the phone uses a pretend reader: no tap screen, and a test Visa taps by itself, so the whole thing can
+be tried without a card. With live keys it opens the real tap screen.
+
+The same people who take payments take taps: the owner, dispatch (unless **Dispatch can take payments** is off) and
+crew leads (unless **Crew leads collect payment** is off). A tap that's canceled or declined is called off at Stripe
+at once, so it doesn't hold the amount back from the office. A company on its own Stripe account (below) takes taps
+into that account, with its location there.
+
 ## Other companies: their own Stripe account (Connect)
 
 Your Stripe account is the *platform*: MoveCrew uses your keys to set up each company's own Stripe
@@ -177,6 +203,7 @@ again and a job marked Paid goes back to Complete. The card box on the crew's ph
    - PaymentMethods: **Write** (to take a card off file)
    - Charges: **Read** (to see refunds)
    - Refunds: **Write** (to refund from MoveCrew)
+   - Terminal › Connection tokens and Locations: **Write** (for tap to pay)
    - Disputes: **Read**
    - Webhook Endpoints: **Write**
 3. In Supabase, replace `STRIPE_SECRET_KEY` with the restricted key (`rk_live_…`) and
@@ -193,7 +220,8 @@ cards saved in test mode can't be charged, and test jobs can't be charged at all
 ## Costs
 
 Stripe's standard US pricing (check stripe.com/pricing for yours): cards **2.9% + 30¢**, ACH bank
-payments **0.8% capped at $5**, and **$15** per dispute (returned if you win). No monthly fee.
+payments **0.8% capped at $5**, and **$15** per dispute (returned if you win). No monthly fee. Taps are
+priced as in-person payments; see stripe.com/terminal for yours.
 
 ## If something's off
 

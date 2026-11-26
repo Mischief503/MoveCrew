@@ -136,6 +136,9 @@ const PMS: Record<string, any> = {
   pm_other: { id: "pm_other", type: "card", customer: "cus_9", card: { brand: "visa", last4: "1881", exp_month: 1, exp_year: 2031, fingerprint: "fpF" } },
   pm_jsA: { id: "pm_jsA", type: "card", customer: null, billing_details: { name: "John Smith" }, card: { brand: "visa", last4: "1234", exp_month: 5, exp_year: 2030, fingerprint: "fpJ" } },
   pm_v25: { id: "pm_v25", type: "card", customer: null, billing_details: { name: "Priya Nair" }, card: { brand: "visa", last4: "5556", exp_month: 6, exp_year: 2030, fingerprint: "fpV" } },
+  // tapped on the crew's phone (tap to pay): Stripe Terminal's card_present, a card and a phone's wallet
+  pm_tap: { id: "pm_tap", type: "card_present", customer: null, card_present: { brand: "visa", last4: "4242", exp_month: 12, exp_year: 2030, fingerprint: "fpT" } },
+  pm_tapgp: { id: "pm_tapgp", type: "card_present", customer: null, card_present: { brand: "mastercard", last4: "4444", wallet: { type: "google_pay" } } },
 };
 let stripeDown = "";
 const OPEN = ["requires_payment_method", "requires_confirmation", "requires_action", "requires_capture"];
@@ -238,6 +241,25 @@ function stripeApi(method: string, path: string, p: Record<string, string>, h: a
     return reply(200, piView(pi, exp));
   }
   if (method === "GET" && path === "/v1/disputes") return reply(200, { data: clone(ST.disputes.filter((d: any) => d.payment_intent === p.payment_intent)) });
+  // Stripe Terminal (tap to pay, batch 15b): a reader's connection token, and the account's locations
+  if (method === "POST" && path === "/v1/terminal/connection_tokens") return reply(200, { object: "terminal.connection_token", secret: (live ? "pst_live_" : "pst_test_") + id() });
+  if (method === "GET" && path === "/v1/terminal/locations") {
+    const all = (ST.locations || []).filter((l: any) => !!l.livemode === live), lim = Math.min(100, +p.limit || 10);
+    const from = p.starting_after ? all.findIndex((l: any) => l.id === p.starting_after) + 1 : 0, page = all.slice(from, from + lim);
+    ST.locPages = (ST.locPages || 0) + 1;
+    return reply(200, { object: "list", data: clone(page), has_more: from + lim < all.length });
+  }
+  if (method === "POST" && path === "/v1/terminal/locations") {
+    const key = h["Idempotency-Key"];
+    if (key && ST.idem[key]) return clone(ST.idem[key]);
+    const a = unflat(p, "address");
+    if (!p.display_name || !a.line1 || !a.city || !a.state || !a.postal_code || a.country !== "US") return reply(400, { error: { type: "invalid_request_error", message: "Missing required param: address." } });
+    const loc = { id: "tml_" + id(), object: "terminal.location", display_name: p.display_name, address: a, metadata: unflat(p, "metadata"), livemode: live };
+    ST.locations = (ST.locations || []).concat([loc]);
+    const out = reply(200, loc);
+    if (key) ST.idem[key] = clone(out);
+    return out;
+  }
   if (method === "POST" && path === "/v1/refunds") {
     const key = h["Idempotency-Key"];
     if (key && ST.idem[key]) return clone(ST.idem[key]);
@@ -273,6 +295,13 @@ function customerPays(sid: string, pm: string, status = "succeeded") {
   if (status === "succeeded" || status === "processing") makeCharge(pi);
   keepPm(pi, pm);
   s.status = "complete"; s.payment_status = status === "succeeded" ? "paid" : "unpaid"; s.payment_intent = pid;
+  return pi;
+}
+// the crew's phone taking a tap for a payment the server made (tap to pay: Stripe Terminal confirms it on the phone)
+function taps(pid: string, pm = "pm_tap") {
+  const pi = ST.intents[pid];
+  pi.status = "succeeded"; pi.payment_method = pm; pi.amount_received = pi.amount;
+  makeCharge(pi);
   return pi;
 }
 // the customer confirming a typed card in Stripe's card box
@@ -1113,6 +1142,106 @@ ok(h.status === 200 && !DB.pay_log.some((x) => x.pi === "pi_stray"), "a payment 
   ok(r.body.ok && r.body.nothing === true && !DB.pay_log.some((x) => x.job_id === "s33"), "paid already: nothing to charge");
   const cs = fn.custSto(doc("org/settings"), doc("jobs/s30"));
   ok(cs && cs.autopay && cs.autopay.label === "Visa ending 4242" && fn.custSto(doc("org/settings"), doc("jobs/s31")).autopay === null, "the customer's copy says which card pays");
+}
+
+/* ---------- tap to pay (batch 15b) ---------- */
+{
+  // the shop address as Stripe takes an address
+  const ua = fn.usAddress;
+  const a1 = ua("418 Oak St, Suite 2, Portland, OR 97201, USA");
+  ok(a1 && a1.line1 === "418 Oak St" && a1.line2 === "Suite 2" && a1.city === "Portland" && a1.state === "OR" && a1.postal_code === "97201" && a1.country === "US",
+    "a shop address with a suite and the country: " + JSON.stringify(a1));
+  const a2 = ua("  77 Ridge Rd,  Austin , tx  78701-1234 "), a3 = ua("418 Oak St, Portland OR 97201");
+  ok(a2 && a2.line1 === "77 Ridge Rd" && !("line2" in a2) && a2.city === "Austin" && a2.state === "TX" && a2.postal_code === "78701" && a3 && a3.city === "Portland" && a3.state === "OR",
+    "extra spaces, a lowercase state, a ZIP+4, no comma before the state");
+  ok(ua("418 Oak St Portland OR 97201") === null && ua("Portland, OR 97201") === null && ua("") === null && ua("418 Oak St, Portland, Oregon") === null,
+    "an address that isn't street, city, state and ZIP: none");
+  ok(fn.methodLabel(PMS.pm_tap) === "Visa ••4242" && fn.methodLabel(PMS.pm_tapgp) === "Google Pay (Mastercard ••4444)", "a tapped card, or a phone's wallet, reads like a card");
+
+  // the phone's reader signing in
+  const tok = (t: string) => app(t, { action: "pay_tap_token", org: ORG });
+  r = await tok("tok-marcus");
+  ok(r.status === 200 && r.body.ok && /^pst_test_\d+$/.test(r.body.secret) && r.body.live === false && r.body.account === "" && calls("/v1/terminal/connection_tokens") === 1,
+    "a crew lead's phone gets a connection token for its reader (test mode, the platform's account)");
+  r = await tok("tok-kim");
+  ok(r.status === 403 && !r.body.secret && calls("/v1/terminal/connection_tokens") === 1, "a mover's phone doesn't");
+  const S0 = doc("org/settings");
+  putDoc(ORG, "org/settings", { ...S0, opt: { ...(S0.opt || {}), leadPay: false } });
+  r = await tok("tok-marcus");
+  ok(r.status === 403 && r.body.message === "The office collects payments in this company.", "leads not collecting payment: no reader for them");
+  putDoc(ORG, "org/settings", { ...S0, opt: { ...(S0.opt || {}), payTap: false } });
+  r = await tok("tok-owner");
+  ok(!r.body.ok && r.body.message === "Tap to pay is off in Options." && calls("/v1/terminal/connection_tokens") === 1, "Options › Tap to pay off: no reader");
+  r = await app("tok-marcus", { action: "pay_tap", org: ORG, jobId: "j1", amount: 100 });
+  ok(!r.body.ok && r.body.message === "Tap to pay is off in Options.", "and no tap payments");
+  putDoc(ORG, "org/settings", S0);
+
+  // Ace's own location is found among the account's (a second page of them), not made again
+  ST.locations = [];
+  for (let i = 0; i < 100; i++) ST.locations.push({ id: "tml_other" + i, object: "terminal.location", display_name: "Someone else", address: {}, metadata: { tally_org: "44444444-4444-4444-4444-4444444444" + String(i).padStart(2, "0") }, livemode: false });
+  ST.locations.push({ id: "tml_ace", object: "terminal.location", display_name: "Ace Moving", address: {}, metadata: { tally_org: ORG }, livemode: false });
+  putDoc(ORG, "jobs/j40", job("j40", { payments: {} }));   // 1263.50 owed
+  const tap = (t: string, jobId: string, x: any = {}) => app(t, { action: "pay_tap", org: ORG, jobId, ...x });
+  const pages0 = ST.locPages || 0, nIntents = Object.keys(ST.intents).length;
+  r = await tap("tok-marcus", "j40", { amount: 300, tip: 45 });
+  const pi40 = ST.intents[r.body.pi], c40 = lastCall("/v1/payment_intents");
+  ok(r.body.ok && r.body.clientSecret === r.body.pi + "_secret_abc" && r.body.location === "tml_ace" && r.body.live === false && r.body.account === "" && r.body.merchant === "Ace Moving" &&
+    r.body.amount === 345 && r.body.tip === 45, "Marcus starts a $300 tap with a $45 tip: the payment, Ace's location, and the name on Stripe's tap screen");
+  ok((ST.locPages || 0) - pages0 === 2 && calls("/v1/terminal/locations") === 0, "Ace's location was on the second page of the account's: found, nothing made");
+  ok(c40.p["allowed_payment_method_types[0]"] === "card_present" && !("allowed_payment_method_types[1]" in c40.p) && c40.p.capture_method === "automatic" && c40.p.amount === "34500" &&
+    !Object.keys(c40.p).some((k) => /^payment_method_types|^payment_method_options/.test(k)) && c40.p["metadata[tally_src]"] === "tap" && c40.p["metadata[tally_tip]"] === "4500" &&
+    c40.p["metadata[tally_by]"] === "Marcus" && Object.keys(ST.intents).length === nIntents + 1, "a card or phone tap, this Stripe version's way: card_present, taken at once, $345 with the tip");
+  const row40 = DB.pay_log.find((x) => x.pi === pi40.id);
+  ok(row40 && row40.source === "tap;tip=4500" && row40.status === "requires_payment_method" && row40.by_staff === "Marcus" && !doc("jobs/j40").payments["st_" + pi40.id],
+    "in the ledger as a tap, waiting for it; nothing on the bill yet");
+  // the phone took the tap and says so
+  taps(pi40.id);
+  r = await app("tok-marcus", { action: "pay_check", org: ORG, jobId: "j40", pi: pi40.id });
+  const line40 = doc("jobs/j40").payments["st_" + pi40.id];
+  ok(r.body.ok && line40 && line40.amt === 300 && line40.tip === 45 && line40.method === "Visa ••4242 (tap to pay) · test" && DB.pay_log.find((x) => x.pi === pi40.id).status === "succeeded",
+    "on the bill once the phone says it went through: $300 and the crew's $45, Visa ••4242 (tap to pay)");
+  ok(logs("j40").some((e) => e === "Payment $300.00 and a $45.00 tip for the crew (Visa ••4242 (tap to pay) · test)"), "and in the job's activity");
+
+  // a tap that didn't happen holds the amount back from the office until it's called off
+  r = await tap("tok-marcus", "j40", { amount: 900 });
+  const piX = r.body.pi;
+  ok(r.body.ok && r.body.location === "tml_ace" && ST.locPages - pages0 === 2, "a second tap: the location is known now, no looking again");
+  r = await tap("tok-owner", "j40", { amount: 900 });
+  ok(!r.body.ok && /^Another payment of \$900\.00 on this job was started a moment ago/.test(r.body.message), "while Marcus's tap is open, the office can't start the same $900");
+  r = await app("tok-dispatch", { action: "pay_tap_cancel", org: ORG, jobId: "j40", pi: piX });
+  ok(r.status === 403 && ST.intents[piX].status === "requires_payment_method", "only the one who started it calls it off");
+  r = await app("tok-marcus", { action: "pay_tap_cancel", org: ORG, jobId: "j40", pi: piX });
+  ok(r.body.ok && r.body.piStatus === "canceled" && ST.intents[piX].status === "canceled" && DB.pay_log.find((x) => x.pi === piX).status === "canceled", "Marcus's phone calls it off: canceled at Stripe and in the ledger");
+  r = await tap("tok-owner", "j40", { amount: 900 });
+  ok(r.body.ok, "and the office can take it now");
+  const piO = r.body.pi;
+  taps(piO, "pm_tapgp");
+  r = await app("tok-owner", { action: "pay_tap_cancel", org: ORG, jobId: "j40", pi: piO });
+  ok(r.body.ok && r.body.piStatus === "succeeded" && doc("jobs/j40").payments["st_" + piO]?.method === "Google Pay (Mastercard ••4444) (tap to pay) · test",
+    "a tap that went through after all isn't called off: it's written down");
+  r = await app("tok-owner", { action: "pay_tap_cancel", org: ORG, jobId: "j40", pi: DB.pay_log.find((x) => x.job_id === "j30").pi });
+  ok(!r.body.ok && r.body.message === "That payment isn't on this job.", "only a tap on this job is called off");
+  r = await tap("tok-owner", "j40", { amount: 100 });
+  ok(!r.body.ok && /more than the \$63\.50 still owed/.test(r.body.message), "past what's owed: refused, as for any card");
+
+  // another company on the platform's account: its location is made from its shop address, once
+  DB.pay_orgs.push({ org_id: ORG2, enabled: true });
+  const tap2 = () => app("tok-stranger", { action: "pay_tap", org: ORG2, jobId: "s1", amount: 50 });
+  r = await tap2();
+  ok(!r.body.ok && /needs the shop's address first, written as street, city, state and ZIP \(Setup › Company\)/.test(r.body.message) && calls("/v1/terminal/locations") === 0,
+    "no shop address: it says what's needed, and nothing is made");
+  putDoc(ORG2, "org/settings", { company: "Stranger Co", shopAddress: "9 Elm Ave, Unit B, Salem, OR 97301" });
+  r = await tap2();
+  const loc2 = lastCall("/v1/terminal/locations");
+  ok(r.body.ok && /^tml_\d+$/.test(r.body.location) && r.body.location !== "tml_ace" && r.body.merchant === "Stranger Co" && loc2.p.display_name === "Stranger Co" &&
+    loc2.p["address[line1]"] === "9 Elm Ave" && loc2.p["address[line2]"] === "Unit B" && loc2.p["address[city]"] === "Salem" && loc2.p["address[state]"] === "OR" &&
+    loc2.p["address[postal_code]"] === "97301" && loc2.p["address[country]"] === "US" && loc2.p["metadata[tally_org]"] === ORG2 && /^tally-loc-/.test(loc2.idem),
+    "its location: made from the shop address, marked as its own");
+  r = await app("tok-stranger", { action: "pay_tap_cancel", org: ORG2, jobId: "s1", pi: r.body.pi });
+  r = await tap2();
+  ok(r.body.ok && calls("/v1/terminal/locations") === 1, "and made once");
+  await app("tok-stranger", { action: "pay_tap_cancel", org: ORG2, jobId: "s1", pi: r.body.pi });
+  DB.pay_orgs.splice(DB.pay_orgs.findIndex((x) => x.org_id === ORG2), 1);
 }
 
 /* ---------- routing ---------- */

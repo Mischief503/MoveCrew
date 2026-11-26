@@ -1173,6 +1173,12 @@ export function methodLabel(pm: J): string {
     const w = c.wallet && c.wallet.type;
     return w === "apple_pay" ? "Apple Pay (" + base + ")" : w === "google_pay" ? "Google Pay (" + base + ")" : base;
   }
+  // a card or a phone tapped on the crew's phone (tap to pay, batch 15b): Stripe Terminal's card_present
+  if (pm.type === "card_present" && pm.card_present) {
+    const c = pm.card_present, base = (BRANDS[c.brand] || "Card") + " ••" + (c.last4 || "");
+    const w = c.wallet && c.wallet.type;
+    return w === "apple_pay" ? "Apple Pay (" + base + ")" : w === "google_pay" ? "Google Pay (" + base + ")" : w === "samsung_pay" ? "Samsung Pay (" + base + ")" : base;
+  }
   if (pm.type === "us_bank_account" && pm.us_bank_account) return "Bank ••" + (pm.us_bank_account.last4 || "");
   const names: J = { link: "Link", cashapp: "Cash App Pay", affirm: "Affirm", klarna: "Klarna", afterpay_clearpay: "Afterpay", paypal: "PayPal", amazon_pay: "Amazon Pay" };
   return names[pm.type] || String(pm.type || "Card");
@@ -1509,7 +1515,7 @@ export async function recordIntent(pi0: J, acct = ""): Promise<J> {
   const pm = pi.payment_method && typeof pi.payment_method === "object" ? pi.payment_method : null;
   const ch = pi.latest_charge && typeof pi.latest_charge === "object" ? pi.latest_charge : null;
   const status = String(pi.status || ""), live = !!pi.livemode, paidNow = status === "succeeded" || status === "processing";
-  const label = methodLabel(pm) + (md.tally_src === "link" ? " (pay link)" : md.tally_src === "cust" ? " (customer app)" : /^auto:/.test(String(md.tally_src || "")) ? " (autopay)" : "") + (live ? "" : " · test");
+  const label = methodLabel(pm) + (md.tally_src === "link" ? " (pay link)" : md.tally_src === "cust" ? " (customer app)" : md.tally_src === "tap" ? " (tap to pay)" : /^auto:/.test(String(md.tally_src || "")) ? " (autopay)" : "") + (live ? "" : " · test");
   const amtC = status === "succeeded" ? (Number(pi.amount_received) || Number(pi.amount) || 0) : (Number(pi.amount) || 0);
   const refunded = paidNow && ch ? Math.min(amtC, Number(ch.amount_refunded) || 0) : 0;
   const dispute = paidNow && ch && ch.disputed ? await disputeOf(pi.id, acct) : { cents: 0, lost: false };
@@ -2967,6 +2973,121 @@ export async function payIntent(org: string, me: J, jobId: string, b: J): Promis
   return res || { ok: false, message: BUSY };
 }
 
+// Tap to pay (batch 15b, Nov 25): the customer taps their card or phone on the back of the crew's Android phone (the
+// MoveCrew app, with Stripe Terminal's Tap to Pay in it). The phone's reader works on the account the company's cards go
+// to (its own Stripe account, or the platform's): the server hands the reader a connection token when it connects
+// (pay_tap_token) and makes each payment (pay_tap: a card_present PaymentIntent the phone takes the tap for, on the
+// company's Terminal location); the phone tells pay_check when it went through, and Stripe's event writes it down too,
+// as for every card payment. A tap that was canceled or declined is called off at once (pay_tap_cancel), so it doesn't
+// hold the amount back from anyone else. Stripe only: a company on Square uses its other ways.
+const TAP_SQ = "Tap to pay works with Stripe, and this company's cards go through Square. Send a pay link or type the card in.";
+const TAP_OFF = "Tap to pay is off in Options.";
+// who may take a tap: the same people who take payments (the job itself is checked when the payment is made)
+function tapWho(me: J, S: J): string {
+  if (me.role === "owner") return "";
+  if (me.role === "dispatch") return optOff(S, "dispatchPay") ? "Only the owner takes payments in this company." : "";
+  if (me.role === "lead") return optOff(S, "leadPay") ? "The office collects payments in this company." : "";
+  return "Crew leads and the office take payments.";
+}
+export async function payTapToken(org: string, me: J, _b: J): Promise<J> {
+  if (await sqActive(org)) return { ok: false, message: TAP_SQ };
+  if (!stripeMode()) return { ok: false, message: "Card payments are not set up yet." };
+  const S = (await getDoc(org, "org/settings")) || {};
+  const no = tapWho(me, S);
+  if (no) return { ok: false, status: 403, message: no };
+  if (optOff(S, "payTap")) return { ok: false, message: TAP_OFF };
+  const pa = await payAccount(org);
+  if (!pa.on) return { ok: false, message: payOffWhy(pa.reason) };
+  const t = await stripe("POST", "terminal/connection_tokens", {}, undefined, pa.acct);
+  return { ok: true, secret: String(t.secret || ""), live: liveNow(), account: pa.acct };
+}
+// The shop address in Setup › Company as Stripe wants an address: "418 Oak St, Suite 2, Portland, OR 97201" (a second
+// part of the street, the country, and a ZIP+4 are fine). null when it isn't written that way.
+export function usAddress(raw: string): J | null {
+  const t = String(raw || "").replace(/\s+/g, " ").trim().replace(/,?\s*\b(U\.?S\.?A?\.?|United States( of America)?)$/i, "");
+  const m = /^(.+?),\s*([^,]+?),?\s+([A-Za-z]{2})\.?,?\s+(\d{5})(?:-\d{4})?$/.exec(t);
+  if (!m) return null;
+  const street = m[1].split(/\s*,\s*/).filter(Boolean);
+  if (!street.length || !/\d/.test(street[0])) return null;
+  const out: J = { line1: street[0].slice(0, 200), city: m[2].trim().slice(0, 100), state: m[3].toUpperCase(), postal_code: m[4], country: "US" };
+  if (street.length > 1) out.line2 = street.slice(1).join(", ").slice(0, 200);
+  return out;
+}
+// Stripe wants every reader on a location, Tap to Pay's too: the company's own (metadata tally_org) on the account its
+// cards go to, made from the shop address the first time.
+const tapLocs = new Map<string, string>();
+async function tapLocation(org: string, S: J, acct: string): Promise<J> {
+  const k = org + "|" + acct + "|" + liveNow(), have = tapLocs.get(k);
+  if (have) return { ok: true, id: have };
+  let after = "";
+  for (let i = 0; i < 10; i++) {
+    const page = await stripe("GET", "terminal/locations", after ? { limit: 100, starting_after: after } : { limit: 100 }, undefined, acct);
+    const list: J[] = (page && page.data) || [];
+    const hit = list.find((l: J) => l && l.metadata && l.metadata.tally_org === org);
+    if (hit) { tapLocs.set(k, String(hit.id)); return { ok: true, id: String(hit.id) }; }
+    if (!page.has_more || !list.length) break;
+    after = String(list[list.length - 1].id);
+  }
+  const a = usAddress(String((S && S.shopAddress) || ""));
+  if (!a) return { ok: false, message: "Tap to pay needs the shop's address first, written as street, city, state and ZIP (Setup › Company): Stripe keeps where cards are taken." };
+  const loc = await stripe("POST", "terminal/locations", { display_name: company(S).slice(0, 100), address: a, metadata: { tally_org: org } },
+    "tally-loc-" + await sha([org, acct, liveNow(), JSON.stringify(a)].join("|")), acct);
+  tapLocs.set(k, String(loc.id));
+  return { ok: true, id: String(loc.id) };
+}
+export async function payTap(org: string, me: J, jobId: string, b: J): Promise<J> {
+  const c = await payContext(org, me, jobId);
+  if (c.err) return { ok: false, message: c.err, status: c.status };
+  if (c.sq) return { ok: false, message: TAP_SQ };
+  if (optOff(c.S, "payTap")) return { ok: false, message: TAP_OFF };
+  const amt = cents(b.amount), by = who(me), acct = c.acct;
+  if (!(amt > 0)) return { ok: false, message: "Enter an amount." };
+  const tp = tipCents(c.S, c.job, b.tip);
+  if (tp.err) return { ok: false, message: tp.err };
+  const tipC: number = tp.tipC;
+  if (await tooManyPays(org, by)) return { ok: false, message: TOO_MANY };
+  const wh = await hookFor(acct);
+  if (!wh.ok) return wh;
+  const loc = await tapLocation(org, c.S, acct);
+  if (!loc.ok) return loc;
+  const res = await withJobLock(org, jobId, async (): Promise<J> => {
+    const ready = await readyToCharge(org, jobId, me, amt, c.job);
+    if (!ready.ok) return ready;
+    const job = ready.job, cus = (await jobCustomer(org, jobId, job, acct)).customer;
+    const md = payMeta(org, jobId, job, by, "tap", me.uid);
+    if (tipC) md.tally_tip = String(tipC);
+    // Stripe Terminal's card or phone tap (this Stripe version names the way to pay in allowed_payment_method_types)
+    const pi = await stripe("POST", "payment_intents", {
+      amount: amt + tipC, currency: "usd", customer: cus, allowed_payment_method_types: ["card_present"], capture_method: "automatic",
+      metadata: md, description: payWhat(c.S, job) + (tipC ? " + tip" : ""), receipt_email: validEmail((job.d || {}).email) || undefined,
+    }, undefined, acct);
+    await rest("POST", "pay_log?on_conflict=pi", { pi: pi.id, org_id: org, job_id: jobId, amount_cents: amt + tipC, status: pi.status || "requires_payment_method",
+      source: "tap" + (tipC ? ";tip=" + tipC : ""), cust_key: md.tally_cust, by_staff: by, livemode: !!pi.livemode, updated_at: nowIso(), account: acct }, "resolution=merge-duplicates");
+    // the phone's reader connects on this account and location and takes the tap for this payment, with the company's
+    // name on Stripe's tap screen (test mode: a pretend reader, which taps a test Visa by itself)
+    return { ok: true, clientSecret: pi.client_secret, pi: pi.id, location: loc.id, live: !!pi.livemode, account: acct, merchant: company(c.S), amount: (amt + tipC) / 100, tip: tipC / 100 };
+  });
+  return res || { ok: false, message: BUSY };
+}
+// A tap that didn't happen (canceled on the phone, declined, the phone gave up): called off now, so it doesn't hold the
+// amount back from the office for a quarter of an hour. One that went through after all is written down instead.
+export async function payTapCancel(org: string, me: J, jobId: string, b: J): Promise<J> {
+  const pid = String(b.pi || "");
+  if (!/^pi_[A-Za-z0-9_]{1,80}$/.test(pid)) return { ok: false, message: "Unknown payment." };
+  const row = ((await rest("GET", "pay_log?select=*&org_id=eq." + q(org) + "&job_id=eq." + q(jobId) + "&pi=eq." + q(pid) + "&limit=1")) || [])[0];
+  if (!row || String(row.source || "").split(";")[0] !== "tap") return { ok: false, message: "That payment isn't on this job." };
+  if (row.by_staff !== who(me) && me.role !== "owner") return { ok: false, status: 403, message: "Only the person who started it calls it off." };
+  if (!!row.livemode !== modeLive(row.account || "")) return { ok: false, message: "That payment was made in the other Stripe mode." };
+  const out = await withJobLock(org, jobId, async (): Promise<J> => {
+    const acct = row.account || "";
+    const pi = await stripe("GET", "payment_intents/" + pid, { expand: ["payment_method", "latest_charge"] }, undefined, acct);
+    if (OPEN_PI.indexOf(pi.status) >= 0) await cancelIntent(pi, acct);
+    else await recordIntent(pi, acct);
+    return { ok: true, piStatus: OPEN_PI.indexOf(pi.status) >= 0 ? "canceled" : String(pi.status || "") };
+  });
+  return out || { ok: false, message: BUSY };
+}
+
 // Refunds from the app (batch 15, Nov 22; until then they were made on Stripe's or Square's own page and came back by
 // themselves). The owner, or dispatch with Options › Dispatch can give refunds, gives back all or part of a card payment
 // on this job, through whichever processor took it, the payment's own account. It comes back through writeDown the
@@ -3644,8 +3765,10 @@ async function handleApp(req: Request): Promise<Response> {
     const pay: Record<string, (o: string, m: J, j: string, x: J) => Promise<J>> = {
       pay_link: payLink, pay_intent: payIntent, pay_saved: paySaved, pay_check: payCheck, pay_refund: payRefund, pay_auto: payAuto,
       pay_forget: (o: string, m: J, _j: string, x: J) => payForget(o, m, x),
+      // tap to pay (batch 15b): the phone's reader signing in (no job), each payment, and calling one off
+      pay_tap_token: (o: string, m: J, _j: string, x: J) => payTapToken(o, m, x), pay_tap: payTap, pay_tap_cancel: payTapCancel,
     };
-    if (b.action !== "pay_forget" && !/^[A-Za-z0-9_-]{1,40}$/.test(jobId)) return json({ ok: false, message: "Missing job" }, 400);
+    if (b.action !== "pay_forget" && b.action !== "pay_tap_token" && !/^[A-Za-z0-9_-]{1,40}$/.test(jobId)) return json({ ok: false, message: "Missing job" }, 400);
     if (pay[b.action]) {
       try {
         const out = await pay[b.action](org, me, jobId, b);

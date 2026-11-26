@@ -14,6 +14,8 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- tap to pay (Stripe Terminal, batch 15b): the phone's NFC takes the tap; MoveCrew works without it -->
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
     <!-- the phone apps MoveCrew hands off to: dialer, messages, maps, browser, camera, file picker -->
     <queries>
@@ -25,6 +27,7 @@
     </queries>
 
     <application
+        android:name=".MoveCrewApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"

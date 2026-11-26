@@ -7,7 +7,8 @@ from what really happened on the job ([docs/PRICING.md](docs/PRICING.md)); labor
 billed on an invoice with terms are in [docs/JOBTYPES.md](docs/JOBTYPES.md), moves over more than one day
 in [docs/MULTIDAY.md](docs/MULTIDAY.md), damage claims and truck reminders in [docs/CLAIMS.md](docs/CLAIMS.md), long-distance moves (by weight and distance, a delivery window, binding or non-binding estimates and weight tickets) in [docs/LONGDIST.md](docs/LONGDIST.md), and storage (customers' things in units, Unit #1, Unit #2, each with a size and a price, billed every month, with autopay from a card on file, and moves into storage that end at the warehouse with the units picked to hold what's moving) in [docs/STORAGE.md](docs/STORAGE.md). The owner turns parts of it
 on and off in Setup › Options ([docs/OPTIONS.md](docs/OPTIONS.md)). Each company takes cards through its own
-Stripe account or its own Square account, whichever it connects in Setup › Payments, and gives refunds from the job
+Stripe account or its own Square account, whichever it connects in Setup › Payments, takes taps on the crew's Android
+phone with Stripe, and gives refunds from the job
 ([docs/SETUP-stripe.md](docs/SETUP-stripe.md), [docs/SETUP-square.md](docs/SETUP-square.md)); someone who works for
 more than one company picks which one each day ([docs/GET-THE-APP.md](docs/GET-THE-APP.md#someone-who-works-for-more-than-one-company)).
 One web app (`web/index.html`) that runs four ways:

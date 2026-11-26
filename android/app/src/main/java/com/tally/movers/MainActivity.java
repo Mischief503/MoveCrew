@@ -77,6 +77,7 @@ public class MainActivity extends Activity {
     private static final int REQ_FILES = 41;
     private static final int REQ_LOCATION = 42;
     private static final int REQ_MIC = 43;
+    private static final int REQ_TAP = 44;
     // photos: made smaller here before the page reads them, kept in the cache under picked/ (see readyPhoto)
     private static final String PICKED = "picked";
     private static final int PHOTO_MAX = 1600;
@@ -97,6 +98,8 @@ public class MainActivity extends Activity {
     private GeolocationPermissions.Callback geoCallback;
     // a walk-through video call asking for the microphone, while Android asks the person (onRequestPermissionsResult)
     private PermissionRequest micRequest;
+    // tap to pay (batch 15b): Stripe Terminal's reader on this phone, made the first time the page asks for a tap
+    private TapReader tap;
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -248,6 +251,23 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean hasGoogle() {
             return BuildConfig.MAPS_KEY != null && !BuildConfig.MAPS_KEY.isEmpty();
+        }
+
+        /* Tap to pay (batch 15b): whether this phone can take a tap, a payment's tap, and the reader's connection token
+           from the server (TapReader says how). */
+        @JavascriptInterface
+        public String tapCheck() {
+            return TapReader.check(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void tapPay(final String id, final String json) {
+            runOnUiThread(() -> tapReader().pay(id, json));
+        }
+
+        @JavascriptInterface
+        public void tapToken(final String id, final String secret, final String err) {
+            runOnUiThread(() -> tapReader().token(id, secret, err));
         }
 
         @JavascriptInterface
@@ -703,6 +723,29 @@ public class MainActivity extends Activity {
                 || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
+    /* ---------- tap to pay (batch 15b): what TapReader needs from the app ---------- */
+    private TapReader tapReader() {
+        if (tap == null) tap = new TapReader(this);
+        return tap;
+    }
+
+    // Stripe takes a tap only where it knows where the phone is
+    boolean tapHasLocation() {
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    void tapAskLocation() {
+        requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_TAP);
+    }
+
+    // the page, from any thread
+    void tapJs(final String code, final ValueCallback<String> then) {
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript(code, then);
+            else if (then != null) then.onReceiveValue("null");
+        });
+    }
+
     @Override
     public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
@@ -717,6 +760,7 @@ public class MainActivity extends Activity {
             if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) r.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
             else r.deny();
         }
+        if (request == REQ_TAP && tap != null) tap.onLocation(tapHasLocation());
     }
 
     /* Back closes whatever is open in MoveCrew (a job, the signing screen, a menu) before leaving. */

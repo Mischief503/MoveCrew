@@ -53,4 +53,7 @@ android {
 dependencies {
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("androidx.core:core:1.13.1")
+    // tap to pay (batch 15b): Stripe Terminal with Tap to Pay on Android (Stripe asks for both, at the same version)
+    implementation("com.stripe:stripeterminal-taptopay:6.0.0")
+    implementation("com.stripe:stripeterminal-core:6.0.0")
 }
