@@ -98,12 +98,40 @@ Storage is on or anyone has been in storage.
   Dispatch sees the last two only with Options › Dispatch sees revenue on.
 - **Units:** every unit as a tile with its size and price a month ("Unit #3", then "5×7×8 ft" and "$150/mo"; a taken
   one shows what that customer pays): Free (dashed), or the customer's name and where they stand, green Paid up, orange
-  "$420 owed", red "$600 past due". Tap a taken one to open that customer's account. A legend says what the colours
-  mean.
+  "$420 owed", red "$600 past due". Tap a taken one to open that customer's account, on its Inventory tab with what's
+  in that unit (with Options › Storage inventory on; see Inventory below). A legend says what the colours mean.
 - **Who's in storage:** past due first (the oldest first), then owing, then paid up, and anyone out of storage who
   still owes: the name, a month, the units, since when and the next bill, and Paid up or what they owe. **All**,
   **Owe** and **Paid up** filter it.
 - For the owner, a button to Setup › Storage at the bottom. Jobs › In storage has **Storage ›** to it.
+
+## Inventory
+
+Batch 13e (Nov 26). Richie: "Each storage unit should be able to log items with a picture to inventory every item going
+in . Just like everything else this should be a option for every company to turn on and off . When you click on the
+storage it should open a inventory tab with pictures". **Setup › Options › Storage inventory** (on to start, under
+Office, with Storage on).
+
+- **Every item gets a picture and a number** (#1, #2 …), in its unit. **Add items to Unit #3** opens the camera or the
+  phone's pictures: each picture is an item, several at once (20 at a time). **No picture** makes an item without one,
+  to take later. When there's more than one unit, **Into** picks the unit new ones go into.
+- **Tap a picture** to open it large: **What it is** ("Sofa, 3 seat") and **Notes** (its condition, marks, what's in
+  the box), its **Unit** (tap another to move it), who took it and when, **Take it again**, **Taken out** (marked with
+  the day; it stays in the list, grey, under **Taken out**) or **Back in storage**, and **Remove** (tap twice) for one
+  taken by mistake. Each is in the account's activity.
+- **The crew takes them on the move into storage**: the move's job sheet and the crew's card (folded, **Storage
+  inventory**) have the same pictures and buttons, into the units picked for the move. When the move is done and its
+  account opens, they're the account's inventory too, and the numbers carry on.
+- **The office takes them on the account**: tap a taken unit on **Storage** and the account opens on its
+  **Inventory** tab, showing that unit (chips for each unit, **All**, and **Taken out**). **Account** is the tab with
+  the bills, as before. Inventory · 7 says how many are in storage; each unit tile and the account's card on Storage
+  say how many items.
+- Once the account is out of storage, Inventory shows what was in it.
+- The pictures are kept like a job's photos: on the phone that took them, and with the hosted MoveCrew in the shared
+  store (each a photos/<id> document, kind Inventory), fetched by another phone when it's shown. If Android closes
+  MoveCrew while the camera is open, the Android app keeps the pictures and they go on the inventory when it opens
+  again.
+- Off: no inventory anywhere, and a unit opens the account as before. What was taken stays, for when it's on again.
 
 ## Where it shows
 
@@ -150,4 +178,7 @@ owed, and the server does it once for that bill, however many office phones ask.
 - The bills aren't texted or emailed to the customer on their own yet: they see them and pay in the customer app,
   and the office can send a pay link from the account. Monthly bill texts and emails come with messages (batch 14).
 - Storage by the cubic foot or by the pallet, late fees, and partial pickups (some things out, the rest stays) are
-  done by hand for now: the units, a customer's prices, and Add a charge or credit on the account.
+  done by hand for now: the units, a customer's prices, and Add a charge or credit on the account. An item taken out
+  can be marked **Taken out** on the inventory.
+- The inventory isn't in the customer app yet, and the crew's card for the delivery move out of storage doesn't list
+  it yet: the office sees it on the account's Inventory tab.

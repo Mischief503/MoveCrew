@@ -54,6 +54,25 @@ const rqTo = async (p, step) => {
 };
 const fillDraft = (p, step) => p.evaluate(() => { Object.assign(window.__tally.state().draft, { name: 'Test Person', phone: '512-555-0100', from: '1 Main St, Austin', to: '9 Oak Ave, Round Rock', miles: '18', items: { boxm: 30, sofa3: 1, bedq: 1 } }); window.__tally.render(); }).then(() => tap(p, `[data-act="q:step"][data-s="${step}"]`, 200));
 
+// storage inventory (batch 13e, Nov 26): pictures drawn in the page, a few named, a long name, one with no picture and
+// one taken out: on a storage account (Lena Wu, Unit #3 and Unit #4), or on a move into storage today (the crew's card)
+const invSeed = (p, crew) => p.evaluate((cr) => {
+  const T = window.__tally, iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const pic = (bg, fg) => { const c = document.createElement('canvas'); c.width = c.height = 160; const g = c.getContext('2d'); g.fillStyle = bg; g.fillRect(0, 0, 160, 160); g.fillStyle = fg; g.fillRect(30, 50, 100, 70); return c.toDataURL('image/jpeg', 0.7); };
+  const L = [['Sofa, 3 seat', 'Small scratch on the left arm', '#e8e2d8', '#5b7c99'], ['Dresser, 4 drawers', '', '#efe9e1', '#8b5a2b'], ['Queen bed frame in three pieces, the bolts taped to the headboard', '', '#e9eef2', '#6b4f3a'], ['', '', '#f1ede6', '#c89b5e'], ['Kitchen boxes (6)', 'Fragile: dishes', '#ece8e1', '#c39a62'], ['Bike', '', '#e4ece6', '#b23b3b']];
+  const units = cr ? ['v5', 'v6'] : ['v3', 'v4'], t = Date.now() - 864e5;
+  const inv = L.map((x, i) => ({ id: 'it' + i, n: i + 1, unit: units[i < 4 ? 0 : 1], name: x[0], note: x[1], ph: 'ph' + i, ts: t + i * 6e4, by: i < 4 ? 'Marcus' : 'Owner', data: pic(x[2], x[3]) }));
+  inv.push({ id: 'it6', n: 7, unit: units[1], name: 'Floor lamp', note: '', ph: '', ts: t + 9e5, by: 'Owner' });
+  if (cr) {
+    const m = T.newJob(Object.assign(T.blankDraft(), { name: 'Rosa Diaz-Villanueva', moveDate: iso(new Date()), time: '07:00', from: '418 Oak St', to: 'Warehouse', toSto: true, items: { sofa3: 1 }, stoPlan: { units, prices: { v5: 150, v6: 150 }, hand: false } }), T.state().settings, 'booked');
+    m.assign.crew = ['Marcus', 'Dee']; m.stoInv = inv; T.state().jobs.push(m); T.ui.open['si:' + m.id] = true;
+  } else {
+    const a = T.stoNewAcct({ name: 'Lena Wu', phone: '5035550142', email: '', vaults: units, start: iso(new Date(Date.now() - 20 * 864e5)) }, 'Owner');
+    inv[5].out = iso(new Date()); inv[5].outBy = 'Owner'; a.stoInv = inv;
+  }
+  T.save(); T.render();
+}, !!crew);
+
 const SCREENS = {
   'owner Today': async () => {},
   'owner Jobs': async (p) => { await tabTo(p, 'jobs'); },
@@ -68,6 +87,9 @@ const SCREENS = {
     // a move into storage (batch 13d): Unit #5 and Unit #6 held for it, and it's Coming in
     const m = T.newJob(Object.assign(T.blankDraft(), { name: 'Rosa Diaz-Villanueva', moveDate: iso(new Date(Date.now() + 9 * 864e5)), time: '08:00', from: '418 Oak St', to: 'Warehouse', toSto: true, items: { sofa3: 1 }, stoPlan: { units: ['v5', 'v6'], prices: { v5: 150, v6: 150 }, hand: false } }), T.state().settings, 'booked');
     T.state().jobs.push(m); T.render(); }); await more(p, 'storage'); },
+  // storage inventory (batch 13e): a unit tapped on Storage opens the account's Inventory tab; a picture tapped opens it
+  'owner storage inventory, a unit': async (p) => { await invSeed(p); await more(p, 'storage'); await tap(p, '#view [data-act="sto:unit"][data-u="v3"]', 300); },
+  'owner storage inventory, an item': async (p) => { await invSeed(p); await more(p, 'storage'); await tap(p, '#view [data-act="sto:unit"][data-u="v3"]', 300); await tap(p, '#sheet .siit', 300); },
   'owner Setup': async (p) => { await more(p, 'settings'); },
   'owner Setup › Fleet': async (p) => { await more(p, 'settings', 'fleet'); },
   'owner Setup › Custom job fields': async (p) => { await more(p, 'settings', 'fields'); },
@@ -108,15 +130,17 @@ const SCREENS = {
   'call center Quotes': async (p) => { await pv(p, 'callcenter', ''); await tabTo(p, 'quotes'); },
   'call center new quote, the move date': async (p) => { await pv(p, 'callcenter', ''); await tap(p, '#fab', 250); await p.fill('[data-d="moveDate"]', await p.evaluate(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })); await sleep(150); },
   'crew Jobs': async (p) => { await pv(p, 'crew', 'Dee'); },
+  // a move into storage today: the crew lead's card with its Storage inventory open (batch 13e)
+  'crew lead Jobs, storage inventory': async (p) => { await invSeed(p, true); await pv(p, 'lead', 'Marcus'); },
   'crew History': async (p) => { await pv(p, 'crew', 'Dee'); await tap(p, '[data-act="cr:view"][data-v="history"]', 200); },
   'crew More': async (p) => { await pv(p, 'crew', 'Dee'); await tap(p, '[data-act="more:open"]', 250); },
   'crew Chat': async (p) => { await pv(p, 'crew', 'Dee'); await tabTo(p, 'chat'); },
 };
 // the smallest phones (320 wide), a tablet held upright, and a phone turned sideways
-const SMALL = ['owner Storage', 'owner new quote, into storage', 'call center Companies', 'call center Schedule', 'call center Quotes', 'crew lead bill, crew changes', 'owner Today', 'owner Jobs', 'owner Reports', 'owner Setup › Inventory catalog', 'owner new quote, price', 'owner job sheet, booked', 'owner job sheet, finished', 'crew lead Jobs, all clocked in', 'crew lead Jobs, job running', 'crew Jobs', 'crew lead new quote, rooms', 'crew lead new quote, check it', 'crew lead new quote, signature', 'owner job sheet, new quote to approve', 'crew lead movers panel', 'owner job sheet, crew changes'];
+const SMALL = ['owner Storage', 'owner storage inventory, a unit', 'owner storage inventory, an item', 'crew lead Jobs, storage inventory', 'owner new quote, into storage', 'call center Companies', 'call center Schedule', 'call center Quotes', 'crew lead bill, crew changes', 'owner Today', 'owner Jobs', 'owner Reports', 'owner Setup › Inventory catalog', 'owner new quote, price', 'owner job sheet, booked', 'owner job sheet, finished', 'crew lead Jobs, all clocked in', 'crew lead Jobs, job running', 'crew Jobs', 'crew lead new quote, rooms', 'crew lead new quote, check it', 'crew lead new quote, signature', 'owner job sheet, new quote to approve', 'crew lead movers panel', 'owner job sheet, crew changes'];
 const TABLET = ['owner Today', 'owner Reports', 'owner job sheet, booked', 'crew lead Jobs, job running'];
 const SIDEWAYS = ['call center Companies', 'call center Schedule', 'owner Today', 'owner job sheet, booked', 'owner new quote, price', 'crew lead Jobs, all clocked in', 'crew Jobs', 'crew lead new quote, rooms'];
-const NARROW = ['owner Storage', 'owner new quote, into storage', 'owner Today', 'owner Jobs', 'owner Setup › Fleet', 'owner Setup › Custom job fields', 'owner Setup › Inventory catalog', 'owner Setup › Rate card', 'owner new quote, price', 'owner job sheet, booked', 'crew lead Jobs, all clocked in', 'crew Jobs'];
+const NARROW = ['owner Storage', 'owner storage inventory, a unit', 'owner storage inventory, an item', 'crew lead Jobs, storage inventory', 'owner new quote, into storage', 'owner Today', 'owner Jobs', 'owner Setup › Fleet', 'owner Setup › Custom job fields', 'owner Setup › Inventory catalog', 'owner Setup › Rate card', 'owner new quote, price', 'owner job sheet, booked', 'crew lead Jobs, all clocked in', 'crew Jobs'];
 
 /* ---------- the checks, in the page (shared with layout-hosted.js) ---------- */
 const { CHECK } = require('./layoutcheck');
@@ -168,7 +192,7 @@ const { CHECK } = require('./layoutcheck');
   if (!AXE) ok(false, 'axe-core is installed for the contrast check (npm install in tests/ui)');
   else {
     const looks = [['movingday', 'light'], ['movingday', 'dark'], ['contrast', 'light'], ['hivis', 'dark'], ['cardboard', 'light'], ['terminal', 'dark']];
-    const shots = ['owner Storage', 'owner new quote, into storage', 'owner Today', 'owner job sheet, finished', 'owner new quote, price', 'owner Setup › Options', 'crew lead Jobs, job running', 'crew Jobs', 'crew lead History, a job opened', 'crew lead new quote, rooms', 'crew lead new quote, check it', 'owner job sheet, new quote to approve', 'crew lead movers panel', 'owner job sheet, crew changes'];
+    const shots = ['owner Storage', 'owner storage inventory, a unit', 'owner storage inventory, an item', 'crew lead Jobs, storage inventory', 'owner new quote, into storage', 'owner Today', 'owner job sheet, finished', 'owner new quote, price', 'owner Setup › Options', 'crew lead Jobs, job running', 'crew Jobs', 'crew lead History, a job opened', 'crew lead new quote, rooms', 'crew lead new quote, check it', 'owner job sheet, new quote to approve', 'crew lead movers panel', 'owner job sheet, crew changes'];
     for (const [t, m] of looks) {
       const found = [];
       for (const n of shots) {

@@ -183,6 +183,22 @@ button.vt{cursor:pointer}
 .vt em{font-style:normal;font-size:11.5px;line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vt em.vp{font-weight:600}
 .vt small{color:var(--text)}
+.sitabs{margin:0 0 10px}
+.siadd{margin:0 0 10px;padding:10px;border:1px dashed var(--line);border-radius:12px}
+.siadd .btn svg,.siedit .btn svg{vertical-align:-3px}
+.sigrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:4px}
+.siit{display:flex;flex-direction:column;gap:3px;min-width:0;padding:0 0 7px;border:var(--bw) solid var(--line);border-radius:var(--r2);background:var(--card);color:var(--text);font:inherit;text-align:left;cursor:pointer;overflow:hidden}
+.siph{display:block;width:100%;aspect-ratio:1;background:var(--line2);overflow:hidden}
+.siph img{width:100%;height:100%;object-fit:cover;display:block}
+.siit.out .siph img{filter:grayscale(1)}
+.siph .phold,.siph .sinone{width:100%;height:100%;border:0;border-radius:0;color:var(--text)}
+.sinone{display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text)}
+.sicap{padding:0 8px;font-size:13px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.siit small{padding:0 8px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.siedit{margin:0 0 10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.sibig{margin-top:8px;border-radius:10px;overflow:hidden;background:var(--line2);display:flex;align-items:center;justify-content:center;min-height:160px}
+.sibig img{display:block;max-width:100%;max-height:60vh;object-fit:contain}
+.sibig .phold,.sibig .sinone{width:100%;min-height:160px;border:0;color:var(--text)}
 .tapbox{display:flex;gap:12px;align-items:center;margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px}.tapbox p{margin:0}.tapico{color:var(--focus);flex:none;display:flex}
 .refundbox{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:12px}.refundbox h3{font-size:16px;margin:0 0 4px}
 .vt.held{border-style:dotted;background:var(--infoSoft)}.vdot.held{border-style:dotted;background:var(--infoSoft)}
@@ -2126,7 +2142,7 @@ var sync={mode:'local',db:null,user:null,uid:'',meName:'',isOwner:false,isAdmin:
 var saveT;
 function cacheState(){
   var c=Object.assign({},state);
-  c.jobs=state.jobs.map(function(j){var g=Object.assign({},j);g.photos=(j.photos||[]).map(function(p){return {id:p.id,kind:p.kind,ts:p.ts}});return g});
+  c.jobs=state.jobs.map(function(j){var g=Object.assign({},j);g.photos=(j.photos||[]).map(function(p){return {id:p.id,kind:p.kind,ts:p.ts}});if(j.stoInv)g.stoInv=j.stoInv.map(siBare);return g});
   c.settings=Object.assign({},state.settings);
   c.settings.forms=(state.settings.forms||[]).map(function(f){return Object.assign({},f,{pages:f.pageIds?[]:f.pages})});
   return c;
@@ -2202,6 +2218,7 @@ var OPTS=[
   {g:'office',k:'claims',t:'Damage claims',h:'Claims on the job sheet, Report damage on the crew lead’s card and in the customer app for 30 days after the move, and the open ones on Today and in Reports.'},
   {g:'office',k:'truckDue',t:'Truck reminders',h:'Each truck’s registration, insurance, inspection and next service in Setup › Fleet, and on Today from 30 days before.'},
   {g:'office',k:'storage',t:'Storage',h:'Customers’ things in your warehouse between moves: Into storage on a quote (the move ends at your warehouse, with units picked to hold what’s moving), Put in storage on a move’s job sheet, a bill every month for their units, and Deliver from storage later. The units, their sizes and prices are in Setup › Storage.'},
+  {g:'office',k:'stoInv',t:'Storage inventory',h:'Every item that goes into storage gets a picture and a number, in its unit: the crew takes them on the move into storage, the office on the customer’s storage account. Tap a unit on Storage to see what’s in it. Off: no inventory, and what was taken is kept.'},
   {g:'office',k:'drivers',t:'A driver for every truck',h:'Dispatch picks who drives each truck on a job. A truck with no driver shows as needing scheduling. Off: no drivers to pick.'},
   {g:'office',k:'dispatchPay',t:'Dispatch can take payments',h:'Dispatch can collect payments and send pay links.'},
   {g:'office',k:'dispatchRefund',t:'Dispatch can give refunds',h:'Dispatch can refund a card payment from a job’s Payments. Off: only you do.',def:false},
@@ -3526,7 +3543,7 @@ function stoSweep(){
   state.jobs.slice().forEach(function(mj){
     if(!stoToIs(mj)||mj.d.stoIn||['done','paid'].indexOf(mj.status)<0)return;
     var sid='si'+mj.id,ex=byId(sid);
-    if(ex){mj.d.stoIn={id:ex.id,words:stoWords(stoOf(ex).vaults)};ch=true;return}   // another office phone opened it
+    if(ex){mj.d.stoIn={id:ex.id,words:stoWords(stoOf(ex).vaults),units:stoOf(ex).vaults.slice()};ch=true;return}   // another office phone opened it
     var P=stoPlanOf(mj),used=stoUsedBy(),ids=P.units.filter(function(id){return !!stoUnit(id)&&!used[id]});
     if(!ids.length)return;   // its units were taken or removed: the job sheet says so, and tapping others opens it
     stoFrom(mj,{vaults:stoSorted(ids),start:stoInDay(mj),prices:P.prices,id:sid},'when the move was done');ch=true;
@@ -3598,7 +3615,7 @@ function stoReopen(j,who){
   logEv(j,'Back in storage'+(who?' ('+who+')':''));stoSweep();return '';
 }
 // the units in words on the moves in and out: the crew's card shows them (the crew can't open the account)
-function stoLinks(j){var s=stoOf(j),w=stoWords(s.vaults);[[s.from,'stoIn'],[s.outJob,'stoOut']].forEach(function(x){var m=x[0]?byId(x[0]):null,k=x[1];if(m&&m.d[k]&&m.d[k].id===j.id&&m.d[k].words!==w)m.d[k]=Object.assign({},m.d[k],{words:w})})}
+function stoLinks(j){var s=stoOf(j),w=stoWords(s.vaults);[[s.from,'stoIn'],[s.outJob,'stoOut']].forEach(function(x){var m=x[0]?byId(x[0]):null,k=x[1];if(m&&m.d[k]&&m.d[k].id===j.id&&(m.d[k].words!==w||canon(m.d[k].units||[])!==canon(s.vaults)))m.d[k]=Object.assign({},m.d[k],{words:w,units:s.vaults.slice()})})}
 // a unit added gets its price now; the others keep theirs
 function stoSetVaults(j,ids,who){var was=stoWords(stoOf(j).vaults);stoLock(j);var s=Object.assign({},j.d.sto),p=Object.assign({},s.prices||{}),now=stoListPrices(ids);
   ids.forEach(function(id){if(p[id]==null||p[id]==='')p[id]=now[id]});Object.keys(p).forEach(function(id){if(ids.indexOf(id)<0)delete p[id]});
@@ -3618,7 +3635,7 @@ function stoFrom(mj,o,who){
   var md=mj.d||{},start=o.start||stoInDay(mj),w=stoWords(o.vaults);
   var j=stoNewJob(md,{vaults:o.vaults,start:start,from:mj.id,prices:o.prices,id:o.id});if(mj.test)j.test=true;
   logEv(j,'Put in storage from the move'+(md.moveDate?' on '+fmtDate(md.moveDate):'')+': '+w+', '+money(stoMonthly(j))+' a month, billed from '+fmtDate(start)+(who?' ('+who+')':''));
-  mj.d.stoIn={id:j.id,words:w};logEv(mj,'Into storage after the move: '+w+(who?' ('+who+')':''));
+  mj.d.stoIn={id:j.id,words:w,units:(o.vaults||[]).slice()};logEv(mj,'Into storage after the move: '+w+(who?' ('+who+')':''));
   state.jobs.push(j);stoSweep();
   return j;
 }
@@ -3785,6 +3802,168 @@ function stoCustInfo(j,S){
    For the owner and dispatch, in More (and the side list on a computer) while Options › Storage is on or anyone has
    been in storage: how many units are free, every unit as a tile (its size and price, and free, or whose, coloured by
    paid up, owes or past due), and everyone in storage (and anyone out of it who still owes), with All / Owe / Paid up. */
+/* ---------- storage inventory (Richie, Nov 26: "Each storage unit should be able to log items with a picture to
+   inventory every item going in ... When you click on the storage it should open a inventory tab with pictures").
+   Options › Storage inventory. An item: {id, n (its number), unit (a unit's id, or ''), name, note, ph (its picture's
+   id), ts, by, out (the day it was taken out), outBy}, in the job's stoInv list (a map in the shared store, like its
+   other lists). Its picture is a photos/<ph> document as a job's photos are (kind Inventory), fetched when it's shown
+   and kept until the item is removed. The crew takes them on the move into storage (they can't open the storage
+   account), the office on the account; an account's inventory is its own items and its move's. ---------- */
+function siOn(){return opt('storage')&&opt('stoInv')}
+function siOf(j){return j&&Array.isArray(j.stoInv)?j.stoInv:[]}
+function siBare(x){var y=Object.assign({},x);delete y.data;return y}
+// a move whose things go into storage: Into storage on its quote, or Put in storage on its job sheet
+function siMove(j){return !!j&&!stoIs(j)&&(stoToIs(j)||!!(j.d&&j.d.stoIn&&j.d.stoIn.id))}
+function siCan(j){return siOn()&&!!j&&(stoIs(j)||siMove(j))&&!isCC()}
+// things go in while the move is on (and after, for what was missed), and while the account is open
+function siAddOk(j){return stoIs(j)?j.status==='storage':['booked','active','done','paid'].indexOf(j.status)>=0}
+// the jobs whose items are this one's inventory: a storage account's own, and its move's
+function siJobs(j){if(!j)return [];var out=[j],f=stoIs(j)?stoOf(j).from:'',m=f?byId(f):null;if(m&&m.id!==j.id)out.push(m);return out}
+function siAll(j){var L=[];siJobs(j).forEach(function(h){siOf(h).forEach(function(x){if(x&&x.id)L.push({x:x,j:h})})});return L.sort(function(a,b){return (num(a.x.n)-num(b.x.n))||(num(a.x.ts)-num(b.x.ts))})}
+function siIn(L){return L.filter(function(r){return !r.x.out})}
+function siInUnit(j,u){return siIn(siAll(j)).filter(function(r){return (r.x.unit||'')===u}).length}
+// the units its things go into: an account's; a move's (its account's, or the units picked for it)
+function siUnits(j){
+  if(!j)return [];
+  if(stoIs(j))return stoOf(j).vaults;
+  var a=j.d&&j.d.stoIn,acc=a&&a.id?byId(a.id):null;
+  if(acc)return stoOf(acc).vaults;
+  if(a&&Array.isArray(a.units))return a.units.slice();
+  return stoToIs(j)?stoPlanOf(j).units:[];
+}
+// the next number: after every item of the inventory it joins (with the account's, when this phone has it)
+function siNextN(j){var a=siMove(j)&&j.d.stoIn&&j.d.stoIn.id?byId(j.d.stoIn.id):null;return siAll(a||j).reduce(function(m,r){return Math.max(m,num(r.x.n))},0)+1}
+function siWord(n){return n+' item'+(n===1?'':'s')}
+function siName(x){return String(x.name||'').trim()||'Item #'+x.n}
+// in words: "#4 Sofa, 3 seat", or "Item #4" before it has a name
+function siLbl(x){var nm=String(x.name||'').trim();return nm?'#'+x.n+' '+nm:'Item #'+x.n}
+// its picture: on this phone already, or fetched now (shown once it comes)
+function siPic(x){if(x.data)return x.data;var d=x.ph?sync.photoCache[x.ph]:'';if(d){x.data=d;return d}if(x.ph&&sync.mode==='shared'&&sync.db)fetchPhoto(x.ph,0);return ''}
+function siRedraw(){if(ui.jobId)renderSheet();else renderTab()}
+function siCur(){var E=ui.siEd;if(!E)return null;var h=byId(E.h),x=h?siOf(h).filter(function(y){return y.id===E.i})[0]:null;return x?{E:E,h:h,x:x}:null}
+function siNew(j,unit,data){
+  var x={id:uid(),n:siNextN(j),unit:unit||'',name:'',note:'',ph:data?uid():'',ts:Date.now(),by:myName()||'Office'};
+  if(data)x.data=data;
+  if(!Array.isArray(j.stoInv))j.stoInv=[];
+  j.stoInv.push(x);return x;
+}
+// a picture no item has any more: gone from the shared store too
+function siGone(ph){
+  if(!ph)return;delete sync.photoCache[ph];
+  if(sync.mode==='shared'&&sync.db){var db=sync.db;delete sync.photoUp[ph];qwrite('photos/'+ph,function(){return db.doc('photos/'+ph).delete()},null)}
+}
+function siRemove(h,x){h.stoInv=siOf(h).filter(function(y){return y.id!==x.id});logEv(h,'Removed '+siLbl(x)+' from the storage inventory ('+(myName()||'Office')+')');siGone(x.ph)}
+// each new picture to the shared store once, as a job's photos go (syncPhotos)
+function siSyncPhotos(j){
+  var db=sync.db;
+  siOf(j).forEach(function(x){
+    if(!x.ph||!x.data||sync.photoUp[x.ph])return;
+    var ph=x.ph,data=x.data,ts=x.ts;sync.photoUp[ph]=1;sync.photoCache[ph]=data;
+    qwrite('photos/'+ph,function(){return db.doc('photos/'+ph).set({id:ph,jobId:j.id,kind:'Inventory',ts:ts,data:data})},null);
+  });
+}
+// the camera, or the phone's pictures: each picture an item in that unit (item: a new picture for that item)
+function siPick(jid,unit,item){
+  // the Android app keeps what they're for, in case Android closes MoveCrew while the camera is open (phonePhotos)
+  if(window.TallyNative&&typeof window.TallyNative.photosFor==='function'){try{window.TallyNative.photosFor(JSON.stringify({job:jid,kind:'Inventory',unit:unit||'',item:item||''}))}catch(e){}}
+  var inp=document.createElement('input');
+  inp.type='file';inp.accept='image/*';inp.multiple=!item;
+  inp.setAttribute('tabindex','-1');inp.setAttribute('aria-hidden','true');
+  inp.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;z-index:-1';
+  inp.addEventListener('change',function(){siTake(inp.files,{job:jid,unit:unit,item:item});setTimeout(function(){if(inp.parentNode)inp.parentNode.removeChild(inp)},0)});
+  document.body.appendChild(inp);
+  try{inp.click()}catch(e){}
+}
+function siTake(fileList,opt){
+  opt=opt||{};
+  var all=Array.prototype.slice.call(fileList||[]),jid=opt.job,job=function(){return jid?byId(jid):null};
+  if(!all.length||!job()){if(opt.after)opt.after(0);else if(all.length)toast('Those pictures weren’t added: that job isn’t here any more.');return}
+  var files=all.slice(0,opt.item?1:PHOTO_MAX),done=0,failed=0,last=null,who=myName()||'Office';
+  if(files.length>1&&!opt.quiet)toast('Adding '+files.length+' items…');
+  files.reduce(function(chain,f){return chain.then(function(){
+    return shrink(f,640).then(function(data){
+      var j=job();if(!j){failed++;return}
+      if(opt.item){var x=siOf(j).filter(function(y){return y.id===opt.item})[0];if(!x){failed++;return}var old=x.ph;x.ph=uid();x.data=data;siGone(old);last=x}
+      else last=siNew(j,opt.unit,data);
+      done++;
+    }).catch(function(){failed++});
+  })},Promise.resolve()).then(function(){
+    var j=job();
+    if(done&&j){if(!opt.item)logEv(j,(done===1?'Item #'+last.n:done+' items')+' taken for storage'+(opt.unit?' in '+stoUnitName(opt.unit):'')+' ('+who+')');save()}
+    if(opt.after){opt.after(done);return}
+    var msg=!done?'Could not read those pictures.':opt.item?'Picture saved.':done===1?'Item #'+last.n+' added. Say what it is below.':done+' items added'+(opt.unit?' to '+stoUnitName(opt.unit):'')+'. Tap one to say what it is.';
+    if(all.length>files.length&&!opt.item)msg+=' 20 at a time is the limit, so '+(all.length-files.length)+' were left out.';
+    else if(failed&&done)msg+=' '+failed+' could not be read.';
+    toast(msg);
+    if(done===1&&last&&!opt.item&&j)ui.siEd={k:j.id,h:j.id,i:last.id};   // one picture: open it, to say what it is
+    siRedraw();
+    if(done===1&&!opt.item)siFocus();
+  });
+}
+function siFocus(noName){setTimeout(function(){var e=$('#siEdit');if(!e)return;try{e.scrollIntoView({block:'start',behavior:'smooth'})}catch(x){}if(!noName){var n=$('#siName');if(n)try{n.focus({preventScroll:true})}catch(x){}}},30)}
+var SI_CAM='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+// one item open: its picture large, what it is, notes, its unit, taken out, remove
+function siEdHtml(j){
+  var c=siCur();if(!c||c.E.k!==j.id)return '';
+  var x=c.x,h=c.h,E=c.E,p=siPic(x),units=siUnits(j),nm=E.name!=null?E.name:String(x.name||''),nt=E.note!=null?E.note:String(x.note||'');
+  var uchips=units.length>1||(units.length&&x.unit!==units[0])?'<div class="f"><span>Unit</span><div class="chips" role="group" aria-label="Its unit">'+units.map(function(u){var on=(x.unit||'')===u;return '<button class="chip'+(on?' on':'')+'" data-act="si:unit" data-u="'+esc(u)+'" aria-pressed="'+on+'">'+esc(stoUnitName(u))+'</button>'}).join('')+'</div></div>':'';
+  var where=h.id!==j.id?' · on the move'+(h.d.moveDate?' on '+stoShort(h.d.moveDate):''):'';
+  return '<div class="siedit" id="siEdit" role="group" aria-label="'+esc('Item #'+x.n)+'">'+
+    '<div class="row between" style="align-items:center"><h3 style="margin:0">Item #'+esc(String(x.n))+(x.unit?' · '+esc(stoUnitName(x.unit)):'')+'</h3><button class="btn sm ghost" data-act="si:close">Close</button></div>'+
+    '<div class="sibig">'+(p?'<img src="'+p+'" alt="'+esc(siName(x))+'">':(x.ph?'<span class="phold">Loading the picture</span>':'<span class="sinone">No picture yet</span>'))+'</div>'+
+    '<button class="btn sm" data-act="si:pic" style="margin-top:6px">'+SI_CAM+' '+(x.ph?'Take it again':'Add a picture')+'</button>'+
+    '<div class="grid2 stack" style="margin-top:8px">'+fld('What it is','<input id="siName" data-sif="name" value="'+esc(nm)+'" placeholder="Sofa, 3 seat" maxlength="80" autocomplete="off">','span2')+
+    fld('Notes','<textarea id="siNote" data-sif="note" rows="2" maxlength="300" placeholder="Condition, marks, what’s in the box">'+esc(nt)+'</textarea>','span2')+'</div>'+uchips+
+    '<p class="hint" style="margin:6px 0 0">Taken by '+esc(x.by||'someone')+' · '+esc(fmtStamp(x.ts))+esc(where)+(x.out?' · out of storage '+esc(fmtDate(x.out))+(x.outBy?' ('+esc(x.outBy)+')':''):'')+'</p>'+
+    '<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn primary grow" data-act="si:save">Save</button>'+
+    '<button class="btn grow" data-act="si:out">'+(x.out?'Back in storage':'Taken out')+'</button>'+
+    '<button class="btn grow'+(ui.armed==='si:rm'?' danger':' ghost')+'" data-act="si:rm">'+(ui.armed==='si:rm'?'Tap again to remove it':'Remove')+'</button></div></div>';
+}
+// the inventory: + Add items (one item a picture, into the unit picked), the units as chips with what's in each, then
+// the pictures; an account's inventory is its own items and its move's
+function siHtml(j){
+  ui.siF=ui.siF||{};ui.siTo=ui.siTo||{};
+  var k=j.id,all=siAll(j),inL=siIn(all),outL=all.filter(function(r){return !!r.x.out}),units=siUnits(j),known={},extra=[];
+  units.forEach(function(u){known[u]=1});
+  inL.forEach(function(r){var u=r.x.unit||'';if(!known[u]&&extra.indexOf(u)<0)extra.push(u)});   // a unit it's no longer in, or none
+  var F=ui.siF[k]||'all';
+  if((F!=='all'&&F!=='out'&&!known[F]&&extra.indexOf(F)<0)||(F==='out'&&!outL.length))F='all';
+  var nameU=function(u){return u?stoUnitName(u):'No unit'};
+  var inU=function(u){return inL.filter(function(r){return (r.x.unit||'')===u}).length};
+  var chip=function(f,label,n){var on=F===f;return '<button class="chip'+(on?' on':'')+'" data-act="si:f" data-id="'+esc(k)+'" data-f="'+esc(f)+'" aria-pressed="'+on+'">'+esc(label)+' <small>'+n+'</small></button>'};
+  var chips=units.length+extra.length>1||outL.length?'<div class="scrollx" style="margin:0 0 8px">'+chip('all','All',inL.length)+units.concat(extra).map(function(u){return chip(u,nameU(u),inU(u))}).join('')+(outL.length?chip('out','Taken out',outL.length):'')+'</div>':'';
+  var shown=F==='out'?outL:F==='all'?inL:inL.filter(function(r){return (r.x.unit||'')===F});
+  var to=known[F]?F:(known[ui.siTo[k]]?ui.siTo[k]:(units[0]||''));
+  var add='';
+  if(siAddOk(j))add='<div class="siadd">'+(units.length>1&&!known[F]?'<div class="chips" role="group" aria-label="New items go into" style="margin:0 0 8px"><small style="align-self:center">Into</small>'+units.map(function(u){var on=u===to;return '<button class="chip'+(on?' on':'')+'" data-act="si:to" data-id="'+esc(k)+'" data-u="'+esc(u)+'" aria-pressed="'+on+'">'+esc(stoUnitName(u))+'</button>'}).join('')+'</div>':'')+
+    '<div class="row" style="gap:8px"><button class="btn primary grow" data-act="si:add" data-id="'+esc(k)+'" data-u="'+esc(to)+'">'+SI_CAM+' Add items'+(to?' to '+esc(stoUnitName(to)):'')+'</button><button class="btn" data-act="si:bare" data-id="'+esc(k)+'" data-u="'+esc(to)+'">No picture</button></div>'+
+    '<p class="hint" style="margin:6px 0 0">A picture of each thing as it goes in. Each picture is an item with its own number; say what it is now or later.</p></div>';
+  else if(stoIs(j)&&j.status!=='storage')add='<p class="hint" style="margin:0 0 8px">Out of storage '+esc(fmtDate(stoOf(j).out))+'. This is what was in it.</p>';
+  var cell=function(r){
+    var x=r.x,p=siPic(x),nm=String(x.name||'').trim();
+    return '<button class="siit'+(x.out?' out':'')+'" data-act="si:open" data-id="'+esc(k)+'" data-h="'+esc(r.j.id)+'" data-i="'+esc(x.id)+'" aria-label="'+esc(siLbl(x)+', '+nameU(x.unit)+(x.out?', taken out':''))+'">'+
+      '<span class="siph">'+(p?'<img src="'+p+'" alt="">':(x.ph?'<span class="phold">Loading</span>':'<span class="sinone">No picture</span>'))+'</span>'+
+      '<span class="sicap"><b>#'+esc(String(x.n))+'</b> '+(nm?esc(nm):'<i>Not named yet</i>')+'</span><small>'+esc(x.out?'Out '+stoShort(x.out):nameU(x.unit))+'</small></button>';
+  };
+  var count=inL.length?siWord(inL.length)+(stoIs(j)?' in storage':' for storage')+(units.length>1?': '+units.map(function(u){return stoUnitName(u)+' '+inU(u)}).join(', '):'')+(outL.length?'. '+outL.length+' taken out.':'.'):outL.length?'Everything taken in has gone out.':'';
+  var acc=siMove(j)&&j.d.stoIn&&j.d.stoIn.id?byId(j.d.stoIn.id):null;
+  return '<div class="siwrap" data-si="'+esc(k)+'">'+(count?'<p class="sub" style="margin:0 0 8px">'+esc(count)+'</p>':'')+add+chips+siEdHtml(j)+
+    (shown.length?'<div class="sigrid">'+shown.map(cell).join('')+'</div>':'<p class="hint" style="margin:4px 0 0">'+(all.length?'Nothing here.':'Nothing taken yet.')+'</p>')+
+    (acc&&canEditJobs()?'<p class="hint" style="margin:8px 0 0">The whole inventory is on the storage account. <button class="linkbtn" data-act="job:open" data-id="'+esc(acc.id)+'">Open it</button></p>':'')+'</div>';
+}
+// a storage account's sheet: Inventory and Account, as tabs (the unit on Storage opens Inventory)
+function siTabsHtml(j){
+  var n=siIn(siAll(j)).length,t=ui.stoTab==='inv'?'inv':'acct';
+  return '<div class="crewtabs sitabs" role="tablist" aria-label="'+esc(jobName(j))+'">'+[['inv','Inventory'+(n?' · '+n:'')],['acct','Account']].map(function(x){var on=x[0]===t;return '<button role="tab" aria-selected="'+on+'" class="'+(on?'on':'')+'" data-act="si:tab" data-t="'+x[0]+'">'+esc(x[1])+'</button>'}).join('')+'</div>';
+}
+// a move into storage: on its job sheet, and folded on the crew's card
+function siSecHtml(j){if(!siCan(j)||!siMove(j))return '';var n=siIn(siAll(j)).length;return '<div class="sec" data-meta="'+esc(n?siWord(n):'')+'"><h3>Storage inventory</h3>'+siHtml(j)+'</div>'}
+function siCrewHtml(j){
+  if(!siCan(j)||!siMove(j))return '';
+  var n=siIn(siAll(j)).length,hk='si:'+j.id;
+  return '<details class="acc cc-si" data-k="'+hk+'"'+(ui.open[hk]?' open':'')+'><summary><span>Storage inventory</span><small>'+esc(n?siWord(n):'a picture of each thing')+'</small></summary><div class="acc-body">'+siHtml(j)+'</div></details>';
+}
+document.addEventListener('input',function(e){var t=e.target;if(!t||!t.dataset||t.dataset.sif===undefined||!ui.siEd)return;ui.siEd[t.dataset.sif]=t.value});
 function stoShown(){return opt('storage')||state.jobs.some(stoIs)}
 function stoPayState(j){return balOf(j)<=0.004?'paid':stoLate(j)?'late':'owes'}
 function stoPayWords(j){var b=balOf(j);return b<=0.004?'Paid up':money(b)+(stoLate(j)?' past due':' owed')}
@@ -3804,7 +3983,7 @@ function renderStorage(){
     if(h)return '<button class="vt held" data-act="job:open" data-id="'+h.id+'" aria-label="'+esc(u.name+', '+line+': held for '+jobName(h)+(h.d.moveDate?', in '+fmtDayShort(stoInDay(h)):''))+'"><b>'+esc(u.name)+'</b>'+what+'<span>'+esc(jobName(h))+'</span><small>'+esc('Held'+(h.d.moveDate?' · in '+stoShort(stoInDay(h)):''))+'</small></button>';
     if(!j)return '<div class="vt free"><b>'+esc(u.name)+'</b>'+what+'<span>Free</span></div>';
     var st=stoPayState(j);
-    return '<button class="vt '+st+'" data-act="job:open" data-id="'+j.id+'" aria-label="'+esc(u.name+', '+line+': '+jobName(j)+', '+stoPayWords(j))+'"><b>'+esc(u.name)+'</b>'+what+'<span>'+esc(jobName(j))+'</span><small>'+esc(stoPayWords(j))+'</small></button>';
+    return '<button class="vt '+st+'" data-act="'+(siOn()?'sto:unit':'job:open')+'" data-id="'+j.id+'" data-u="'+esc(u.id)+'" aria-label="'+esc(u.name+', '+line+': '+jobName(j)+', '+stoPayWords(j)+(siOn()?', '+siWord(siInUnit(j,u.id))+' in it':''))+'"><b>'+esc(u.name)+'</b>'+what+'<span>'+esc(jobName(j))+'</span><small>'+esc(stoPayWords(j))+'</small></button>';
   };
   var grid=c.units.length?'<div class="vgrid">'+c.units.map(tile).join('')+'</div>'+
       '<p class="hint vlegend"><span><i class="vdot free"></i>Free</span><span><i class="vdot held"></i>Held for a move</span><span><i class="vdot paid"></i>Paid up</span><span><i class="vdot owes"></i>Owes</span><span><i class="vdot late"></i>Past due</span></p>'
@@ -3817,7 +3996,8 @@ function renderStorage(){
   var list=all.filter(function(j){return ui.stoF==='all'||(ui.stoF==='owe'?balOf(j)>0.004:balOf(j)<=0.004)});
   var card=function(j){
     var s=stoOf(j),in_=j.status==='storage',st=stoPayState(j),nx=in_?stoNext(s.start,t):'';
-    var line=in_?(stoWords(s.vaults)||'No unit')+' · '+(s.since>t?'goes in ':'since ')+stoShort(s.since)+(nx?' · next bill '+stoShort(nx):'')
+    var nI=siOn()?siIn(siAll(j)).length:0;
+    var line=in_?(stoWords(s.vaults)||'No unit')+' · '+(s.since>t?'goes in ':'since ')+stoShort(s.since)+(nx?' · next bill '+stoShort(nx):'')+(nI?' · '+siWord(nI):'')
       :'Out of storage '+stoShort(s.out)+(s.vaults.length?' · was in '+stoWords(s.vaults):'');
     var badge=st==='paid'?'<span class="pill" data-s="paid">Paid up</span>':'<span class="pill '+(st==='late'?'bad':'warn')+'">'+esc(stoPayWords(j))+'</span>';
     return '<button class="job" data-act="job:open" data-id="'+j.id+'"><div class="row between"><div class="t">'+esc(jobName(j))+'</div><div class="r">'+(in_?money(stoMonthly(j))+'/mo':money(balOf(j)))+'</div></div><div class="route">'+esc(line)+'</div><div>'+pill(j.status)+' '+badge+(j.test?' <span class="pill" style="border:1px dashed var(--muted);background:transparent">Test</span>':'')+'</div></button>';
@@ -3825,7 +4005,7 @@ function renderStorage(){
   var people=all.length?(list.map(card).join('')||'<p class="hint">Nobody here.</p>')
     :'<div class="card empty"><h3>Nobody in storage yet</h3><p>Put a move’s things in storage from its job sheet (Storage, near the end)'+(state.ui.role==='owner'?', or add someone who’s already in your warehouse in Setup › Storage':'')+'.</p></div>';
   v.innerHTML=(opt('storage')?'':'<div class="note">Options › Storage is off: nobody new goes into storage, and these accounts are still billed.</div>')+tiles+
-    '<section class="card"><h2>Units</h2><p class="sub">'+free+' free, '+taken+' taken'+(nHeld?', '+nHeld+' held for moves coming in':'')+'.'+(taken?' Tap a taken one to open the customer’s account.':'')+'</p>'+grid+'</section>'+stoComingHtml()+
+    '<section class="card"><h2>Units</h2><p class="sub">'+free+' free, '+taken+' taken'+(nHeld?', '+nHeld+' held for moves coming in':'')+'.'+(taken?(siOn()?' Tap a taken one for what’s in it, with pictures, and the customer’s account.':' Tap a taken one to open the customer’s account.'):'')+'</p>'+grid+'</section>'+stoComingHtml()+
     '<div class="secline"><h2>Who’s in storage</h2>'+(all.length?'<small>'+open.length+' in'+(gone.length?', '+gone.length+' out and owing':'')+'</small>':'')+'</div>'+chips+people+
     (state.ui.role==='owner'?'<button class="btn" style="width:100%;margin-top:12px" data-act="more:go" data-tab="settings" data-sec="storage">Setup › Storage: the units, their sizes and prices, someone already in storage</button>':'');
 }
@@ -5061,6 +5241,7 @@ function renderJobs(){
 function openJob(id,force){
   if(!canEditJobs())return;
   if(!force&&ui.jobId&&ui.jobId!==id){var cj=byId(ui.jobId);if(cj&&sheetDirty(cj).length){leaveSheet(function(){openJob(id,true)});return}}
+  ui.stoTab=ui.stoTabNext||(ui.jobId===id?ui.stoTab:'acct');ui.stoTabNext='';if(ui.jobId!==id)ui.siEd=null;
   ui.jobId=id;ui.armed='';ui.closeAsk=null;ui.open['sh:Schedule']=true;ui.open['sh:Storage account']=true;renderSheet();commsLoadLog(id);
 }
 function closeSheet(){ui.jobId=null;ui.closeAsk=null;renderSheet();renderTab()}
@@ -5300,12 +5481,15 @@ function renderSheet(){
    (j.startedAt?'<div class="sec" data-meta="'+(j.status==='active'?esc(phaseNow(j)):(j.phases&&j.phases.unloadEnd?fmtDur(j.phases.unloadEnd-j.phases.loadStart)+' handling':''))+'"><h3>On-site times</h3>'+
      (j.status==='active'||(crewOnly(j)&&j.finishedAt)||(j.phases&&j.phases.loadStart)?'<div class="phz">'+phaseRows(j)+'</div>':'<p class="hint">The crew did not record load and unload times on this job.</p>')+crewOnRows(j)+
      (j.actualHours>0?'<p class="hint"'+(topUpFor(j)?' style="color:var(--text)"':'')+'>'+esc(payLine(j,false))+'.</p>':'')+'</div>':'')+
-   stoMoveHtml(j)+ldSheetHtml(j)+claimsSecHtml(j)+
+   stoMoveHtml(j)+siSecHtml(j)+ldSheetHtml(j)+claimsSecHtml(j)+
    commsSection(j)+
    '<div class="sec"><h3>Activity</h3>'+acts+'</div>'+
    (state.ui.role==='owner'?'<button class="btn danger" data-act="sh:delete">'+(ui.armed==='sh:delete'?'Tap again to delete this job':'Delete job')+'</button>':'')+
    '</div>'+leaveBarHtml(j)+'</div>';
   accordify($('.sheet-body',el),'.sec','H3','sh',['Schedule','Storage account']);
+  // a storage account: Inventory and Account as tabs (storage inventory), its pictures in place of the account's parts
+  var sit=stoIs(j)&&siOn()&&!isCC()?siTabsHtml(j):'';
+  if(sit){var sib=$('.sheet-body',el);if(sib){if(ui.stoTab==='inv')sib.innerHTML=sit+siHtml(j);else sib.insertAdjacentHTML('afterbegin',sit)}}
   // a part with something unsaved stays open, so its Save button is in view
   ['Customer and route','Job notes','Materials and costs'].forEach(function(tt){
     var dirty=tt==='Customer and route'?jedDirty(j,'cust').length:tt==='Job notes'?jedDirty(j,'notes').length:costDirty(matKey('s',j.id));
@@ -7735,7 +7919,7 @@ function crewKit(me){
     var body='<div class="cc-sub">Crew: '+(crewLine||'none yet')+'</div>'+crewLeadLine(j)+crewHint+(asLead?mvLine(j,me)+crewLines(j,me,false):'')+truckLines+
       (j.actualHours>0&&(j.status==='done'||j.status==='paid')?'<div class="cc-sub"><b>'+esc(payLine(j,true,me))+'</b></div>':'')+
       '<div class="cc-route">'+addrRoles(j).map(function(r){return '<div><small>'+esc(r[1])+'</small>'+map(j.d[r[0]])+'</div>'}).join('')+'</div>'+stoCrewLine(j)+
-      notesSec+matsSec+photoSec+crewClaimHtml(j,me,asLead)+runSec;
+      notesSec+matsSec+photoSec+siCrewHtml(j)+crewClaimHtml(j,me,asLead)+runSec;
     var est=['booked','active'].indexOf(j.status)>=0?(multiDay(j)?'Est. '+(Math.round(dayHoursOf(j,(onDate(j,t)||{i:0}).i)*2)/2)+' h':estLine(j)):'';
     if(fold){var hk='h:'+j.id,fin=['done','paid'].indexOf(j.status)>=0,dayW=onDate(j,t)?'Today':fmtDate(j.d.moveDate);
       // finished (Richie, Oct 21: "the customer name, date and time on job"): the day and how long the job took
@@ -8967,6 +9151,15 @@ function phonePhotos(){
         .then(function(bl){try{return new File([bl],n,{type:bl.type||'image/jpeg'})}catch(e){return bl}})
         .catch(function(){return null});
     })).then(function(files){
+      if(f.kind==='Inventory'){
+        siTake(files.filter(Boolean),{job:j.id,unit:f.unit||'',item:f.item||'',quiet:true,after:function(done){
+          toast(done?'MoveCrew restarted while the camera was open. '+(f.item?'The picture':siWord(done))+' saved to the storage inventory for '+(j.d&&j.d.name||'the job')+'.'
+                    :'MoveCrew restarted while the camera was open and couldn’t read those pictures. Take them again.');
+          if(canEditJobs()){if(stoIs(j))ui.stoTabNext='inv';openJob(j.id,true)}else{ui.open['si:'+j.id]=true;ui.tab='crew';render()}
+          finish();
+        }});
+        return;
+      }
       ui.photoJob=j.id;ui.photoKind=f.kind||'Pickup';
       takePhotos(files.filter(Boolean),{job:j.id,kind:ui.photoKind,quiet:true,after:function(done){
         var who=j.d&&j.d.name||'the job';
@@ -9592,6 +9785,7 @@ function jobDoc(j){
   o.materials=toMap(j.materials,function(x){return x.id});
   o.costs=toMap(j.costs,function(x){return x.id});
   if(claimsOf(j).length)o.claims=toMap(claimsOf(j),function(x){return x.id});
+  if(siOf(j).length)o.stoInv=toMap(siOf(j).map(siBare),function(x){return x.id});
   o.confirm=JSON.parse(JSON.stringify(j.confirm||{}));
   o.crewOn=JSON.parse(JSON.stringify(j.crewOn||{}));
   o.crewAdj=toMap(j.crewAdj,function(x){return x.id});
@@ -9613,6 +9807,7 @@ function docToJob(v){
     log:mapArr(v.log,'ts').slice(-60)};
   if(v.walkVids&&typeof v.walkVids==='object')j.walkVids=mapArr(v.walkVids,'at');
   if(v.claims&&typeof v.claims==='object')j.claims=mapArr(v.claims,'at');
+  if(v.stoInv&&typeof v.stoInv==='object')j.stoInv=mapArr(v.stoInv,'ts').map(function(x){if(x&&x.ph&&sync.photoCache[x.ph])x.data=sync.photoCache[x.ph];return x});
   ['startedAt','finishedAt','actualHours','phases','minPaid','test','milesDriven','clockFix','clockAt','clockSig','back','odo','rq','quoteHist','crewRates','createdBy','createdCC','bookedCC','crewAsk','eta','cust','sales','quotedBy','quotedTeam','survey','tipSplit','inv','pauses','wt'].forEach(function(k){if(v[k]!=null)j[k]=v[k]});
   return j;
 }
@@ -9699,7 +9894,7 @@ function syncOut(){
   if(sync.got.jobs){
     var seen={};
     state.jobs.forEach(function(j){
-      seen[j.id]=1;syncPhotos(j);
+      seen[j.id]=1;syncPhotos(j);siSyncPhotos(j);
       var key='jobs/'+j.id;if(sync.inflight[key])return;
       var cur=jobDoc(j),prev=sync.lastJobs[j.id];
       if(!prev)qwrite(key,function(){return db.doc(key).set(cur).catch(ccClosed)},function(res){if(res==='closed')return ccGone(j.id);sync.lastJobs[j.id]=cur});
@@ -9740,13 +9935,13 @@ function softRefresh(){
   },300);
 }
 function softSettings(){var a=document.activeElement;if(ui.tab==='settings'&&!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))renderSettings()}
-function attachPhoto(id,data){state.jobs.forEach(function(j){(j.photos||[]).forEach(function(p){if(p.id===id)p.data=data})})}
+function attachPhoto(id,data){state.jobs.forEach(function(j){(j.photos||[]).forEach(function(p){if(p.id===id)p.data=data});siOf(j).forEach(function(x){if(x.ph===id)x.data=data})})}
 function fetchPhoto(id,tries){
   if(sync.photoCache[id]||sync.fetching[id]||!sync.db)return;
   sync.fetching[id]=1;
   sync.db.doc('photos/'+id).get().then(function(snap){
     delete sync.fetching[id];
-    if(snap.exists){var v=snap.data();sync.photoCache[id]=v.data;attachPhoto(id,v.data);softRefresh()}
+    if(snap.exists){var v=snap.data();sync.photoCache[id]=v.data;sync.photoUp[id]=1;attachPhoto(id,v.data);softRefresh()}
     else if((tries||0)<4)setTimeout(function(){fetchPhoto(id,(tries||0)+1)},2500);
   }).catch(function(){delete sync.fetching[id]});
 }
@@ -12660,6 +12855,22 @@ document.addEventListener('click',function(e){
     case 'sh:addpay':j=byId(ui.jobId);if(!j||!canCollect()||!$('#payMethod'))break;var amt=round2(moneyVal($('#payAmt')));if(addPayment(j,amt,$('#payMethod').value)){save();renderSheet();toast('Payment recorded.')}else toast(payLocked(j)?'Sign the required forms first.':'Enter an amount first.');break;
     case 'sh:rmphoto':j=byId(ui.jobId);j.photos=j.photos.filter(function(p){return p.id!==t.dataset.pid});save();renderSheet();break;
     case 'sto:f':ui.stoF=t.dataset.f;renderStorage();break;
+    // storage inventory (Nov 26)
+    case 'sto:unit':{var suj=byId(t.dataset.id);if(!suj)break;ui.siF=ui.siF||{};ui.siF[suj.id]=t.dataset.u||'all';ui.siEd=null;ui.stoTabNext='inv';openJob(suj.id);break}
+    case 'si:tab':{ui.stoTab=t.dataset.t==='inv'?'inv':'acct';ui.siEd=null;ui.armed='';renderSheet();var stb=$('#sheet .sheet-body');if(stb)stb.scrollTop=0;break}
+    case 'si:f':ui.siF=ui.siF||{};ui.siF[t.dataset.id]=t.dataset.f;ui.siEd=null;ui.armed='';siRedraw();break;
+    case 'si:to':ui.siTo=ui.siTo||{};ui.siTo[t.dataset.id]=t.dataset.u;siRedraw();break;
+    case 'si:add':{var saj=byId(t.dataset.id);if(!saj||!siCan(saj)||!siAddOk(saj))break;siPick(saj.id,t.dataset.u||'','');break}
+    case 'si:bare':{var sbj=byId(t.dataset.id);if(!sbj||!siCan(sbj)||!siAddOk(sbj))break;var sbx=siNew(sbj,t.dataset.u||'','');logEv(sbj,'Item #'+sbx.n+' taken for storage'+(sbx.unit?' in '+stoUnitName(sbx.unit):'')+', no picture ('+(myName()||'Office')+')');save();ui.siEd={k:sbj.id,h:sbj.id,i:sbx.id};siRedraw();siFocus();break}
+    case 'si:open':ui.siEd={k:t.dataset.id,h:t.dataset.h,i:t.dataset.i};ui.armed='';siRedraw();siFocus(true);break;
+    case 'si:close':ui.siEd=null;ui.armed='';siRedraw();break;
+    case 'si:save':case 'si:out':{var sc=siCur();if(!sc)break;var sE=sc.E,sx=sc.x;
+      sx.name=String(sE.name!=null?sE.name:sx.name||'').trim().slice(0,80);sx.note=String(sE.note!=null?sE.note:sx.note||'').trim().slice(0,300);
+      if(a==='si:out'){var sw=myName()||'Office';if(sx.out){delete sx.out;delete sx.outBy;logEv(sc.h,siLbl(sx)+' back in storage ('+sw+')')}else{sx.out=todayISO();sx.outBy=sw;logEv(sc.h,siLbl(sx)+' taken out of storage ('+sw+')')}}
+      save();ui.siEd=null;ui.armed='';siRedraw();toast(a==='si:save'?siLbl(sx)+' saved.':sx.out?siLbl(sx)+' is marked as taken out.':siLbl(sx)+' is back in storage.');break}
+    case 'si:unit':{var su=siCur();if(!su)break;su.x.unit=t.dataset.u||'';save();siRedraw();break}
+    case 'si:rm':{var sr=siCur();if(!sr)break;if(armed('si:rm')){siRemove(sr.h,sr.x);ui.siEd=null;save();siRedraw();toast(siLbl(sr.x)+' removed.')}else siRedraw();break}
+    case 'si:pic':{var sp=siCur();if(!sp)break;siPick(sp.h.id,sp.x.unit||'',sp.x.id);break}
     case 'sh:refund':{var rfj=byId(ui.jobId);if(!rfj||!canRefund())break;ui.refund={job:rfj.id,pid:t.dataset.pid,nonce:'r'+uid()+uid()};ui.armed='';ui.open['sh:Payments']=true;renderSheet();
       var rfb=$('#refundBox');if(rfb&&rfb.scrollIntoView)rfb.scrollIntoView({block:'nearest'});break}
     case 'sh:refundx':ui.refund=null;ui.armed='';renderSheet();break;
@@ -13302,7 +13513,7 @@ else if(location.hash==='#sos')ui.sosWant=true;   // the link in an emergency te
 (function migrate11(){if(window.claude&&typeof window.claude.use==='function')return;var n=0;state.jobs.forEach(function(j){if((crewAdjs(j).length||/^c[34]:/.test(String(j.clockSig||'')))&&clockStale(j)){rebill(j,'worked out again');n++}});if(n)save()})();
 (function migrate9(){var h=state.ui.sosHide||{},n=Date.now();Object.keys(h).forEach(function(k){if(!(n-h[k]<864e5))delete h[k]});state.ui.sosHide=h})();
 applyTheme();chatInit();syncBoot();render();resumeGeo();commsBaseline();
-if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow,ldSync:ldSync,ldRateFor:ldRateFor,addrState:addrState,ldInter:ldInter,roadDays:roadDays,ldNow:ldNow,ldWeigh:ldWeigh,ldWeightBill:ldWeightBill,ldBilledLater:ldBilledLater,ldCustInfo:ldCustInfo,custLdHtml:custLdHtml,ldDayAlerts:ldDayAlerts,flowAmtNow:flowAmtNow,stoIs:stoIs,stoOf:stoOf,stoCfg:stoCfg,stoSweep:stoSweep,stoFrom:stoFrom,stoClose:stoClose,stoReopen:stoReopen,stoBills:stoBills,stoDueSince:stoDueSince,stoLate:stoLate,stoMonthly:stoMonthly,stoCustInfo:stoCustInfo,stoBillDates:stoBillDates,stoNext:stoNext,stoOutJob:stoOutJob,stoNewAcct:stoNewAcct,stoAlerts:stoAlerts,stoUsedBy:stoUsedBy,stoReportCard:stoReportCard,stoSetVaults:stoSetVaults,stoPriceOf:stoPriceOf,stoLock:stoLock,stoUnitLine:stoUnitLine,stoCap:stoCap,stoSuggest:stoSuggest,canRefund:canRefund,refundLeft:refundLeft,tapOn:tapOn,tapCan:tapCan,tapWhy:tapWhy,stripeWays:stripeWays,flowMethodStripe:flowMethodStripe,stoAutoTick:stoAutoTick,stoCardName:stoCardName,custStoCard:custStoCard,stoTick:stoTick,stripeCards:stripeCards,stoPlanFor:stoPlanFor,stoPlanOf:stoPlanOf,stoHeldBy:stoHeldBy,stoOpenFor:stoOpenFor,stoToIs:stoToIs,stoPlanCust:stoPlanCust,stoSweep:stoSweep,sheetKindLine:sheetKindLine,stoCrewLine:stoCrewLine,stoNewJob:stoNewJob,stoFree:stoFree,custDetailsHtml:custDetailsHtml,newJob:newJob,ldSheetSet:ldSheetSet,paidOf:paidOf,addPayment:addPayment};
+if(window.__TALLY_TEST)window.__tally={state:function(){return state},sync:sync,chat:chat,save:save,syncOut:syncOut,jobDoc:jobDoc,comms:comms,ui:ui,people:people,loadPeople:loadPeople,pay:pay,qrSvg:qrSvg,sos:sos,sosSync:sosSync,sosAll:sosAll,sosRefresh:sosRefresh,calc:calc,moveKind:moveKind,kindLine:kindLine,clockBill:clockBill,clockSig:clockSig,bidActual:bidActual,conflictsFor:conflictsFor,paidToday:paidToday,crewMs:crewMs,shiftMs:shiftMs,render:render,themes:THEMES,varsFor:varsFor,contrastOf:contrastOf,needsSched:needsSched,jobTrucks:jobTrucks,trucksNoDriver:trucksNoDriver,canDrive:canDrive,defaultSettings:defaultSettings,rqBuild:rqBuild,rqKey:rqKey,rqItemsArr:rqItemsArr,docToJob:docToJob,canon:canon,mvAdd:mvAdd,billHours:billHours,clockRows:clockRows,clockStale:clockStale,schedRecs:schedRecs,schedOf:schedOf,dayLoad:dayLoad,dirApply:dirApply,openJob:openJob,billCrewAt:billCrewAt,mvRate:mvRate,applyClock:applyClock,mvSummary:mvSummary,billOld:billOld,mvUndo:mvUndo,backTry:backTry,crewForm:crewForm,crewReq:crewReq,crewShort:crewShort,crewShortN:crewShortN,crewPut:crewPut,formsPending:formsPending,planDay:planDay,fitAt:fitAt,fitTimes:fitTimes,needOf:needOf,nextRoom:nextRoom,deskLoad:deskLoad,deskRecs:deskRecs,deskCos:deskCos,dayPlanOf:dayPlanOf,moversOn:moversOn,rateCardOf:rateCardOf,hmMin:hmMin,minHm:minHm,dayLoadIn:dayLoadIn,loadWords:loadWords,availWords:availWords,carryDraft:carryDraft,fitIn:fitIn,slotWords:slotWords,slotNo:slotNo,fitWhy:fitWhy,custMoveOf:custMoveOf,emailKey:emailKey,walkLink:walkLink,walkVidsHtml:walkVidsHtml,walkCalls:walkCalls,walkDueC:walkDueC,walkAdopt:walkAdopt,walkSweepSoon:walkSweepSoon,walkW:walkW,wk:function(){return wk},custSurveyHtml:custSurveyHtml,walkMinsW:walkMinsW,custMoves:custMoves,custPeople:custPeople,custStage:custStage,custDueNow:custDueNow,csTipAmt:csTipAmt,tipsOf:tipsOf,custBookWhy:custBookWhy,custCur:custCur,custCrewForm:custCrewForm,crewWhen:crewWhen,reqOpen:reqOpen,reqRange:reqRange,tipAskJ:tipAskJ,flowTipAsk:flowTipAsk,flowTipAmt:flowTipAmt,csAgainWhy:csAgainWhy,custCatalog:custCatalog,totalOf:totalOf,jobDiff:jobDiff,ccQuotes:ccQuotes,salesStage:salesStage,salesLine:salesLine,salesReport:salesReport,salesMissed:salesMissed,jobName:jobName,webQuoteRead:webQuoteRead,leadNotice:leadNotice,ringPoll:ringPoll,ringShow:ringShow,salesRunsOut:salesRunsOut,commOf:commOf,surveyOf:surveyOf,surveyText:surveyText,quoteUntil:quoteUntil,salesBodyC:salesBodyC,custCardHtml:custCardHtml,custNextHtml:custNextHtml,payrollData:payrollData,paySheets:paySheets,xlsxBook:xlsxBook,csvOf:csvOf,tsvOf:tsvOf,periodOf:periodOf,lastPeriod:lastPeriod,periodStep:periodStep,payCfg:payCfg,splitCents:splitCents,tipShares:tipShares,jobOwnMs:jobOwnMs,hrHas:hrHas,canHR:canHR,hrOnly:hrOnly,payUi:payUi,crc32:crc32,sidesOf:sidesOf,rateCardHtml:rateCardHtml,balOf:balOf,money:money,takePhotos:takePhotos,phonePhotos:phonePhotos,shrink:shrink,phone:phone,claimsOf:claimsOf,claimAdd:claimAdd,claimSet:claimSet,releasedOf:releasedOf,custClaimOk:custClaimOk,claimsCard:claimsCard,custClaimsHtml:custClaimsHtml,csClaimGo:csClaimGo,docToJob2:docToJob,truckDueAlerts:truckDueAlerts,jobDays:jobDays,onDate:onDate,daySpans:daySpans,dayHoursOf:dayHoursOf,splitHours:splitHours,minusPauses:minusPauses,endDay:endDay,resumeDay:resumeDay,jobPaused:jobPaused,dayNow:dayNow,canEndDay:canEndDay,setDays:setDays,laterDayMiss:laterDayMiss,blockOfDay:blockOfDay,jobTypeOf:jobTypeOf,laborKindOf:laborKindOf,crewOnly:crewOnly,priced:priced,addrRoles:addrRoles,routeWords:routeWords,invoiceJob:invoiceJob,invDue:invDue,invState:invState,invSweep:invSweep,invLine:invLine,termsOf:termsOf,packDayFrom:packDayFrom,setStatus:setStatus,phaseNext:phaseNext,custKindHtml:custKindHtml,opt:opt,blankDraft:blankDraft,finishNow:finishNow,ldSync:ldSync,ldRateFor:ldRateFor,addrState:addrState,ldInter:ldInter,roadDays:roadDays,ldNow:ldNow,ldWeigh:ldWeigh,ldWeightBill:ldWeightBill,ldBilledLater:ldBilledLater,ldCustInfo:ldCustInfo,custLdHtml:custLdHtml,ldDayAlerts:ldDayAlerts,flowAmtNow:flowAmtNow,stoIs:stoIs,stoOf:stoOf,stoCfg:stoCfg,stoSweep:stoSweep,stoFrom:stoFrom,stoClose:stoClose,stoReopen:stoReopen,stoBills:stoBills,stoDueSince:stoDueSince,stoLate:stoLate,stoMonthly:stoMonthly,stoCustInfo:stoCustInfo,stoBillDates:stoBillDates,stoNext:stoNext,stoOutJob:stoOutJob,stoNewAcct:stoNewAcct,stoAlerts:stoAlerts,stoUsedBy:stoUsedBy,stoReportCard:stoReportCard,stoSetVaults:stoSetVaults,stoPriceOf:stoPriceOf,stoLock:stoLock,stoUnitLine:stoUnitLine,stoCap:stoCap,stoSuggest:stoSuggest,canRefund:canRefund,refundLeft:refundLeft,siOn:siOn,siAll:siAll,siUnits:siUnits,siTake:siTake,siNextN:siNextN,siCan:siCan,siMove:siMove,tapOn:tapOn,tapCan:tapCan,tapWhy:tapWhy,stripeWays:stripeWays,flowMethodStripe:flowMethodStripe,stoAutoTick:stoAutoTick,stoCardName:stoCardName,custStoCard:custStoCard,stoTick:stoTick,stripeCards:stripeCards,stoPlanFor:stoPlanFor,stoPlanOf:stoPlanOf,stoHeldBy:stoHeldBy,stoOpenFor:stoOpenFor,stoToIs:stoToIs,stoPlanCust:stoPlanCust,stoSweep:stoSweep,sheetKindLine:sheetKindLine,stoCrewLine:stoCrewLine,stoNewJob:stoNewJob,stoFree:stoFree,custDetailsHtml:custDetailsHtml,newJob:newJob,ldSheetSet:ldSheetSet,paidOf:paidOf,addPayment:addPayment};
 })();
 </script>
 </body>

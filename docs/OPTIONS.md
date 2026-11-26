@@ -94,6 +94,7 @@ The number under a switch (radius, %, $) shows only while the switch is on. See
 | Damage claims | No Damage claims on job sheets, and no Report damage on the crew lead's card or in the customer app. Claims already made stay on their jobs. See [CLAIMS.md](CLAIMS.md). |
 | Truck reminders | No dates under each truck in Setup › Fleet, and none on Today. See [CLAIMS.md](CLAIMS.md#truck-reminders). |
 | Storage | No Storage part on move job sheets (no Put in storage), no Setup › Storage, and no Storage card in Reports unless there are accounts. Accounts already made stay, and keep being billed. See [STORAGE.md](STORAGE.md). |
+| Storage inventory | No inventory: no Inventory tab on a storage account, no Storage inventory on a move into storage or the crew's card, and a unit on Storage opens the account as before (Nov 26). What was taken, and its pictures, is kept for when it's on again. See [STORAGE.md](STORAGE.md#inventory). |
 | A driver for every truck | No driver boxes on jobs, no Who drives list in Setup › Fleet and drivers, and a truck without a driver doesn't make a job need scheduling. The texts just name the truck. |
 | Office approves new quotes from the crew (starts off) | On: a crew lead's new quote waits for the owner or dispatch to approve it (Today: *New quote to approve*), then the customer signs it. Off: the customer's signature is enough, and the office is told. |
 | Dispatch can take payments | Dispatch has no payment buttons (*The owner takes payments on this job*); the server refuses dispatch's payments too. |
